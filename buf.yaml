@@ -1,0 +1,11 @@
+version: v1
+name: buf.build/maxlandon/protobuf
+deps:
+  - buf.build/srikrsna/protoc-gen-gotag
+  - buf.build/ufoundit-dev/protoc-gen-gorm
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
