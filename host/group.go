@@ -36,8 +36,8 @@ func NewGroup() *Group {
 	}
 }
 
-// GroupFrom - Get a Group from its Protobuf equivalent.
-func GroupFrom(pb *host.Group) *Group {
+// GroupFromPB - Get a Group from its Protobuf equivalent.
+func GroupFromPB(pb *host.Group) *Group {
 	return &Group{Group: pb}
 }
 

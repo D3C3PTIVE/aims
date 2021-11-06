@@ -16,9 +16,7 @@ import "scan/scan.proto";
 
 // Host - Represents a remote computer host in DB
 message Host {
-  // GORM ---------------------------------------
   option (gorm.opts).ormable = true;
-
   // @gotags: display:"ID" readonly:"true" strict:"yes"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true"
@@ -60,7 +58,7 @@ message Host {
   // @gotags: xml:"ports>port"
   repeated Port Ports = 36;
   // @gotags: xml:"ports>extraports"
-  repeated Port ExtraPorts = 33;
+  repeated ExtraPort ExtraPorts = 33;
   // @gotags: xml:"os"
   OS OS = 24; 
   // @gotags: xml:"status"
@@ -94,7 +92,6 @@ message Host {
 // A hostname for a host.
 message Hostname {
   option (gorm.opts).ormable = true;
-
   // @gotags: display:"ID" readonly:"true" strict:"yes"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true"

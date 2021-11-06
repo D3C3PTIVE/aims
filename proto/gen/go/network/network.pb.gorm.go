@@ -279,7 +279,7 @@ type DistanceWithAfterToPB interface {
 }
 
 type AddressORM struct {
-	Addr      string
+	Addr      *types.Inet `gorm:"type:varchar(48)"`
 	CreatedAt *time.Time
 	Id        go_uuid.UUID `gorm:"type:uuid;primary_key"`
 	Type      string
@@ -318,7 +318,11 @@ func (m *Address) ToORM(ctx context.Context) (AddressORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
-	to.Addr = m.Addr
+	if m.Addr != nil {
+		if to.Addr, err = types.ParseInet(m.Addr.Value); err != nil {
+			return to, err
+		}
+	}
 	to.Type = m.Type
 	to.Vendor = m.Vendor
 	if posthook, ok := interface{}(m).(AddressWithAfterToORM); ok {
@@ -344,7 +348,9 @@ func (m *AddressORM) ToPB(ctx context.Context) (Address, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
-	to.Addr = m.Addr
+	if m.Addr != nil && m.Addr.IPNet != nil {
+		to.Addr = &types.InetValue{Value: m.Addr.String()}
+	}
 	to.Type = m.Type
 	to.Vendor = m.Vendor
 	if posthook, ok := interface{}(m).(AddressWithAfterToPB); ok {

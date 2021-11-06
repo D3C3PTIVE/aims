@@ -25,7 +25,7 @@ type HostORM struct {
 	Distance        *network.DistanceORM `gorm:"foreignkey:DistanceId;association_foreignkey:Id"`
 	DistanceId      *go_uuid.UUID
 	EndTime         *time.Time
-	ExtraPorts      []*PortORM               `gorm:"foreignkey:ExtraPortsHostId;association_foreignkey:Id"`
+	ExtraPorts      []*ExtraPortORM          `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	HostScripts     []*scan.NmapScriptORM    `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_nmap_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:NmapScriptId"`
 	Hostnames       []*HostnameORM           `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	IPIDSequence    *network.IPIDSequenceORM `gorm:"foreignkey:IPIDSequenceId;association_foreignkey:Id"`
@@ -38,7 +38,7 @@ type HostORM struct {
 	OSLang          string
 	OSName          string
 	OSSp            string
-	Ports           []*PortORM `gorm:"foreignkey:PortsHostId;association_foreignkey:Id"`
+	Ports           []*PortORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	Purpose         string
 	Scope           string
 	Smurfs          []*scan.SmurfORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_smurves;jointable_foreignkey:HostId;association_jointable_foreignkey:SmurfId"`
@@ -772,13 +772,13 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 		return nil, err
 	}
 	ormObj.Addresses = nil
-	filterExtraPorts := PortORM{}
+	filterExtraPorts := ExtraPortORM{}
 	if ormObj.Id == go_uuid.Nil {
 		return nil, errors.EmptyIdError
 	}
-	filterExtraPorts.ExtraPortsHostId = new(go_uuid.UUID)
-	*filterExtraPorts.ExtraPortsHostId = ormObj.Id
-	if err = db.Where(filterExtraPorts).Delete(PortORM{}).Error; err != nil {
+	filterExtraPorts.HostId = new(go_uuid.UUID)
+	*filterExtraPorts.HostId = ormObj.Id
+	if err = db.Where(filterExtraPorts).Delete(ExtraPortORM{}).Error; err != nil {
 		return nil, err
 	}
 	if err = db.Model(&ormObj).Association("HostScripts").Replace(ormObj.HostScripts).Error; err != nil {
@@ -798,8 +798,8 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 	if ormObj.Id == go_uuid.Nil {
 		return nil, errors.EmptyIdError
 	}
-	filterPorts.PortsHostId = new(go_uuid.UUID)
-	*filterPorts.PortsHostId = ormObj.Id
+	filterPorts.HostId = new(go_uuid.UUID)
+	*filterPorts.HostId = ormObj.Id
 	if err = db.Where(filterPorts).Delete(PortORM{}).Error; err != nil {
 		return nil, err
 	}

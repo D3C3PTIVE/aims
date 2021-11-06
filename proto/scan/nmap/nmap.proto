@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package scan;
+package nmap;
 
 // DB -----------
 import "options/gorm.proto";
@@ -31,18 +31,18 @@ message Run {
   string StartStr = 13;
   string Version = 14;
   string XMLOutputVersion = 15;
-  Debugging Debugging = 16;
-  scan.Stats Stats = 17;
-  scan.Info ScanInfo = 18;
+  scan.Debugging Debugging = 16 [(gorm.field).belongs_to = {}];
+  scan.Stats Stats = 17 [(gorm.field).belongs_to = {}];
+  scan.Info ScanInfo = 18 [(gorm.field).belongs_to = {}];
   google.protobuf.Timestamp Start = 19;
-  Verbose Verbose = 20;
+  scan.Verbose Verbose = 20 [(gorm.field).belongs_to = {}];
   repeated host.Host Hosts = 21 [(gorm.field).many_to_many = {}];          
   repeated scan.NmapScript PreScripts = 22 [(gorm.field).many_to_many = {}];
   repeated scan.NmapScript PostScripts = 23 [(gorm.field).many_to_many = {}];
   repeated scan.Target Targets = 24 [(gorm.field).many_to_many = {}];
-  repeated scan.Task TaskBegin = 25;
-  repeated scan.TaskProgress TaskProgress = 26;
-  repeated scan.Task TaskEnd = 27;
+  repeated scan.Task TaskBegin = 25 [(gorm.field).many_to_many = {}];
+  repeated scan.TaskProgress TaskProgress = 26 [(gorm.field).many_to_many = {}];
+  repeated scan.Task TaskEnd = 27 [(gorm.field).many_to_many = {}];
 
   repeated string NmapErrors = 28;
   // bytes rawXML = 30;

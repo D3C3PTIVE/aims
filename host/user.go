@@ -36,8 +36,8 @@ func NewUser() *User {
 	}
 }
 
-// UserFrom - Get a User from its Protobuf equivalent.
-func UserFrom(pb *host.User) *User {
+// UserFromPB - Get a User from its Protobuf equivalent.
+func UserFromPB(pb *host.User) *User {
 	return &User{User: pb}
 }
 

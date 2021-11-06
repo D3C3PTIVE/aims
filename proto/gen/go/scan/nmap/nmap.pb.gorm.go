@@ -19,16 +19,27 @@ import (
 type RunORM struct {
 	Args             string
 	CreatedAt        *time.Time
-	Hosts            []*host.HostORM       `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_hosts;jointable_foreignkey:RunId;association_jointable_foreignkey:HostId"`
-	Id               go_uuid.UUID          `gorm:"type:uuid;primary_key"`
+	Debugging        *scan.DebuggingORM `gorm:"foreignkey:DebuggingId;association_foreignkey:Id"`
+	DebuggingId      *go_uuid.UUID
+	Hosts            []*host.HostORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_hosts;jointable_foreignkey:RunId;association_jointable_foreignkey:HostId"`
+	Id               go_uuid.UUID    `gorm:"type:uuid;primary_key"`
+	InfoId           *go_uuid.UUID
 	PostScripts      []*scan.NmapScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_post_scripts;jointable_foreignkey:RunId;association_jointable_foreignkey:NmapScriptId"`
 	PreScripts       []*scan.NmapScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_pre_scripts;jointable_foreignkey:RunId;association_jointable_foreignkey:NmapScriptId"`
 	ProfileName      string
+	ScanInfo         *scan.InfoORM `gorm:"foreignkey:InfoId;association_foreignkey:Id"`
 	Scanner          string
 	Start            *time.Time
 	StartStr         string
-	Targets          []*scan.TargetORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_targets;jointable_foreignkey:RunId;association_jointable_foreignkey:TargetId"`
+	Stats            *scan.StatsORM `gorm:"foreignkey:StatsId;association_foreignkey:Id"`
+	StatsId          *go_uuid.UUID
+	Targets          []*scan.TargetORM       `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_targets;jointable_foreignkey:RunId;association_jointable_foreignkey:TargetId"`
+	TaskBegin        []*scan.TaskORM         `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_task_begins;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskId"`
+	TaskEnd          []*scan.TaskORM         `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_task_ends;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskId"`
+	TaskProgress     []*scan.TaskProgressORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_task_progresses;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskProgressId"`
 	UpdatedAt        *time.Time
+	Verbose          *scan.VerboseORM `gorm:"foreignkey:VerboseId;association_foreignkey:Id"`
+	VerboseId        *go_uuid.UUID
 	Version          string
 	XMLOutputVersion string
 }
@@ -70,9 +81,37 @@ func (m *Run) ToORM(ctx context.Context) (RunORM, error) {
 	to.StartStr = m.StartStr
 	to.Version = m.Version
 	to.XMLOutputVersion = m.XMLOutputVersion
+	if m.Debugging != nil {
+		tempDebugging, err := m.Debugging.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Debugging = &tempDebugging
+	}
+	if m.Stats != nil {
+		tempStats, err := m.Stats.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Stats = &tempStats
+	}
+	if m.ScanInfo != nil {
+		tempScanInfo, err := m.ScanInfo.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.ScanInfo = &tempScanInfo
+	}
 	if m.Start != nil {
 		t := m.Start.AsTime()
 		to.Start = &t
+	}
+	if m.Verbose != nil {
+		tempVerbose, err := m.Verbose.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Verbose = &tempVerbose
 	}
 	for _, v := range m.Hosts {
 		if v != nil {
@@ -118,9 +157,39 @@ func (m *Run) ToORM(ctx context.Context) (RunORM, error) {
 			to.Targets = append(to.Targets, nil)
 		}
 	}
-	// Repeated type Task is not an ORMable message type
-	// Repeated type TaskProgress is not an ORMable message type
-	// Repeated type Task is not an ORMable message type
+	for _, v := range m.TaskBegin {
+		if v != nil {
+			if tempTaskBegin, cErr := v.ToORM(ctx); cErr == nil {
+				to.TaskBegin = append(to.TaskBegin, &tempTaskBegin)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskBegin = append(to.TaskBegin, nil)
+		}
+	}
+	for _, v := range m.TaskProgress {
+		if v != nil {
+			if tempTaskProgress, cErr := v.ToORM(ctx); cErr == nil {
+				to.TaskProgress = append(to.TaskProgress, &tempTaskProgress)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskProgress = append(to.TaskProgress, nil)
+		}
+	}
+	for _, v := range m.TaskEnd {
+		if v != nil {
+			if tempTaskEnd, cErr := v.ToORM(ctx); cErr == nil {
+				to.TaskEnd = append(to.TaskEnd, &tempTaskEnd)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskEnd = append(to.TaskEnd, nil)
+		}
+	}
 	// Repeated type string is not an ORMable message type
 	if posthook, ok := interface{}(m).(RunWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
@@ -151,8 +220,36 @@ func (m *RunORM) ToPB(ctx context.Context) (Run, error) {
 	to.StartStr = m.StartStr
 	to.Version = m.Version
 	to.XMLOutputVersion = m.XMLOutputVersion
+	if m.Debugging != nil {
+		tempDebugging, err := m.Debugging.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Debugging = &tempDebugging
+	}
+	if m.Stats != nil {
+		tempStats, err := m.Stats.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Stats = &tempStats
+	}
+	if m.ScanInfo != nil {
+		tempScanInfo, err := m.ScanInfo.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.ScanInfo = &tempScanInfo
+	}
 	if m.Start != nil {
 		to.Start = timestamppb.New(*m.Start)
+	}
+	if m.Verbose != nil {
+		tempVerbose, err := m.Verbose.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Verbose = &tempVerbose
 	}
 	for _, v := range m.Hosts {
 		if v != nil {
@@ -198,9 +295,39 @@ func (m *RunORM) ToPB(ctx context.Context) (Run, error) {
 			to.Targets = append(to.Targets, nil)
 		}
 	}
-	// Repeated type Task is not an ORMable message type
-	// Repeated type TaskProgress is not an ORMable message type
-	// Repeated type Task is not an ORMable message type
+	for _, v := range m.TaskBegin {
+		if v != nil {
+			if tempTaskBegin, cErr := v.ToPB(ctx); cErr == nil {
+				to.TaskBegin = append(to.TaskBegin, &tempTaskBegin)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskBegin = append(to.TaskBegin, nil)
+		}
+	}
+	for _, v := range m.TaskProgress {
+		if v != nil {
+			if tempTaskProgress, cErr := v.ToPB(ctx); cErr == nil {
+				to.TaskProgress = append(to.TaskProgress, &tempTaskProgress)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskProgress = append(to.TaskProgress, nil)
+		}
+	}
+	for _, v := range m.TaskEnd {
+		if v != nil {
+			if tempTaskEnd, cErr := v.ToPB(ctx); cErr == nil {
+				to.TaskEnd = append(to.TaskEnd, &tempTaskEnd)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.TaskEnd = append(to.TaskEnd, nil)
+		}
+	}
 	// Repeated type string is not an ORMable message type
 	if posthook, ok := interface{}(m).(RunWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
@@ -414,6 +541,18 @@ func DefaultStrictUpdateRun(ctx context.Context, in *Run, db *gorm.DB) (*Run, er
 		return nil, err
 	}
 	ormObj.Targets = nil
+	if err = db.Model(&ormObj).Association("TaskBegin").Replace(ormObj.TaskBegin).Error; err != nil {
+		return nil, err
+	}
+	ormObj.TaskBegin = nil
+	if err = db.Model(&ormObj).Association("TaskEnd").Replace(ormObj.TaskEnd).Error; err != nil {
+		return nil, err
+	}
+	ormObj.TaskEnd = nil
+	if err = db.Model(&ormObj).Association("TaskProgress").Replace(ormObj.TaskProgress).Error; err != nil {
+		return nil, err
+	}
+	ormObj.TaskProgress = nil
 	if hook, ok := interface{}(&ormObj).(RunORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
 			return nil, err
@@ -609,6 +748,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			continue
 		}
 		if !updatedDebugging && strings.HasPrefix(f, prefix+"Debugging.") {
+			updatedDebugging = true
 			if patcher.Debugging == nil {
 				patchee.Debugging = nil
 				continue
@@ -616,15 +756,12 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			if patchee.Debugging == nil {
 				patchee.Debugging = &scan.Debugging{}
 			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"Debugging."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
+			if o, err := scan.DefaultApplyFieldMaskDebugging(ctx, patchee.Debugging, patcher.Debugging, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Debugging.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Debugging = o
 			}
-			if err := gorm1.MergeWithMask(patcher.Debugging, patchee.Debugging, childMask); err != nil {
-				return nil, nil
-			}
+			continue
 		}
 		if f == prefix+"Debugging" {
 			updatedDebugging = true
@@ -632,6 +769,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			continue
 		}
 		if !updatedStats && strings.HasPrefix(f, prefix+"Stats.") {
+			updatedStats = true
 			if patcher.Stats == nil {
 				patchee.Stats = nil
 				continue
@@ -639,15 +777,12 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			if patchee.Stats == nil {
 				patchee.Stats = &scan.Stats{}
 			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"Stats."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
+			if o, err := scan.DefaultApplyFieldMaskStats(ctx, patchee.Stats, patcher.Stats, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Stats.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Stats = o
 			}
-			if err := gorm1.MergeWithMask(patcher.Stats, patchee.Stats, childMask); err != nil {
-				return nil, nil
-			}
+			continue
 		}
 		if f == prefix+"Stats" {
 			updatedStats = true
@@ -655,6 +790,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			continue
 		}
 		if !updatedScanInfo && strings.HasPrefix(f, prefix+"ScanInfo.") {
+			updatedScanInfo = true
 			if patcher.ScanInfo == nil {
 				patchee.ScanInfo = nil
 				continue
@@ -662,15 +798,12 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			if patchee.ScanInfo == nil {
 				patchee.ScanInfo = &scan.Info{}
 			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"ScanInfo."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
+			if o, err := scan.DefaultApplyFieldMaskInfo(ctx, patchee.ScanInfo, patcher.ScanInfo, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"ScanInfo.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.ScanInfo = o
 			}
-			if err := gorm1.MergeWithMask(patcher.ScanInfo, patchee.ScanInfo, childMask); err != nil {
-				return nil, nil
-			}
+			continue
 		}
 		if f == prefix+"ScanInfo" {
 			updatedScanInfo = true
@@ -701,6 +834,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			continue
 		}
 		if !updatedVerbose && strings.HasPrefix(f, prefix+"Verbose.") {
+			updatedVerbose = true
 			if patcher.Verbose == nil {
 				patchee.Verbose = nil
 				continue
@@ -708,15 +842,12 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			if patchee.Verbose == nil {
 				patchee.Verbose = &scan.Verbose{}
 			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"Verbose."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
+			if o, err := scan.DefaultApplyFieldMaskVerbose(ctx, patchee.Verbose, patcher.Verbose, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Verbose.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Verbose = o
 			}
-			if err := gorm1.MergeWithMask(patcher.Verbose, patchee.Verbose, childMask); err != nil {
-				return nil, nil
-			}
+			continue
 		}
 		if f == prefix+"Verbose" {
 			updatedVerbose = true

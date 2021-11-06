@@ -58,7 +58,7 @@ message Address {
   // -------------------------------------
 
   // @gotags: xml:"addr,attr"
-  string Addr = 10;          
+  gorm.types.InetValue Addr = 10;          
   // @gotags: xml:"addrtype,attr"
   string Type = 11;        
   // @gotags: xml:"vendor,attr"

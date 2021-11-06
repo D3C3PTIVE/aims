@@ -7,69 +7,77 @@ import "options/gorm.proto";
 import "types/types.proto";
 import "google/protobuf/timestamp.proto";
 
-// This file contains all objects needed by Nmap for :
-// - Giving information about an ongoing scan
-// - Parsing its results
-
 
 // Info - A general overview of a Scan, with basic information
 // on targeted/found services, protocols and flags.
 message Info {
-        // @gotags: xml:"numservices,attr"
-        int32 NumServices = 1;
-        // @gotags: xml:"protocol,attr"
-        string Protocol = 2;
-        // @gotags: xml:"scanflags,attr"
-        string ScanFlags = 3;
-        // @gotags: xml:"services,attr"
-        string Services = 4;
-        // @gotags: xml:"type,attr"
-        string Type = 5;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"numservices,attr"
+  int32 NumServices = 10;
+  // @gotags: xml:"protocol,attr"
+  string Protocol = 11;
+  // @gotags: xml:"scanflags,attr"
+  string ScanFlags = 12;
+  // @gotags: xml:"services,attr"
+  string Services = 13;
+  // @gotags: xml:"type,attr"
+  string Type = 14;
 }
 
 // Verbose - Contains the verbosity level of the scan
 message Verbose {
-        // @gotags: xml:"level,attr"
-        int32 Level = 1;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"level,attr"
+  int32 Level = 10;
 }
 
 // Debugging - Contains the debugging level of the scan
 message Debugging {
-        // @gotags: xml:"level,attr"
-        int32 Level = 1;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: xml:"level,attr"
+  int32 Level = 10;
 }
 
 // Task - Information about a task
 message Task {
-        // @gotags: xml:"time,attr"
-        google.protobuf.Timestamp Time = 5;
-        // @gotags: xml:"task,attr"
-        string Task = 2;
-        // @gotags: xml:"extrainfo,attr"
-        string ExtraInfo = 3;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"time,attr"
+  google.protobuf.Timestamp Time = 10;
+  // @gotags: xml:"task,attr"
+  string Task = 11;
+  // @gotags: xml:"extrainfo,attr"
+  string ExtraInfo = 12;
 }
 
 // TaskProgress - Progression of a task
 message TaskProgress {
-        // @gotags: xml:"percent,attr"
-        float Percent = 1;
-        // @gotags: xml:"remaining,attr"
-        int32 Remaining = 2;
-        // @gotags: xml:"task,attr"
-        string Task = 3;
-        // @gotags: xml:"etc,attr"
-        google.protobuf.Timestamp Etc = 4;
-        // @gotags: xml:"time,attr"
-        google.protobuf.Timestamp Time = 5;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"percent,attr"
+  float Percent = 10;
+  // @gotags: xml:"remaining,attr"
+  int32 Remaining = 11;
+  // @gotags: xml:"task,attr"
+  string Task = 12;
+  // @gotags: xml:"etc,attr"
+  google.protobuf.Timestamp Etc = 13;
+  // @gotags: xml:"time,attr"
+  google.protobuf.Timestamp Time = 14;
 }
 
 // Target - Represents a target, how it was specified when passed to nmap,
 // its status and the reason of its status. Example:
 // <target specification="domain.does.not.exist" status="skipped" reason="invalid"/>
 message Target {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
-  // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
 
   // @gotags: xml:"specification,attr"
@@ -82,50 +90,57 @@ message Target {
 
 // Stats - Contains statistics for a Nmap scan
 message Stats {
-        // @gotags: xml:"finished"
-        Finished Finished = 1;
-        // @gotags: xml:"hosts"
-        HostStats Hosts = 2;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"finished"
+  Finished Finished = 10;
+  // @gotags: xml:"hosts"
+  HostStats Hosts = 11;
 }
 
+// Finished - Statistics for a Scan after it has run.
 message Finished {
-        // @gotags: xml:"time,attr"
-        google.protobuf.Timestamp Time = 1;
-        // @gotags: xml:"timestr,attr"
-        string TimeStr = 2;
-        // @gotags: xml:"elapsed,attr"
-        float Elapsed = 3;
-        // @gotags: xml:"summary,attr"
-        string Summary = 4;
-        // @gotags: xml:"exit,attr"
-        string Exit = 5;
-        // @gotags: xml:"errormsg,attr"
-        string ErrorMsg = 6;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"time,attr"
+  google.protobuf.Timestamp Time = 10;
+  // @gotags: xml:"timestr,attr"
+  string TimeStr = 11;
+  // @gotags: xml:"elapsed,attr"
+  float Elapsed = 12;
+  // @gotags: xml:"summary,attr"
+  string Summary = 13;
+  // @gotags: xml:"exit,attr"
+  string Exit = 14;
+  // @gotags: xml:"errormsg,attr"
+  string ErrorMsg = 15;
 }
 
 // Host - Contains the amount of up/down hosts and total count
 message HostStats {
-        // @gotags: xml:"up,attr"
-        int32 Up = 1;
-        // @gotags: xml:"down,attr"
-        int32 Down = 2;
-        // @gotags: xml:"total,attr"
-        int32 Total = 3;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"up,attr"
+  int32 Up = 10;
+  // @gotags: xml:"down,attr"
+  int32 Down = 11;
+  // @gotags: xml:"total,attr"
+  int32 Total = 12;
 }
 
 // NmapScript - Represents a Nmap Scripting Engine Script.
 // The inner elements can be an arbitrary collection of Tables and Elements. They can be empty
 message NmapScript {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
-
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true"
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true"
   google.protobuf.Timestamp UpdatedAt = 5;
-  // -------------------------------------
 
   // @gotags: xml:"output,attr"
   string Output = 10;
@@ -137,7 +152,6 @@ message NmapScript {
 
 // elements - The smallest building block for scripts/tables. Key is optional
 message Element {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
@@ -150,7 +164,6 @@ message Element {
 
 // Table - An arbitrary collection of (sub-)Tables and Elements. Can be empty
 message Table {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
@@ -165,7 +178,6 @@ message Table {
 
 // Times - Contains time statistics for a Nmap scan
 message Times {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
@@ -181,7 +193,6 @@ message Times {
 
 // Smurf - COntains responses from a smurf attack
 message Smurf {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
