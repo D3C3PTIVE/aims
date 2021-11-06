@@ -31,7 +31,7 @@ message Port {
   // @gotags: xml:"owner"
   string Owner = 12;
   // @gotags: xml:"service"
-  network.Service Service = 13;
+  network.Service Service = 13 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"state"
   State State = 14;
   // @gotags: xml:"script"
@@ -40,7 +40,7 @@ message Port {
   // @gotags: xml:"count"
   int32 Count = 20;
   // @gotags: xml:"extrareasons"
-  repeated Reason Reasons = 21 [(gorm.field).belongs_to = {}];
+  repeated Reason Reasons = 21;
 }
 
 

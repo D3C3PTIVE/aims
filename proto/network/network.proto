@@ -1,16 +1,15 @@
 syntax = "proto3";
 
-// DB -----------
-import "options/gorm.proto";
-import "types/types.proto";
-import "google/protobuf/timestamp.proto";
-
 package network;
 
-// Trace - Represents the trace to a host, including the hops
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+import "types/types.proto";
+
+// Trace Represents the trace to a host, including the hops
 message Trace {
   option (gorm.opts).ormable = true;
-  // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
 
   // @gotags: xml:"proto,attr"
@@ -24,7 +23,6 @@ message Trace {
 // Hop - An IP hop to a host
 message Hop {
   option (gorm.opts).ormable = true;
-  // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
 
   // @gotags: xml:"ttl,attr"
@@ -39,8 +37,11 @@ message Hop {
 
 // Distance - The number of hops before reaching the host
 message Distance {
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
   // @gotags: xml:"value,attr"
-  int32 Value = 1;
+  int32 Value = 2;
 }
 
 // Address - A network address
@@ -57,14 +58,9 @@ message Address {
   // -------------------------------------
 
   // @gotags: xml:"addr,attr"
-  string IP = 10;          
+  string Addr = 10;          
   // @gotags: xml:"addrtype,attr"
   string Type = 11;        
   // @gotags: xml:"vendor,attr"
   string Vendor = 12;      
-  
-  // We might have two subnets 192.168.1.1/24. How to know, when adding a host,
-  // to which subnet it belongs ? We need to check a few things:
-  // - Gateway for each address
-  string Gateway = 13;
 }

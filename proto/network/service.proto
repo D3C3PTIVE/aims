@@ -2,50 +2,56 @@ syntax = "proto3";
 
 package network;
 
+// DB -----------
 import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+import "types/types.proto";
 
 // Service - A service running behind a port
 message Service {
-        // General
-        uint32 ID = 1;
-        // @inject_tag: gorm:"not null"
-        uint32 PortID = 2;
-        // @inject_tag: xml:"proto,attr"
-        string Protocol = 3;
-        // @inject_tag: xml:"name,attr"
-        string Name = 4;
-        // @inject_tag: xml:"extrainfo,attr"
-        string ExtraInfo = 5;
+  // GORM --------------------------------
+  option (gorm.opts).ormable = true;
 
-        // Nmap
-        // @inject_tag: xml:"devicetype,attr"
-        string DeviceType = 10;
-        // @inject_tag: xml:"hostname,attr"
-        string Hostname = 12;
-        // @inject_tag: xml:"method,attr"
-        string Method = 14;
-        // @inject_tag: xml:"ostype,attr"
-        string OSType = 15;
-        // @inject_tag: xml:"product,attr"
-        string Product = 16;
-        // @inject_tag: xml:"rpcnum,attr"
-        string RPCNum = 17;
-        // @inject_tag: xml:"servicefp,attr"
-        string ServiceFP = 18;
-        // @inject_tag: xml:"tunnel,attr"
-        string Tunnel = 19;
-        // @inject_tag: xml:"lowver,attr"
-        string LowVersion = 13;
-        // @inject_tag: xml:"highver,attr"
-        string HighVersion = 11;
-        // @inject_tag: xml:"version,attr"
-        string Version = 20;
-        // @inject_tag: xml:"conf,attr"
-        int32 Configuration = 21;
-        // @inject_tag: xml:"cpe"
-        repeated string CPEs = 6;        // "Common Platform Enumeration" is standardized way to name software applications, OSs and Hardware platforms
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+  // -------------------------------------
 
-        // Timestamp
-        google.protobuf.Timestamp CreatedAt = 38;
-        google.protobuf.Timestamp UpdatedAt = 39;
+  // Nmap
+  // @gotags: xml:"proto,attr" display:"Protocol"
+  string Protocol = 10;
+  // @gotags: xml:"name,attr" display:"Name"
+  string Name = 11;
+  // @gotags: xml:"extrainfo,attr" display:"Extra Info"
+  string ExtraInfo = 12;
+
+  // @gotags: xml:"devicetype,attr" display:"Device Type"
+  string DeviceType = 17;
+  // @gotags: xml:"hostname,attr"
+  string Hostname = 18;
+  // @gotags: xml:"method,attr" display:"Method"
+  string Method = 19;
+  // @gotags: xml:"ostype,attr" display:"OS Type"
+  string OSType = 20;
+  // @gotags: xml:"product,attr" display:"Product"
+  string Product = 21;
+  // @gotags: xml:"rpcnum,attr" display:"RPC Number"
+  string RPCNum = 22;
+  // @gotags: xml:"servicefp,attr" display:"Fingerprint"
+  string ServiceFP = 23;
+  // @gotags: xml:"tunnel,attr" display:"Tunnel"
+  string Tunnel = 24;
+  // @gotags: xml:"lowver,attr" display:"Low Version"
+  string LowVersion = 25; 
+  // @gotags: xml:"highver,attr" display:"High Version"
+  string HighVersion = 26;
+  // @gotags: xml:"version,attr" display:"Version"
+  string Version = 27;
+  // @gotags: xml:"conf,attr"
+  int32 Confidence = 28;
+  // @gotags: xml:"cpe" display:"CPEs"
+  repeated string CPEs = 29; // "Common Platform Enumeration":standardized way to name software apps, OSs and Hardware platforms
 }

@@ -2,41 +2,58 @@ syntax = "proto3";
 
 package network;
 
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+import "types/types.proto";
+
 // Sequence - 
 message Sequence {
-        // @inject_tag: xml:"class,attr"
-        string Class = 1;
-        // @inject_tag: xml:"values,attr"
-        string Values = 2;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+ // @gotags: xml:"class,attr"
+ string Class = 10;
+ // @gotags: xml:"values,attr"
+ string Values = 11;
 }
 
 // TCPSequence - Represents a detected TCP Sequence
 message TCPSequence {
-        // @inject_tag: xml:"index,attr"
-        int32 Index = 1; 
-        // @inject_tag: xml:"difficulty,attr"
-        string Difficulty = 2;
-        // @inject_tag: xml:"values,attr"
-        string Values = 3;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"index,attr"
+  int32 Index = 10; 
+  // @gotags: xml:"difficulty,attr"
+  string Difficulty = 11;
+  // @gotags: xml:"values,attr"
+  string Values = 12;
 }
 
 // IPIDSequence - Represents a detected IP ID Sequence
 message IPIDSequence {
-        // @inject_tag: xml:"index,attr"
-        int32 Index = 1; 
-        // @inject_tag: xml:"difficulty,attr"
-        string Difficulty = 2;
-        // @inject_tag: xml:"values,attr"
-        string Values = 3;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"index,attr"
+  int32 Index = 10; 
+  // @gotags: xml:"difficulty,attr"
+  string Difficulty = 11;
+  // @gotags: xml:"values,attr"
+  string Values = 12;
 }
 
 // TCPTSSequence - Represents a detected TCP TS Sequence
 message TCPTSSequence {
-        // @inject_tag: xml:"index,attr"
-        int32 Index = 1; 
-        // @inject_tag: xml:"difficulty,attr"
-        string Difficulty = 2;
-        // @inject_tag: xml:"values,attr"
-        string Values = 3;
+  option (gorm.opts).ormable = true;
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"index,attr"
+  int32 Index = 10; 
+  // @gotags: xml:"difficulty,attr"
+  string Difficulty = 11;
+  // @gotags: xml:"values,attr"
+  string Values = 12;
 }
 

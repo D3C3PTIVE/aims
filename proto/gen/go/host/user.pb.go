@@ -35,9 +35,11 @@ type User struct {
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
 	// @gotags: display:"Updated at" readonly:"true"
 	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"` // -------------------------------------
-	Name      string                 `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
-	UID       int32                  `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty"`
-	Groups    []*Group               `protobuf:"bytes,12,rep,name=Groups,proto3" json:"Groups,omitempty"`
+	// @gotags: display:"Name"
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name"`
+	// @gotags: display:"UID"
+	UID    int32    `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty" display:"UID"`
+	Groups []*Group `protobuf:"bytes,12,rep,name=Groups,proto3" json:"Groups,omitempty"`
 }
 
 func (x *User) Reset() {

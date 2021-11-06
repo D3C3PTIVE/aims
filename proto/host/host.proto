@@ -66,17 +66,17 @@ message Host {
   // @gotags: xml:"status"
   Status Status = 32;
   // @gotags: xml:"distance"
-  network.Distance Distance = 55;
+  network.Distance Distance = 55 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"starttime,attr,omitempty"
   google.protobuf.Timestamp StartTime = 31;
   // @gotags: xml:"endtime,attr,omitempty"
   google.protobuf.Timestamp EndTime = 40;         // Might have issues here with XML unmarshalling
   // @gotags: xml:"ipidsequence"
-  network.IPIDSequence IPIDSequence = 41;
+  network.IPIDSequence IPIDSequence = 41 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcpsequence"
-  network.TCPSequence TCPSequence = 25;
+  network.TCPSequence TCPSequence = 25 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcptssequence"
-  network.TCPTSSequence TCPTSSequence = 26;
+  network.TCPTSSequence TCPTSSequence = 26 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"times"
   scan.Times Times = 27 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"trace"

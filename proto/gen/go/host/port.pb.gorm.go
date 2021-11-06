@@ -27,7 +27,9 @@ type PortORM struct {
 	Protocol         string
 	Reasons          []*ReasonORM          `gorm:"foreignkey:PortId;association_foreignkey:Id"`
 	Scripts          []*scan.NmapScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:port_nmap_scripts;jointable_foreignkey:PortId;association_jointable_foreignkey:NmapScriptId"`
-	State            *StateORM             `gorm:"foreignkey:PortId;association_foreignkey:Id"`
+	Service          *network.ServiceORM   `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
+	ServiceId        *go_uuid.UUID
+	State            *StateORM `gorm:"foreignkey:PortId;association_foreignkey:Id"`
 	UpdatedAt        *time.Time
 }
 
@@ -65,6 +67,13 @@ func (m *Port) ToORM(ctx context.Context) (PortORM, error) {
 	to.Number = m.Number
 	to.Protocol = m.Protocol
 	to.Owner = m.Owner
+	if m.Service != nil {
+		tempService, err := m.Service.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Service = &tempService
+	}
 	if m.State != nil {
 		tempState, err := m.State.ToORM(ctx)
 		if err != nil {
@@ -121,6 +130,13 @@ func (m *PortORM) ToPB(ctx context.Context) (Port, error) {
 	to.Number = m.Number
 	to.Protocol = m.Protocol
 	to.Owner = m.Owner
+	if m.Service != nil {
+		tempService, err := m.Service.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Service = &tempService
+	}
 	if m.State != nil {
 		tempState, err := m.State.ToPB(ctx)
 		if err != nil {
@@ -721,6 +737,7 @@ func DefaultApplyFieldMaskPort(ctx context.Context, patchee *Port, patcher *Port
 			continue
 		}
 		if !updatedService && strings.HasPrefix(f, prefix+"Service.") {
+			updatedService = true
 			if patcher.Service == nil {
 				patchee.Service = nil
 				continue
@@ -728,15 +745,12 @@ func DefaultApplyFieldMaskPort(ctx context.Context, patchee *Port, patcher *Port
 			if patchee.Service == nil {
 				patchee.Service = &network.Service{}
 			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"Service."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
+			if o, err := network.DefaultApplyFieldMaskService(ctx, patchee.Service, patcher.Service, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Service.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Service = o
 			}
-			if err := gorm1.MergeWithMask(patcher.Service, patchee.Service, childMask); err != nil {
-				return nil, nil
-			}
+			continue
 		}
 		if f == prefix+"Service" {
 			updatedService = true
