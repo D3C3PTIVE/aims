@@ -18,7 +18,7 @@ package credential
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// import "github.com/maxlandon/aims/proto/gen/go/credential"
+import "github.com/maxlandon/aims/proto/gen/go/credential"
 
 // PostgresMD5 - A credential.Private.PasswordHash password hash that can be
 // credential.Private.ReplayableHash replayed to authenticate to PostgreSQL
@@ -26,15 +26,9 @@ package credential
 // by the string 'md5'
 type PostgresMD5 Private
 
-// type PostgresMD5 struct {
-//         *Private
-// }
-
 // NewPostgresMD5 - Create a new PostgreSQL MD5 Credential and its embedded Protobuf type.
-// func NewPostgresMD5() *PostgresMD5 {
-//         md := &PostgresMD5{
-//                 Private: NewPrivate(),
-//         }
-//         md.Type = credential.PrivateType_PostgresMD5
-//         return md
-// }
+func NewPostgresMD5() *PostgresMD5 {
+	md := PostgresMD5(Private{})
+	md.Type = credential.PrivateType_PostgresMD5
+	return &md
+}

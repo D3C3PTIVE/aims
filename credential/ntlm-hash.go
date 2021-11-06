@@ -36,17 +36,13 @@ import (
 // printed as a hexadecimal string where 2 characters represent a byte of the original hash with
 // the high nibble first): (1) {lanManagerHexDigestRegexp, the LAN Manager hash's hex digest} and
 // (2) {ntLanManagerHexDigestRegexp, the NTLM hash's hex digest}.
-type NTLMHash struct {
-	*Private // The Private type is a base Maltego Entity.
-}
+type NTLMHash Private
 
 // NewNTLMHash - Create a new NTLM hash Credential and its embedded Protobuf type.
 func NewNTLMHash() *NTLMHash {
-	h := &NTLMHash{
-		Private: NewPrivate(),
-	}
+	h := NTLMHash(Private{})
 	h.Type = credential.PrivateType_NTLMHash
-	return h
+	return &h
 }
 
 // HexDigest - Converts a buffer containing `hash` bytes to a String containing the hex digest of that `hash`.

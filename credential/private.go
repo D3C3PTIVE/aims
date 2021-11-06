@@ -19,6 +19,8 @@ package credential
 */
 
 import (
+	"context"
+
 	"github.com/maxlandon/aims/proto/gen/go/credential"
 	"github.com/maxlandon/gondor/maltego"
 )
@@ -28,23 +30,14 @@ import (
 // password hash, or key file.
 type Private credential.Private
 
-// type Private struct {
-//         *credential.Private
-// }
-
-// NewPrivate - Creates a new credential.Private with its embedded Protobuf type.
-// func NewPrivate() *Private {
-//         return &Private{
-//                 Private: &credential.Private{},
-//         }
-// }
-
-// PrivateFromPB - Get a Private from its Protobuf equivalent.
-// func PrivateFromPB(pb *credential.Private) *Private {
-//         return &Private{Private: pb}
-// }
+// ToORM - Get the SQL object for the Private credential.
+func (p *Private) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	pb := &credential.Private{}
+	return (*pb).ToORM(ctx)
+}
 
 // AsEntity - Returns the Private as a valid Maltego Entity.
 func (h *Private) AsEntity() maltego.Entity {
+
 	return maltego.Entity{}
 }
