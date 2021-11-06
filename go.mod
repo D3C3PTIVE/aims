@@ -8,6 +8,7 @@ require (
 	github.com/jinzhu/gorm v1.9.16
 	github.com/maxlandon/gondor v0.0.0-20211105054626-4bc6f6322d62
 	github.com/satori/go.uuid v1.2.0
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	google.golang.org/genproto v0.0.0-20211104193956-4c6863e31247
 	google.golang.org/protobuf v1.27.1
 )

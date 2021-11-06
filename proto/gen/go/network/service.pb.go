@@ -34,7 +34,7 @@ type Service struct {
 	// @gotags: display:"Created at" readonly:"true"
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
 	// @gotags: display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"` // -------------------------------------
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
 	// Nmap
 	// @gotags: xml:"proto,attr" display:"Protocol"
 	Protocol string `protobuf:"bytes,10,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"proto,attr" display:"Protocol"`
