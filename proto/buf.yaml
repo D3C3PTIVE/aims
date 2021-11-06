@@ -1,7 +1,7 @@
 version: v1
 name: buf.build/maxlandon/aims
 deps:
-  - buf.build/srikrsna/protoc-gen-gotag
+  # - buf.build/srikrsna/protoc-gen-gotag
   - buf.build/ufoundit-dev/protoc-gen-gorm
 lint:
   use:

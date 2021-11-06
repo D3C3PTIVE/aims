@@ -5,7 +5,7 @@ managed:
     default: github.com/maxlandon/aims/proto/gen/go
     except:
       - buf.build/googleapis/googleapis
-      - buf.build/srikrsna/protoc-gen-gotag
+      # - buf.build/srikrsna/protoc-gen-gotag
       - buf.build/ufoundit-dev/protoc-gen-gorm
 
 plugins:
