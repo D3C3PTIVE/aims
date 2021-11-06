@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package network;
+
+// Sequence - 
+message Sequence {
+        // @inject_tag: xml:"class,attr"
+        string Class = 1;
+        // @inject_tag: xml:"values,attr"
+        string Values = 2;
+}
+
+// TCPSequence - Represents a detected TCP Sequence
+message TCPSequence {
+        // @inject_tag: xml:"index,attr"
+        int32 Index = 1; 
+        // @inject_tag: xml:"difficulty,attr"
+        string Difficulty = 2;
+        // @inject_tag: xml:"values,attr"
+        string Values = 3;
+}
+
+// IPIDSequence - Represents a detected IP ID Sequence
+message IPIDSequence {
+        // @inject_tag: xml:"index,attr"
+        int32 Index = 1; 
+        // @inject_tag: xml:"difficulty,attr"
+        string Difficulty = 2;
+        // @inject_tag: xml:"values,attr"
+        string Values = 3;
+}
+
+// TCPTSSequence - Represents a detected TCP TS Sequence
+message TCPTSSequence {
+        // @inject_tag: xml:"index,attr"
+        int32 Index = 1; 
+        // @inject_tag: xml:"difficulty,attr"
+        string Difficulty = 2;
+        // @inject_tag: xml:"values,attr"
+        string Values = 3;
+}
+

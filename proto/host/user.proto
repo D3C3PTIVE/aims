@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package host;
+
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+import "types/types.proto";
+
+// User - An operating-system user. 
+message User {
+  // GORM --------------------------------
+  option (gorm.opts).ormable = true;
+
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+  // -------------------------------------
+
+  // @gotags: display:"Name"
+  string Name = 10;     
+  // @gotags: display:"UID" 
+  int32 UID = 11; 
+  repeated Group Groups = 12 [(gorm.field).many_to_many = {}];
+}
+
+// Group - An operating-system group of users
+message Group {
+  // GORM --------------------------------
+  option (gorm.opts).ormable = true;
+
+  // @gotags: display:"ID" hidden:"true" strict:"yes"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // @gotags: display:"Name"
+  string Name = 10;     
+  // @gotags: display:"Group ID"
+  int32 GID = 11;
+  repeated User Members = 12 [(gorm.field).many_to_many = {}];
+}

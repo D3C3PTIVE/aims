@@ -1,0 +1,129 @@
+syntax = "proto3";
+
+package host;
+
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+import "types/types.proto";
+
+import "host/os.proto";
+import "host/port.proto";
+import "host/user.proto";
+import "network/network.proto";
+import "network/packet.proto";
+import "scan/scan.proto";
+
+// Host - Represents a remote computer host in DB
+message Host {
+  // GORM ---------------------------------------
+  option (gorm.opts).ormable = true;
+
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // General ------------------------------------
+  // @gotags: display:"MAC Address" 
+  string MAC = 10;
+  // @gotags: display:"Comm" 
+  string Comm = 11;
+  // @gotags: display:"OS Name" 
+  string OSName = 12;
+  // @gotags: display:"OS Flavor" 
+  string OSFlavor = 13;
+  // @gotags: display:"OS Service Pack" 
+  string OSSp = 14;
+  // @gotags: display:"OS Language" 
+  string OSLang = 15;
+  // @gotags: display:"OS Family" 
+  string OSFamily = 16;
+  // @gotags: display:"CPU Arch" 
+  string Arch = 17;
+  // @gotags: display:"Purpose" 
+  string Purpose = 18;
+  // @gotags: display:"Info" 
+  string Info = 19;
+  // @gotags: display:"Scope" 
+  string Scope = 20;
+  // @gotags: display:"Virtual Host" 
+  string VirtualHost = 21;
+  repeated User Users = 22;
+  repeated network.Address Addresses = 23 [(gorm.field).many_to_many = {}];
+
+  // Nmap ---------------------------------------
+  // @gotags: xml:"hostnames>hostname"
+  repeated Hostname Hostnames = 34;
+  // @gotags: xml:"ports>port"
+  repeated Port Ports = 36;
+  // @gotags: xml:"ports>extraports"
+  repeated Port ExtraPorts = 33;
+  // @gotags: xml:"os"
+  OS OS = 24; 
+  // @gotags: xml:"status"
+  Status Status = 32;
+  // @gotags: xml:"distance"
+  network.Distance Distance = 55;
+  // @gotags: xml:"starttime,attr,omitempty"
+  google.protobuf.Timestamp StartTime = 31;
+  // @gotags: xml:"endtime,attr,omitempty"
+  google.protobuf.Timestamp EndTime = 40;         // Might have issues here with XML unmarshalling
+  // @gotags: xml:"ipidsequence"
+  network.IPIDSequence IPIDSequence = 41;
+  // @gotags: xml:"tcpsequence"
+  network.TCPSequence TCPSequence = 25;
+  // @gotags: xml:"tcptssequence"
+  network.TCPTSSequence TCPTSSequence = 26;
+  // @gotags: xml:"times"
+  scan.Times Times = 27 [(gorm.field).belongs_to = {}];
+  // @gotags: xml:"trace"
+  network.Trace Trace = 28 [(gorm.field).belongs_to = {}];
+  // @gotags: xml:"uptime"
+  Uptime Uptime = 29;
+  // @gotags: xml:"comment,attr"
+  string Comment = 30;
+  // @gotags: xml:"hostscript>script"
+  repeated scan.NmapScript HostScripts = 35 [(gorm.field).many_to_many = {}];
+  // @gotags: xml:"smurf"
+  repeated scan.Smurf Smurfs = 37 [(gorm.field).many_to_many = {}];
+}
+
+// A hostname for a host.
+message Hostname {
+  option (gorm.opts).ormable = true;
+
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // @gotags: display:"Name" xml:"name,attr"
+  string Name = 10;
+  // @gotags: display:"Type" xml:"type,attr"
+  string Type = 11;
+}
+
+// Uptime - The amount of time the host has been up
+message Uptime {
+  // @gotags: xml:"seconds,attr"
+  int32 Seconds = 1;
+  // @gotags: xml:"lastboot,attr"
+  string LastBoot = 2;
+}
+
+// Status represents a host's status.
+message Status {
+  option (gorm.opts).ormable = true;
+
+  // @gotags: xml:"state,attr"
+  string State = 1;
+  // @gotags: xml:"reason,attr"
+  string Reason = 2;
+  // @gotags: xml:"reason_ttl,attr"
+  string ReasonTTL = 3;
+}
