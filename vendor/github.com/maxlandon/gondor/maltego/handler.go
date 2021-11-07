@@ -56,6 +56,13 @@ func (ts *TransformServer) transformHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Check that the Transform Input Entity type
+	// is the same type as the request Entity one.
+	if err = transform.checkInputEntity(request.Entity); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Create a new Transform instance based on the model.
 	instance := transform.newInstanceFromRequest(request)
 

@@ -120,15 +120,12 @@ func (e *Entity) marshalBaseEntities(entityValue reflect.Value, field *reflect.S
 			realValue = fieldValue
 		}
 
-		// We can't read unexported fields, nor
-		if !fieldType.IsExported() {
-			continue
-		}
-
 		// If the type is marked as a Base entity, check and process it.
 		if _, isBaseEntity := fieldType.Tag.Lookup("base"); isBaseEntity {
 			e.marshalBaseEntity(realValue, &fieldType)
-			continue
+			// For now, we return: only one base Entity is allowed
+			return
+			// continue
 		}
 	}
 }

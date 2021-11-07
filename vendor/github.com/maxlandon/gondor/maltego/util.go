@@ -24,6 +24,7 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -72,4 +73,32 @@ func funcPathAndName(f interface{}) string {
 func funcName(f interface{}) string {
 	splitFuncName := strings.Split(funcPathAndName(f), ".")
 	return splitFuncName[len(splitFuncName)-1]
+}
+
+// getDirectory - Return a directory path where all subdirs have been created.
+// Example, outputting an Entity to /tmp/<distribution/Entities
+func getDirectory(path string, subdir string) (string, error) {
+	fullPath := filepath.Join(path, subdir)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		err = os.MkdirAll(fullPath, 0700)
+		if err != nil {
+			return "", err
+		}
+	}
+	return fullPath, nil
+}
+
+func getNamePlural(name string) (p string) {
+	trimmed := strings.TrimSpace(name)
+	// var suffix string
+	// switch string(trimmed[len(trimmed)-1]) {
+	// case "e", "a", "u", "i", "o":
+	//         suffix = "s"
+	// case "s":
+	//         // suffix = "ess"
+	// case "y":
+	//         suffix = "ies"
+	// default:
+	// }
+	return trimmed
 }

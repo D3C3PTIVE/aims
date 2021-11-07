@@ -20,6 +20,7 @@ package maltego
 
 import (
 	"encoding/xml"
+	"sync"
 )
 
 // Message - A type containing all the output elements of a Transform.
@@ -66,7 +67,8 @@ func (m Message) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error
 	}
 
 	// And finally write the temp struct contents to the Message
-	m.Entity = temp.Entities[0] // Hard-coded in Maltego Python/Go libs
+	m.Entity = temp.Entities[0]      // Hard-coded in Maltego Python/Go libs
+	m.Entity.mutex = &sync.RWMutex{} // Not initialized by XML
 	m.Type = m.Entity.Type
 	m.Value = temp.Values[0]         // Same hard-coding
 	m.Slider = temp.Slider.SoftLimit // And finally, the limit of output entities

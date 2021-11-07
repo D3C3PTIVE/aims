@@ -19,6 +19,8 @@ package maltego
 */
 
 import (
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/maxlandon/gondor/maltego/configuration"
@@ -33,6 +35,7 @@ import (
 // which can also produce this Distribution, but only for its own context/content.
 type Distribution struct {
 	// Base information
+	Name string
 
 	// Contents
 	entities   map[string]Entity                        // Entities write themselves to files
@@ -48,9 +51,21 @@ type Distribution struct {
 // NewDistribution - Create a new Maltego Distribution,
 // with default operating parameters and empty contents.
 func NewDistribution() Distribution {
-	return Distribution{
+	d := Distribution{
 		mutex: &sync.RWMutex{},
 	}
+
+	// Automatically set the Distribution based
+	// on the package of our caller.
+	pc, _, _, ok := runtime.Caller(1)
+	if ok {
+
+		path := runtime.FuncForPC(pc).Name()
+		pkg := strings.Split(path, ".")
+		d.Name = pkg[0]
+	}
+
+	return d
 }
 
 //

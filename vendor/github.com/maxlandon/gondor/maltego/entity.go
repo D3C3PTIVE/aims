@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/maxlandon/gondor/maltego/configuration"
 )
 
 //
@@ -51,9 +53,10 @@ type Entity struct {
 	DisplayName string // Defaults to the camelCase-split Entity type if Go native.
 	Alias       string `xml:"-"`         // The alias under which the Entity can be searched for/ grabbed.
 	Type        string `xml:"Type,attr"` // The string representation of the Entity type (determined through reflection)
-	Category    string `xml:"-"`         // The category of entities to which this category belongs (eg: a DNS server => services)
-	Value       string `xml:",cdata"`    // The value of the Entity, used by the Maltego client
-	Weight      int    `xml:"Weight"`    // The weight attributed to this entity on the graph
+	Description string `xml:"-"`
+	Category    string `xml:"-"`      // The category of entities to which this category belongs (eg: a DNS server => services)
+	Value       string `xml:",cdata"` // The value of the Entity, used by the Maltego client
+	Weight      int    `xml:"Weight"` // The weight attributed to this entity on the graph
 
 	// Display properties
 	// These properties are all the other properties related to
@@ -63,6 +66,13 @@ type Entity struct {
 	Bookmark BookmarkColor `xml:"-"`                        // Wraps itself into Properties later.
 	Overlays Overlays      `xml:"Overlays"`                 // Access the various overlays by their position.
 	Labels   []Label       `xml:"DisplayInformation>Label"` // Additional display information
+
+	// An entity inherits all the properties of its base Entity, if it has one.
+	// Because some of these properties might happen to be settings of various kinds
+	// (display labels, icons, etc), this Entity will by default inherit them as well.
+	// There are several ways to add a Base to this Entity: either through struct tags,
+	// or with AddBase(e ValidEntity) when people are not able to embed the type.
+	base ValidEntity
 
 	// The actual Entity properties, as a list to preserve order.
 	// When this Entity is an Input to a Transform, the underlying
@@ -156,6 +166,23 @@ func (e Entity) AsEntity() Entity {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 	return e
+}
+
+// SetBase - An entity inherits all the properties of its base Entity, if it has one.
+// Because some of these properties might happen to be settings of various kinds
+// (display labels, icons, etc), this Entity will by default inherit them as well.
+//
+// You can also set the base for your Entity with struct tags, with base:"yes"
+// (any non-nil "" value is enough).
+//
+// This function is therefore useful when for some reason, you don't want or cannot
+// embed a type in yours for acting as a Base (ex: when your Entity is a type alias).
+// Call this function within your type's AsEntity() function implementation to overcome
+// the problem, (very) preferably at its beginning so you can override inherited settings.
+func (e *Entity) SetBase(base ValidEntity) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+	e.base = base
 }
 
 // Property - Returns the string value of a Property field (regardless of its true,
@@ -343,8 +370,95 @@ func (e *Entity) setDisplayProperties(base Entity) {
 	e.Labels = append(base.Labels, e.Labels...)
 }
 
+func (e *Entity) hasBaseEntity() (yes bool, name string) {
+	if e.data == nil {
+		return false, ""
+	}
+
+	if e.base != nil {
+		b := e.base.AsEntity()
+		name = strings.Join([]string{b.Namespace, b.Type}, ".")
+		return true, name
+	}
+
+	// Get the reflect value here. The type is only
+	// needed in recursive calls, with entityValue.TypeOf()
+	entityValue := reflect.ValueOf(e.data).Elem()
+
+	numFields := entityValue.Type().NumField()
+	for fieldCount := 0; fieldCount < numFields; fieldCount++ {
+		// The realValue is the dereferenced pointer value
+		// if we were passed a pointer to a type. Below, we
+		// also make sure to initialize any nil pointers.
+		var realValue reflect.Value
+
+		// Get reflect value and type of single field
+		fieldValue := entityValue.Field(fieldCount) // Can be nil
+		fieldType := entityValue.Type().Field(fieldCount)
+
+		// We can't read unexported fields, nor
+		if !fieldType.IsExported() {
+			continue
+		}
+
+		// Check if field is a pointer. If so, dereference
+		// and switch on dereferenced type
+		if fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil() {
+			fieldValue.Set(reflect.New(fieldValue.Type().Elem()))
+			realValue = fieldValue.Elem()
+		} else {
+			realValue = fieldValue
+		}
+
+		// If the type is marked as a Base entity, check and process it.
+		if _, isBaseEntity := fieldType.Tag.Lookup("base"); isBaseEntity {
+			// Check the underlying type is a maltego.ValidEntity type.
+			// If we have a Maltego Entity type, this is our base.
+			validEntity := reflect.TypeOf((*ValidEntity)(nil)).Elem()
+			if realValue.Type().Implements(validEntity) {
+				base, ok := realValue.Interface().(ValidEntity)
+				if !ok {
+					continue
+				}
+				// Else we're good, forge the complete name.
+				b := base.AsEntity()
+				name = strings.Join([]string{b.Namespace, b.Type}, ".")
+				return true, name
+			}
+		}
+	}
+
+	return false, ""
+}
+
 // writeConfig - The Entity creates a file in path/Entities/EntityName,
 // and writes itself as an XML message into it.
 func (e Entity) writeConfig(path string) (err error) {
+	// dir, err := getDirectory(path, "Entities")
+	// if err != nil {
+	//         return fmt.Errorf("Error getting output dir: %s", err)
+	// }
+
+	// Create a configuration Entity in which we put everything.
+	ce := configuration.Entity{
+		ID:              strings.Join([]string{e.Namespace, e.Type}, "."),
+		DisplayName:     e.DisplayName,
+		Plural:          getNamePlural(e.DisplayName),
+		Description:     e.Description,
+		Category:        e.Category,
+		AllowedRoot:     true,
+		Visible:         true,
+		ConversionOrder: 2147483647,
+		// Icons
+		// Default converter ?
+	}
+
+	// Return and set any Base Entity
+	if hasBase, name := e.hasBaseEntity(); hasBase {
+		ce.BaseEntities = append(ce.BaseEntities, name)
+	}
+
+	// Now set all properties
+
 	return
 }

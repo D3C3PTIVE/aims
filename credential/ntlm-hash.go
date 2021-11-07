@@ -20,12 +20,14 @@ package credential
 
 import (
 	"bytes"
+	"context"
 	"crypto/des"
 	"encoding/binary"
 	"encoding/hex"
 	"strings"
 	"unicode/utf16"
 
+	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/md4"
 
 	"github.com/maxlandon/aims/proto/gen/go/credential"
@@ -44,6 +46,33 @@ func NewNTLMHash() *NTLMHash {
 	h.Type = credential.PrivateType_NTLMHash
 	return &h
 }
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the NTLMHash credential.
+func (h *NTLMHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	return (*Private)(h).ToORM(ctx)
+}
+
+// ToPB - Get the Protobuf object for the NTLMHash credential.
+func (h *NTLMHash) ToPB(ctx context.Context) *credential.Private {
+	return (*Private)(h).ToPB(ctx)
+}
+
+// AsEntity - Returns the Private as a valid Maltego Entity.
+func (h *NTLMHash) AsEntity() maltego.Entity {
+	// e:= maltego.NewEntity(h)
+	// base := (*Private)(h).AsEntity()
+	// e.SetBase(base)
+	// return e
+	return maltego.NewEntity(h)
+}
+
+//
+// Type-Specific functions
+//
 
 // HexDigest - Converts a buffer containing `hash` bytes to a String containing the hex digest of that `hash`.
 // @param hash [String] a buffer of bytes

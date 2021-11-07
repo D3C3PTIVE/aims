@@ -49,8 +49,25 @@ func (p *Private) validate() (err error) {
 		return err
 	}
 
-	// Key-specific validations.
-	if p.Type == PrivateType_Key {
+	// All credential pass through a common data formatter
+	// that may apply some formatting to the data. If you
+	// want to apply some to your credential type, do it here.
+	p.normalizeData()
+
+	// Then, the credential data is passed through a checker
+	// that will perform some regexp matchings against the
+	// Credential, depending on its declared type.
+	// Add your own branching in this function if you need.
+	if err = p.checkDataFormat(); err != nil {
+		return err
+	}
+
+	// Additional validations.
+	// Add your own branching and checks for your type. Normally
+	// these checks should not make any modification to the cred data.
+	switch p.Type {
+
+	case PrivateType_Key:
 		// Must be called first, otherwise can't check readable
 		if err := p.checkUnencrypted(); err != nil {
 			return err
@@ -63,16 +80,6 @@ func (p *Private) validate() (err error) {
 		}
 	}
 
-	// NTLM-specific checks
-	if p.Type == PrivateType_NTLMHash {
-		// Avoid doubt case-insensitive collisions at the outset
-		p.normalizeData()
-
-		// Check the structure of the data: we must find one or two hashes.
-		if err := p.dataFormatNTLM(); err != nil {
-			return err
-		}
-	}
 	// All validations have passed successfully, we can save.
 	return
 }
@@ -91,6 +98,35 @@ func (p *Private) hasData() (yes bool, err error) {
 	}
 
 	return true, nil
+}
+
+// Normalizes {Private.Data} by making it all lowercase so that the unique validation and index on
+// ({Private.Type}, {.Data}) catches collision in a case-insensitive manner without the need
+// to use case-insensitive comparisons.
+func (p *Private) normalizeData() {
+	switch p.Type {
+	case PrivateType_NTLMHash, PrivateType_PostgresMD5:
+		p.Data = strings.ToLower(p.Data)
+	}
+}
+
+// The credential data is passed through a checker that will perform some regexp matchings against the
+// Credential, depending on its declared type. Add your own branching in this function if you need.
+func (p *Private) checkDataFormat() (err error) {
+	switch p.Type {
+
+	case PrivateType_NTLMHash:
+		// Check the structure of the data: we must find one or two hashes.
+		if err := p.dataFormatNTLM(); err != nil {
+			return err
+		}
+
+	case PrivateType_PostgresMD5:
+		if err := p.dataFormatPostresMD5(); err != nil {
+			return err
+		}
+	}
+	return
 }
 
 //
@@ -150,13 +186,6 @@ var (
 	ntlmDataRegexp = fmt.Sprintf("\\A%s:%s\\z", lanManagerHexDigestRegexp, ntLanManagerHexDigestRegexp)
 )
 
-// Normalizes {Private.Data} by making it all lowercase so that the unique validation and index on
-// ({Private.Type}, {.Data}) catches collision in a case-insensitive manner without the need
-// to use case-insensitive comparisons.
-func (p *Private) normalizeData() {
-	p.Data = strings.ToLower(p.Data)
-}
-
 // Validates that {#data} is in the NTLM data format of <LAN Manager hex digest>:<NT LAN Manager hex digest>.
 // Both hex digests are 32 lowercase hexadecimal characters.
 func (p *Private) dataFormatNTLM() (err error) {
@@ -185,4 +214,21 @@ func (p *Private) blankPassword() bool {
 		return true
 	}
 	return false
+}
+
+//
+// PostgreSQL MD5 --------------------
+//
+
+const (
+	postresMD5Regexp = "md5([a-f0-9]{32})"
+)
+
+// Validates that {#data} is in the PostgreSQL MD5 data format.
+func (p *Private) dataFormatPostresMD5() (err error) {
+	re := regexp.MustCompile(postresMD5Regexp)
+	if match := re.MatchString(p.Data); !match {
+		return fmt.Errorf("PostgresMD5 Credential is not in Postgres MD5 Hash format")
+	}
+	return
 }

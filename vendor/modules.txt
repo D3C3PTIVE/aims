@@ -36,7 +36,7 @@ github.com/lib/pq
 github.com/lib/pq/hstore
 github.com/lib/pq/oid
 github.com/lib/pq/scram
-# github.com/maxlandon/gondor v0.0.0-20211105054626-4bc6f6322d62
+# github.com/maxlandon/gondor v0.0.0-20211107181652-b501c4771abd => /home/user/projects/gondor
 ## explicit; go 1.17
 github.com/maxlandon/gondor/maltego
 github.com/maxlandon/gondor/maltego/configuration
@@ -151,3 +151,4 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
+# github.com/maxlandon/gondor => /home/user/projects/gondor
