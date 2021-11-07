@@ -19,27 +19,30 @@ package host
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"context"
+
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/maxlandon/aims/proto/gen/go/host"
 )
 
 // Host - A physical or virtual computer host.
 // The type has several categories of fields: general information,
 // and Nmap-compliant fields (ports, status, route, scripts etc).
-type Host struct {
-	*host.Host
+type Host host.Host
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the Host
+func (h *Host) ToORM(ctx context.Context) (host.HostORM, error) {
+	return (*host.Host)(h).ToORM(ctx)
 }
 
-// NewHost - Creates a new aims.Host with its embedded Protobuf type.
-func NewHost() *Host {
-	return &Host{
-		Host: &host.Host{},
-	}
-}
-
-// HostFromPB - Get a Host from its Protobuf equivalent.
-func HostFromPB(pb *host.Host) *Host {
-	return &Host{Host: pb}
+// ToPB - Get the Protobuf object for the Host
+func (h *Host) ToPB(ctx context.Context) *host.Host {
+	return (*host.Host)(h)
 }
 
 // AsEntity - Returns the Host as a valid Maltego Entity.

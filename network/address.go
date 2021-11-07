@@ -19,6 +19,8 @@ package network
 */
 
 import (
+	"context"
+
 	"github.com/maxlandon/aims/proto/gen/go/network"
 	"github.com/maxlandon/gondor/maltego"
 )
@@ -26,20 +28,20 @@ import (
 // Address - An address somewhere on a network, or on a host.
 // Can be an IPv4/v6 address, a MAC address, or else.
 // This type has fields that are compliant with Nmap scan schemas.
-type Address struct {
-	*network.Address
+type Address network.Address
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the Host
+func (a *Address) ToORM(ctx context.Context) (network.AddressORM, error) {
+	return (*network.Address)(a).ToORM(ctx)
 }
 
-// NewAddress - Creates a new aims.Address with its embedded Protobuf type.
-func NewAddress() *Address {
-	return &Address{
-		Address: &network.Address{},
-	}
-}
-
-// AddressFromPB - Get an Address from its Protobuf equivalent.
-func AddressFromPB(pb *network.Address) *Address {
-	return &Address{Address: pb}
+// ToPB - Get the Protobuf object for the Host
+func (a *Address) ToPB(ctx context.Context) *network.Address {
+	return (*network.Address)(a)
 }
 
 // AsEntity - Returns the Address as a valid Maltego Entity.

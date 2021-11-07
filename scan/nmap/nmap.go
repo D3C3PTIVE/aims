@@ -19,35 +19,29 @@ package nmap
 */
 
 import (
+	"encoding/xml"
+
 	"github.com/maxlandon/aims/proto/gen/go/scan/nmap"
 	"github.com/maxlandon/gondor/maltego"
 )
 
 // Run - The results of an Nmap scan that has been ran.
 // This object is the root of the complete output XML tree of the scan.
-type Run struct {
-	*nmap.Run
-}
-
-// NewScan - Creates a new nmap.Scan object with its embedded Protobuf type.
-func NewScan() *Run {
-	return &Run{
-		Run: &nmap.Run{},
-	}
-}
-
-// FromRunPB - Get a Nmap Scan from its Protobuf equivalent.
-// This function is equivalent to nmap.ScanFromRun(), given that
-// the embedded Protobuf type equivalent is able to parse the XML
-// output of an Nmap scan into itself.
-func FromRunPB(pb *nmap.Run) *Run {
-	return &Run{Run: pb}
-}
+type Run nmap.Run
 
 // FromRun - If you have ran a Scan and parsed its XML output
 // into an nmap.Run protobuf type, you can create a scan out of it.
 func FromRun(pb *nmap.Run) *Run {
-	return &Run{Run: pb}
+	return (*Run)(pb)
+}
+
+// FromXML - Given the output of an Nmap Scan as a string in XML format,
+// parse it and return a Run with its contents. If the unmarshalling fails,
+// it returns both the model and the error, so always check the latter.
+func FromXML(data []byte) (*Run, error) {
+	r := &nmap.Run{}
+	err := xml.Unmarshal(data, r)
+	return (*Run)(r), err
 }
 
 // AsEntity - Returns the Scan as a valid Maltego Entity.

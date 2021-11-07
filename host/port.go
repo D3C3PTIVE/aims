@@ -19,27 +19,30 @@ package host
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"context"
+
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/maxlandon/aims/proto/gen/go/host"
 )
 
 // Port - A port on a Host.
 // The type has several categories of fields: general information,
 // and Nmap-compliant fields (status, owner, service, scripts etc).
-type Port struct {
-	*host.Port
+type Port host.Port
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the Port
+func (p *Port) ToORM(ctx context.Context) (host.PortORM, error) {
+	return (*host.Port)(p).ToORM(ctx)
 }
 
-// NewPort - Create a new aims.Port with its embedded Protobuf type.
-func NewPort() *Port {
-	return &Port{
-		Port: &host.Port{},
-	}
-}
-
-// PortFromPB - Get a Port from its Protobuf equivalent.
-func PortFromPB(pb *host.Port) *Port {
-	return &Port{Port: pb}
+// ToPB - Get the Protobuf object for the Port
+func (p *Port) ToPB(ctx context.Context) *host.Port {
+	return (*host.Port)(p)
 }
 
 // AsEntity - Returns the Port as a valid Maltego Entity.

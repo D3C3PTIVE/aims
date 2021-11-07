@@ -19,27 +19,30 @@ package network
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/network"
+	"context"
+
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/maxlandon/aims/proto/gen/go/network"
 )
 
 // Service - A service somewhere on a network.
 // The type has several categories of fields: general information,
 // and Nmap-compliant fields (fingerprints, protocols, banners, versions)
-type Service struct {
-	*network.Service
+type Service network.Service
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the Service
+func (s *Service) ToORM(ctx context.Context) (network.ServiceORM, error) {
+	return (*network.Service)(s).ToORM(ctx)
 }
 
-// NewService - Creates a new aims.Service with its embedded Protobuf type.
-func NewService() *Service {
-	return &Service{
-		Service: &network.Service{},
-	}
-}
-
-// ServiceFromPB - Get a Service from its Protobuf equivalent.
-func ServiceFromPB(pb *network.Service) *Service {
-	return &Service{Service: pb}
+// ToPB - Get the Protobuf object for the Service
+func (s *Service) ToPB(ctx context.Context) *network.Service {
+	return (*network.Service)(s)
 }
 
 // AsEntity - Returns the Service as a valid Maltego Entity.

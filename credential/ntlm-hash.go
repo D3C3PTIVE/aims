@@ -38,6 +38,7 @@ import (
 // printed as a hexadecimal string where 2 characters represent a byte of the original hash with
 // the high nibble first): (1) {lanManagerHexDigestRegexp, the LAN Manager hash's hex digest} and
 // (2) {ntLanManagerHexDigestRegexp, the NTLM hash's hex digest}.
+// NOTE: Please instantiate a new NTLMHash with NewNTLMHash().
 type NTLMHash Private
 
 // NewNTLMHash - Create a new NTLM hash Credential and its embedded Protobuf type.

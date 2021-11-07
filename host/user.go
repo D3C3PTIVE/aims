@@ -19,26 +19,29 @@ package host
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"context"
+
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/maxlandon/aims/proto/gen/go/host"
 )
 
 // User - A computer (login) user.
 // This type will be closely related to the various aims/credential types.
-type User struct {
-	*host.User
+type User host.User
+
+//
+// General Functions
+//
+
+// ToORM - Get the SQL object for the User
+func (u *User) ToORM(ctx context.Context) (host.UserORM, error) {
+	return (*host.User)(u).ToORM(ctx)
 }
 
-// NewUser - Create a new aims.User with its embedded Protobuf type.
-func NewUser() *User {
-	return &User{
-		User: &host.User{},
-	}
-}
-
-// UserFromPB - Get a User from its Protobuf equivalent.
-func UserFromPB(pb *host.User) *User {
-	return &User{User: pb}
+// ToPB - Get the Protobuf object for the User
+func (u *User) ToPB(ctx context.Context) *host.User {
+	return (*host.User)(u)
 }
 
 // AsEntity - Returns the User as a valid Maltego Entity.

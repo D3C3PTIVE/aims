@@ -30,6 +30,7 @@ import (
 // credential.Private.ReplayableHash replayed to authenticate to PostgreSQL
 // servers. It is composed of a hexadecimal string of 32 characters prepended
 // by the string 'md5'
+// NOTE: Please instantiate a new PostgresMD5 with NewPostgresMD5().
 type PostgresMD5 Private
 
 // NewPostgresMD5 - Create a new PostgreSQL MD5 Credential and its embedded Protobuf type.
