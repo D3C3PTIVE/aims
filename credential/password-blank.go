@@ -26,18 +26,15 @@ import (
 	"github.com/maxlandon/aims/proto/gen/go/credential"
 )
 
-// Password - A credential.Private password.
-// NOTE: A blank password is considered invalid if BOTH 1) the Password.Type is not
-// set to credential.PrivateType_BlankPassword and 2) the Password.Data is "". This
-// will throw a validation error when saving the password to DB. If you want to save
-// an empty password, you MUST change the .Type to PrivateType_BlankPassword.
-// NOTE: Please instantiate a new Password with NewPassword().
-type Password Private
+// BlankPassword - A credential.Private password.
+// Note that upon saving this object in DB, any .Data value
+// will be replaced by an empty string.
+type BlankPassword Private
 
-// NewPassword - Create a new Password Credential.
-func NewPassword() *Password {
-	h := Password(Private{})
-	h.Type = credential.PrivateType_Password
+// NewBlankPassword - Create a new blank Password Credential.
+func NewBlankPassword() *BlankPassword {
+	h := BlankPassword(Private{})
+	h.Type = credential.PrivateType_BlankPassword
 	return &h
 }
 
@@ -45,22 +42,22 @@ func NewPassword() *Password {
 // General Functions
 //
 
-// ToORM - Get the SQL object for the Password credential.
-// NOTE: A blank password is considered invalid if BOTH 1) the Password.Type is not
-// set to credential.PrivateType_BlankPassword and 2) the Password.Data is "". This
+// ToORM - Get the SQL object for the BlankPassword credential.
+// NOTE: A blank password is considered invalid if BOTH 1) the BlankPassword.Type is not
+// set to credential.PrivateType_BlankBlankPassword and 2) the BlankPassword.Data is "". This
 // will throw a validation error when saving the password to DB. If you want to save
-// an empty password, you MUST change the .Type to PrivateType_BlankPassword.
-func (p *Password) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+// an empty password, you MUST change the .Type to PrivateType_BlankBlankPassword.
+func (p *BlankPassword) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 	return (*Private)(p).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Password credential.
-func (p *Password) ToPB(ctx context.Context) *credential.Private {
+// ToPB - Get the Protobuf object for the BlankPassword credential.
+func (p *BlankPassword) ToPB(ctx context.Context) *credential.Private {
 	return (*Private)(p).ToPB(ctx)
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *Password) AsEntity() maltego.Entity {
+func (p *BlankPassword) AsEntity() maltego.Entity {
 	// e:= maltego.NewEntity(h)
 	// base := (*Private)(h).AsEntity()
 	// e.SetBase(base)

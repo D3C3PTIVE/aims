@@ -26,24 +26,22 @@ import (
 	"github.com/maxlandon/aims/proto/gen/go/credential"
 )
 
-// Private - Base type for all private credentials. A private credential is any credential
-// that should not be publicly disclosed, such as a credential.Private.Password password,
-// password hash, or key file.
-// NOTE: By default, a credential.Private is of Type Password, and
-// any blank Private.Data field value will be treated as incorrect.
-type Private credential.Private
+// Public - A Publicly disclosed credential, like a username or a public key.
+// NOTE: By default, a credential.Public is of Type Username, and any blank
+// Public.Username field value will be treated as incorrect.
+type Public credential.Public
 
-// ToORM - Get the SQL object for the Private credential.
-func (p *Private) ToORM(ctx context.Context) (credential.PrivateORM, error) {
-	return (*credential.Private)(p).ToORM(ctx)
+// ToORM - Get the SQL object for the Public credential.
+func (p *Public) ToORM(ctx context.Context) (credential.PublicORM, error) {
+	return (*credential.Public)(p).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Private credential.
-func (p *Private) ToPB(ctx context.Context) *credential.Private {
-	return (*credential.Private)(p)
+// ToPB - Get the Protobuf object for the Public credential.
+func (p *Public) ToPB(ctx context.Context) *credential.Public {
+	return (*credential.Public)(p)
 }
 
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *Private) AsEntity() maltego.Entity {
+// AsEntity - Returns the Public as a valid Maltego Entity.
+func (p *Public) AsEntity() maltego.Entity {
 	return maltego.NewEntity(p)
 }
