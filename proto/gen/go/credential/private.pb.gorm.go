@@ -15,6 +15,7 @@ import (
 )
 
 type PrivateORM struct {
+	CoreId    *go_uuid.UUID
 	CreatedAt *time.Time
 	Data      string
 	Id        go_uuid.UUID `gorm:"type:uuid;primary_key"`
