@@ -33,6 +33,10 @@ import (
 // any blank Private.Data field value will be treated as incorrect.
 type Private credential.Private
 
+//
+// General Functions
+//
+
 // ToORM - Get the SQL object for the Private credential.
 func (p *Private) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 	return (*credential.Private)(p).ToORM(ctx)

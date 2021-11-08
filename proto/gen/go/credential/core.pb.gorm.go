@@ -17,6 +17,7 @@ import (
 type CoreORM struct {
 	CreatedAt   *time.Time
 	Id          go_uuid.UUID `gorm:"type:uuid;primary_key"`
+	LoginId     *go_uuid.UUID
 	LoginsCount int32
 	Origin      *OriginORM  `gorm:"not null;foreignkey:CoreId;association_foreignkey:Id"`
 	Private     *PrivateORM `gorm:"foreignkey:CoreId;association_foreignkey:Id"`

@@ -31,6 +31,10 @@ import (
 // Public.Username field value will be treated as incorrect.
 type Public credential.Public
 
+//
+// General Functions
+//
+
 // ToORM - Get the SQL object for the Public credential.
 func (p *Public) ToORM(ctx context.Context) (credential.PublicORM, error) {
 	return (*credential.Public)(p).ToORM(ctx)

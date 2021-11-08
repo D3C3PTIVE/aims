@@ -19,10 +19,12 @@ type OriginORM struct {
 	CoreId    *go_uuid.UUID
 	Cracker   string
 	CreatedAt *time.Time
+	Filename  string
 	Id        go_uuid.UUID        `gorm:"type:uuid;primary_key"`
 	Service   *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
 	ServiceId *go_uuid.UUID
 	SessionId go_uuid.UUID
+	Type      int32
 	UpdatedAt *time.Time
 }
 
@@ -65,6 +67,8 @@ func (m *Origin) ToORM(ctx context.Context) (OriginORM, error) {
 	} else {
 		to.SessionId = go_uuid.Nil
 	}
+	to.Type = int32(m.Type)
+	to.Filename = m.Filename
 	to.Cracker = m.Cracker
 	if m.Service != nil {
 		tempService, err := m.Service.ToORM(ctx)
@@ -97,6 +101,8 @@ func (m *OriginORM) ToPB(ctx context.Context) (Origin, error) {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
 	to.SessionId = &types.UUID{Value: m.SessionId.String()}
+	to.Type = OriginType(m.Type)
+	to.Filename = m.Filename
 	to.Cracker = m.Cracker
 	if m.Service != nil {
 		tempService, err := m.Service.ToPB(ctx)
@@ -469,6 +475,14 @@ func DefaultApplyFieldMaskOrigin(ctx context.Context, patchee *Origin, patcher *
 		}
 		if f == prefix+"SessionId" {
 			patchee.SessionId = patcher.SessionId
+			continue
+		}
+		if f == prefix+"Type" {
+			patchee.Type = patcher.Type
+			continue
+		}
+		if f == prefix+"Filename" {
+			patchee.Filename = patcher.Filename
 			continue
 		}
 		if f == prefix+"Cracker" {

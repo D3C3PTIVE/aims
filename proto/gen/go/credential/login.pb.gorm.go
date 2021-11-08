@@ -17,15 +17,14 @@ import (
 
 type LoginORM struct {
 	AccessLevel     string
-	Core            *CoreORM `gorm:"foreignkey:CoreId;association_foreignkey:Id"`
-	CoreId          *go_uuid.UUID
+	Core            *CoreORM `gorm:"not null;foreignkey:LoginId;association_foreignkey:Id"`
 	CreatedAt       *time.Time
 	HostId          go_uuid.UUID `gorm:"type:uuid;not null"`
 	Id              go_uuid.UUID `gorm:"type:uuid;primary_key"`
 	LastAttemptedAt *time.Time
 	Service         *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
 	ServiceId       *go_uuid.UUID
-	Status          string
+	Status          int32
 	UpdatedAt       *time.Time
 }
 
@@ -65,7 +64,7 @@ func (m *Login) ToORM(ctx context.Context) (LoginORM, error) {
 		to.LastAttemptedAt = &t
 	}
 	to.AccessLevel = m.AccessLevel
-	to.Status = m.Status
+	to.Status = int32(m.Status)
 	if m.Core != nil {
 		tempCore, err := m.Core.ToORM(ctx)
 		if err != nil {
@@ -115,7 +114,7 @@ func (m *LoginORM) ToPB(ctx context.Context) (Login, error) {
 		to.LastAttemptedAt = timestamppb.New(*m.LastAttemptedAt)
 	}
 	to.AccessLevel = m.AccessLevel
-	to.Status = m.Status
+	to.Status = LoginStatus(m.Status)
 	if m.Core != nil {
 		tempCore, err := m.Core.ToPB(ctx)
 		if err != nil {
@@ -326,6 +325,15 @@ func DefaultStrictUpdateLogin(ctx context.Context, in *Login, db *gorm.DB) (*Log
 		if db, err = hook.BeforeStrictUpdateCleanup(ctx, db); err != nil {
 			return nil, err
 		}
+	}
+	filterCore := CoreORM{}
+	if ormObj.Id == go_uuid.Nil {
+		return nil, errors.EmptyIdError
+	}
+	filterCore.LoginId = new(go_uuid.UUID)
+	*filterCore.LoginId = ormObj.Id
+	if err = db.Where(filterCore).Delete(CoreORM{}).Error; err != nil {
+		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(LoginORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
