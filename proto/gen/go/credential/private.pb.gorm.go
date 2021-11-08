@@ -16,10 +16,10 @@ import (
 
 type PrivateORM struct {
 	CreatedAt *time.Time
-	Data      string       `gorm:"not null"`
+	Data      string
 	Id        go_uuid.UUID `gorm:"type:uuid;primary_key"`
 	JTRFormat string
-	Type      int32 `gorm:"not null"`
+	Type      int32
 	UpdatedAt *time.Time
 }
 

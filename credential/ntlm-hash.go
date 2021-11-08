@@ -41,7 +41,7 @@ import (
 // NOTE: Please instantiate a new NTLMHash with NewNTLMHash().
 type NTLMHash Private
 
-// NewNTLMHash - Create a new NTLM hash Credential and its embedded Protobuf type.
+// NewNTLMHash - Create a new NTLM hash Credential.
 func NewNTLMHash() *NTLMHash {
 	h := NTLMHash(Private{})
 	h.Type = credential.PrivateType_NTLMHash

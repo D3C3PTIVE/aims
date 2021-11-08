@@ -31,11 +31,11 @@ import (
 // servers. It is composed of a hexadecimal string of 32 characters prepended
 // by the string 'md5'
 // NOTE: Please instantiate a new PostgresMD5 with NewPostgresMD5().
-type PostgresMD5 Private
+type PostgresMD5 NonReplayableHash
 
 // NewPostgresMD5 - Create a new PostgreSQL MD5 Credential and its embedded Protobuf type.
 func NewPostgresMD5() *PostgresMD5 {
-	md := PostgresMD5(Private{})
+	md := PostgresMD5(ReplayableHash{})
 	md.Type = credential.PrivateType_PostgresMD5
 	return &md
 }
@@ -46,18 +46,18 @@ func NewPostgresMD5() *PostgresMD5 {
 
 // ToORM - Get the SQL object for the PostgresMD5 credential.
 func (p *PostgresMD5) ToORM(ctx context.Context) (credential.PrivateORM, error) {
-	return (*Private)(p).ToORM(ctx)
+	return (*ReplayableHash)(p).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the PostgresMD5 credential.
 func (p *PostgresMD5) ToPB(ctx context.Context) *credential.Private {
-	return (*Private)(p).ToPB(ctx)
+	return (*ReplayableHash)(p).ToPB(ctx)
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.
 func (p *PostgresMD5) AsEntity() maltego.Entity {
 	// e:= maltego.NewEntity(h)
-	// base := (*Private)(p).AsEntity()
+	// base := (*NonReplayableHash)(p).AsEntity()
 	// e.SetBase(base)
 	// return e
 	return maltego.NewEntity(p)

@@ -89,7 +89,7 @@ func (p *Private) hasData() (yes bool, err error) {
 
 	// Only blank passwords can have no data
 	if p.Type != PrivateType_BlankPassword && p.Data == "" {
-		return false, fmt.Errorf("Private credential of type %s has no data", p.Type)
+		return false, fmt.Errorf("Private credential of type %s has no data", p.Type.String())
 	}
 
 	// And blank passwords must have no data
