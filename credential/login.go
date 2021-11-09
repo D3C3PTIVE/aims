@@ -37,6 +37,66 @@ import (
 type Login credential.Login
 
 //
+// Creation & Update Functions
+//
+
+// InvalidateLoginOpts - A template used to submit a Login invalidation request with
+// an InvalidateLogin() call. None of these fields are nil by default, but some of their
+// own values are checked in the InvalidateLogin() function.
+// Each field in this struct list its fields checked by InvalidateLogin().
+// NOTE: At no point any ID will be required from any of those types, so this function
+// does NOT require any database-existing object.
+type InvalidateLoginOpts struct {
+
+	// Port - A port is lower-level item that we require to check a login.
+	// This is so because the credential.Service that you must pass as a
+	// field is usually an attribute of a host.Port.
+	Port host.Port
+
+	// Service - The service against which a Login has been performed.
+	// Fields that are checked:
+	// .Hostname  - an IP or a domain name, that you can populate.
+	// .Protocol  - The transport and/or application protocol of the service
+	Service network.Service
+
+	// Public - The credential.Public that we tried.
+	// Fields that are checked:
+	// .Username  - if PublicType_Username
+	// .Key,      - if PublicType_Key
+	Public Public
+
+	// Private - The credential.Private that we tried.
+	// Fields that are checked:
+	// .Data    - checked against the .PrivateType
+	Private Private
+
+	// Status - The status symbol that the user
+	// gives when populating this template.
+	Status credential.LoginStatus
+}
+
+// InvalidateLogin - Checks to see if a credential.Login exists for a given set of details.
+// If it does exists, we then appropriately set the status to one of our failure statuses.
+//
+// @param: The template that you pass as argument must be populated with several fields,
+//         each of them in turn checking some of its own required fields. Please refer
+//         to the InvalidateLoginOpts documentation for a list of each of those required.
+//
+// Raises an error if any of the above options are missing
+func InvalidateLogin(opts *InvalidateLoginOpts) (err error) {
+
+	// Check the Port+Service fields validity,
+	// and create any missing stuff if needed.
+
+	// We must find a credential.Core matching ALL fields, and if
+	// any condition is missing, we don't have a valid combination.
+
+	// If one is found, update the login last attempt.
+
+	return
+}
+
+//
 // General Functions
 //
 

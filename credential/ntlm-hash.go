@@ -45,6 +45,7 @@ type NTLMHash Private
 func NewNTLMHash() *NTLMHash {
 	h := NTLMHash(Private{})
 	h.Type = credential.PrivateType_NTLMHash
+	h.JTRFormat = "nt,lm"
 	return &h
 }
 

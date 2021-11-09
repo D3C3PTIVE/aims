@@ -37,6 +37,7 @@ type PostgresMD5 NonReplayableHash
 func NewPostgresMD5() *PostgresMD5 {
 	md := PostgresMD5(ReplayableHash{})
 	md.Type = credential.PrivateType_PostgresMD5
+	md.JTRFormat = "raw-md5,postgres"
 	return &md
 }
 

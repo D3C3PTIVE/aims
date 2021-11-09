@@ -26,16 +26,17 @@ import (
 	strings "strings"
 
 	gorm "github.com/jinzhu/gorm"
+	uuid "github.com/satori/go.uuid"
 )
 
 // BeforeCreate_ - All Private credentials undergo various validations depending on their type.
-func (p *Private) BeforeCreate_(ctx context.Context, db *gorm.DB) (*gorm.DB, error) {
-	return db, p.validate()
+func (p *PrivateORM) BeforeCreate_(ctx context.Context, db *gorm.DB) (*gorm.DB, error) {
+	return db, p.validate(db)
 }
 
 // BeforeStrictUpdateSave - All Private credentials undergo various validations depending on their type.
-func (p *Private) BeforeStrictUpdateSave(ctx context.Context, db *gorm.DB) (*gorm.DB, error) {
-	return db, p.validate()
+func (p *PrivateORM) BeforeStrictUpdateSave(ctx context.Context, db *gorm.DB) (*gorm.DB, error) {
+	return db, p.validate(db)
 }
 
 //
@@ -43,7 +44,7 @@ func (p *Private) BeforeStrictUpdateSave(ctx context.Context, db *gorm.DB) (*gor
 //
 
 // validate - Perform all validations regardless of the Private credential type.
-func (p *Private) validate() (err error) {
+func (p *PrivateORM) validate(db *gorm.DB) (err error) {
 	// Check data null
 	if yes, err := p.hasData(); !yes && err != nil {
 		return err
@@ -62,12 +63,22 @@ func (p *Private) validate() (err error) {
 		return err
 	}
 
+	// Check uniqueness: some private types, such as cryptographic keys
+	// and some tokens, must have .Data unique among all saved credentials.
+	// When we have an error, we fetch the corresponding credential and
+	// take its attributes: will update it in our place.
+	if err = p.checkUniqueness(db); err != nil {
+		err = db.Where(&PrivateORM{
+			Data: p.Data,
+		}).First(p).Error // Load the data into ourselves.
+	}
+
 	// Additional validations.
 	// Add your own branching and checks for your type. Normally
 	// these checks should not make any modification to the cred data.
 	switch p.Type {
 
-	case PrivateType_Key:
+	case int32(PrivateType_Key):
 		// Must be called first, otherwise can't check readable
 		if err := p.checkUnencrypted(); err != nil {
 			return err
@@ -85,15 +96,16 @@ func (p *Private) validate() (err error) {
 }
 
 // hasData - Validate that we have data when we need to
-func (p *Private) hasData() (yes bool, err error) {
+func (p *PrivateORM) hasData() (yes bool, err error) {
 
 	// Only blank passwords can have no data
-	if p.Type != PrivateType_BlankPassword && p.Data == "" {
-		return false, fmt.Errorf("Private credential of type %s has no data", p.Type.String())
+	if p.Type != int32(PrivateType_BlankPassword) && p.Data == "" {
+		return false, fmt.Errorf("Private credential of type %s has no data",
+			PrivateType(p.Type).String())
 	}
 
 	// And blank passwords must have no data
-	if p.Type == PrivateType_BlankPassword && p.Data != "" {
+	if p.Type == int32(PrivateType_BlankPassword) && p.Data != "" {
 		p.Data = ""
 	}
 
@@ -103,27 +115,56 @@ func (p *Private) hasData() (yes bool, err error) {
 // Normalizes {Private.Data} by making it all lowercase so that the unique validation and index on
 // ({Private.Type}, {.Data}) catches collision in a case-insensitive manner without the need
 // to use case-insensitive comparisons.
-func (p *Private) normalizeData() {
+func (p *PrivateORM) normalizeData() {
 	switch p.Type {
-	case PrivateType_NTLMHash, PrivateType_PostgresMD5:
+	case int32(PrivateType_NTLMHash), int32(PrivateType_PostgresMD5):
 		p.Data = strings.ToLower(p.Data)
 	}
 }
 
 // The credential data is passed through a checker that will perform some regexp matchings against the
 // Credential, depending on its declared type. Add your own branching in this function if you need.
-func (p *Private) checkDataFormat() (err error) {
+func (p *PrivateORM) checkDataFormat() (err error) {
 	switch p.Type {
 
-	case PrivateType_NTLMHash:
+	case int32(PrivateType_NTLMHash):
 		// Check the structure of the data: we must find one or two hashes.
 		if err := p.dataFormatNTLM(); err != nil {
 			return err
 		}
 
-	case PrivateType_PostgresMD5:
+	case int32(PrivateType_PostgresMD5):
 		if err := p.dataFormatPostresMD5(); err != nil {
 			return err
+		}
+	}
+	return
+}
+
+// checkUniqueness - Some private types, such as cryptographic keys
+// and some tokens, must have .Data unique among all saved credentials.
+func (p *PrivateORM) checkUniqueness(db *gorm.DB) (err error) {
+	switch p.Type {
+	// Passwords can be identical from one access to another.
+	case int32(PrivateType_BlankPassword), int32(PrivateType_Password):
+		return
+	default:
+		// NOTE: that we consider here that MD5 hashes are collision-free...
+		var cred = &PrivateORM{}
+		err = db.Where(&PrivateORM{Data: p.Data}).First(cred).Error
+
+		// Either we didn't find it, we're good
+		if err == gorm.ErrRecordNotFound {
+			return nil
+		}
+		// Of another error but credential fetched, good
+		if err != nil && cred.Id == uuid.Nil {
+			return nil
+		}
+		// Or no error and we have an ID, thus a collision.
+		if err == nil && cred.Id != uuid.Nil {
+			return fmt.Errorf("Private %s (%s) private data is colliding",
+				PrivateType(cred.Type).String(), cred.Id.String())
 		}
 	}
 	return
@@ -134,7 +175,7 @@ func (p *Private) checkDataFormat() (err error) {
 //
 
 // checkReadable - Check that we can successfully load this key into a native Go type.
-func (p *Private) checkReadable() (err error) {
+func (p *PrivateORM) checkReadable() (err error) {
 
 	// The parsing either outputs an ecc.PrivateKey, rsa.PrivateKey
 	// or ed25519.PrivateKey. We don't care why one as long as no errors.
@@ -145,7 +186,7 @@ func (p *Private) checkReadable() (err error) {
 
 // checkUnencrypted -  Whether the key data in is encrypted.
 // Encrypted keys cannot be saved and should be decrypted before saving.
-func (p *Private) checkUnencrypted() (err error) {
+func (p *PrivateORM) checkUnencrypted() (err error) {
 	matched, err := regexp.Match("ENCRYPTED", []byte(p.Data))
 	if matched {
 		return fmt.Errorf("Private Key is encrypted, cannot save to DB")
@@ -154,7 +195,7 @@ func (p *Private) checkUnencrypted() (err error) {
 }
 
 // checkPrivate - Check that the credential data is a Private Key
-func (p *Private) checkPrivate() (err error) {
+func (p *PrivateORM) checkPrivate() (err error) {
 	matched, err := regexp.Match("-----BEGIN (.+) PRIVATE KEY-----", []byte(p.Data))
 	if matched {
 		return fmt.Errorf("Credential data is not a Private Key")
@@ -188,7 +229,7 @@ var (
 
 // Validates that {#data} is in the NTLM data format of <LAN Manager hex digest>:<NT LAN Manager hex digest>.
 // Both hex digests are 32 lowercase hexadecimal characters.
-func (p *Private) dataFormatNTLM() (err error) {
+func (p *PrivateORM) dataFormatNTLM() (err error) {
 	re := regexp.MustCompile(ntlmDataRegexp)
 	if match := re.MatchString(p.Data); !match {
 		return fmt.Errorf("NTML Credential data does not match its associated regular expression")
@@ -197,7 +238,7 @@ func (p *Private) dataFormatNTLM() (err error) {
 }
 
 // lmHashPresent - Check that we have the LM portion of the hash
-func (p *Private) lmHashPresent() bool {
+func (p *PrivateORM) lmHashPresent() bool {
 	if strings.HasPrefix(p.Data, blankLMHash) {
 		return false
 	}
@@ -205,7 +246,7 @@ func (p *Private) lmHashPresent() bool {
 }
 
 // verify we don't have a blank Password under the appearance of a default NTLM hash.
-func (p *Private) blankPassword() bool {
+func (p *PrivateORM) blankPassword() bool {
 	match, err := regexp.MatchString(fmt.Sprintf("%s:%s", blankLMHash, blankNTHash), p.Data)
 	if err != nil {
 		return false
@@ -225,7 +266,7 @@ const (
 )
 
 // Validates that {#data} is in the PostgreSQL MD5 data format.
-func (p *Private) dataFormatPostresMD5() (err error) {
+func (p *PrivateORM) dataFormatPostresMD5() (err error) {
 	re := regexp.MustCompile(postresMD5Regexp)
 	if match := re.MatchString(p.Data); !match {
 		return fmt.Errorf("PostgresMD5 Credential is not in Postgres MD5 Hash format")

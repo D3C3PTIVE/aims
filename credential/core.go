@@ -23,11 +23,11 @@ import (
 	"github.com/maxlandon/aims/proto/gen/go/credential"
 )
 
-// core - A wrapper around the credential.Core protobuf type. This is unexported
+// Core - A wrapper around the credential.Core protobuf type. This is unexported
 // because the core is always only a driver that orchestrates one or more Credential types,
 // along with an optional realm. Various functions in the package allow users to instantiate
 // Credential sets, similarly to Metasploit Credential API.
-type core credential.Core
+type Core credential.Core
 
 //
 // Database Scopes
