@@ -44,12 +44,14 @@ func NewNonReplayableHash() *NonReplayableHash {
 
 // ToORM - Get the SQL object for the NonReplayableHash credential.
 func (h *NonReplayableHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	h.Type = credential.PrivateType_NonReplayableHash
 	return (*PasswordHash)(h).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the NonReplayableHash credential.
-func (h *NonReplayableHash) ToPB(ctx context.Context) *credential.Private {
-	return (*PasswordHash)(h).ToPB(ctx)
+func (h *NonReplayableHash) ToPB() *credential.Private {
+	h.Type = credential.PrivateType_NonReplayableHash
+	return (*PasswordHash)(h).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

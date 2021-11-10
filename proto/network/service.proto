@@ -52,4 +52,18 @@ message Service {
   int32 Confidence = 28;
   // @gotags: xml:"cpe" display:"CPEs"
   repeated string CPEs = 29; // "Common Platform Enumeration":standardized way to name software apps, OSs and Hardware platforms
+
+  // @gotags: display:"Authenticated"
+  bool Authenticated = 30;
+
+  // Additional information grabbed from any 
+  // method ran against the service. Because
+  // some HTTP scanners yield map[string]interface{},
+  // we always store them as map[string]string.
+  message AddedInfo {
+                string Key = 1;
+                string Value = 2;
+  }
+  repeated AddedInfo AdditionalInfo = 40;
 }
+

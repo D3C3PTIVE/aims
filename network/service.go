@@ -41,7 +41,7 @@ func (s *Service) ToORM(ctx context.Context) (network.ServiceORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the Service
-func (s *Service) ToPB(ctx context.Context) *network.Service {
+func (s *Service) ToPB() *network.Service {
 	return (*network.Service)(s)
 }
 

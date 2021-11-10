@@ -44,12 +44,14 @@ func NewUsername() *Username {
 
 // ToORM - Get the SQL object for the Username credential.
 func (h *Username) ToORM(ctx context.Context) (credential.PublicORM, error) {
+	h.Type = credential.PublicType_Username
 	return (*Public)(h).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the Username credential.
-func (h *Username) ToPB(ctx context.Context) *credential.Public {
-	return (*Public)(h).ToPB(ctx)
+func (h *Username) ToPB() *credential.Public {
+	h.Type = credential.PublicType_Username
+	return (*Public)(h).ToPB()
 }
 
 // AsEntity - Returns the Public as a valid Maltego Entity.

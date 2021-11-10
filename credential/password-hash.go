@@ -45,12 +45,14 @@ func NewPasswordHash() *PasswordHash {
 
 // ToORM - Get the SQL object for the PasswordHash credential.
 func (h *PasswordHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	h.Type = credential.PrivateType_NonReplayableHash
 	return (*Private)(h).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the PasswordHash credential.
-func (h *PasswordHash) ToPB(ctx context.Context) *credential.Private {
-	return (*Private)(h).ToPB(ctx)
+func (h *PasswordHash) ToPB() *credential.Private {
+	h.Type = credential.PrivateType_NonReplayableHash
+	return (*Private)(h).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

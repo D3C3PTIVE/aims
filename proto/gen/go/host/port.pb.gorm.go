@@ -8,7 +8,7 @@ import (
 	types "github.com/infobloxopen/protoc-gen-gorm/types"
 	gorm "github.com/jinzhu/gorm"
 	network "github.com/maxlandon/aims/proto/gen/go/network"
-	scan "github.com/maxlandon/aims/proto/gen/go/scan"
+	nmap "github.com/maxlandon/aims/proto/gen/go/scan/nmap"
 	go_uuid "github.com/satori/go.uuid"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -24,9 +24,9 @@ type PortORM struct {
 	Number    uint32
 	Owner     string
 	Protocol  string
-	Reasons   []*ReasonORM          `gorm:"foreignkey:PortId;association_foreignkey:Id"`
-	Scripts   []*scan.NmapScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:port_nmap_scripts;jointable_foreignkey:PortId;association_jointable_foreignkey:NmapScriptId"`
-	Service   *network.ServiceORM   `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
+	Reasons   []*ReasonORM        `gorm:"foreignkey:PortId;association_foreignkey:Id"`
+	Scripts   []*nmap.ScriptORM   `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:port_scripts;jointable_foreignkey:PortId;association_jointable_foreignkey:ScriptId"`
+	Service   *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
 	ServiceId *go_uuid.UUID
 	State     *StateORM `gorm:"foreignkey:PortId;association_foreignkey:Id"`
 	UpdatedAt *time.Time

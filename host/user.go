@@ -40,7 +40,7 @@ func (u *User) ToORM(ctx context.Context) (host.UserORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the User
-func (u *User) ToPB(ctx context.Context) *host.User {
+func (u *User) ToPB() *host.User {
 	return (*host.User)(u)
 }
 

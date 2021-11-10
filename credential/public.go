@@ -41,7 +41,7 @@ func (p *Public) ToORM(ctx context.Context) (credential.PublicORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the Public credential.
-func (p *Public) ToPB(ctx context.Context) *credential.Public {
+func (p *Public) ToPB() *credential.Public {
 	return (*credential.Public)(p)
 }
 

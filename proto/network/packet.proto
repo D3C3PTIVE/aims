@@ -7,7 +7,7 @@ import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
 import "types/types.proto";
 
-// Sequence - 
+// Sequence - Represents a detected Sequence
 message Sequence {
   option (gorm.opts).ormable = true;
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
@@ -57,3 +57,45 @@ message TCPTSSequence {
   string Values = 12;
 }
 
+// ICMPResponse - An ICMP response sent by a remote host.
+// The TTL given by the response is stored in the Host object
+// or the Scan Run object, but is not related to ICMP in anyway.
+message ICMPResponse {
+        // Type - The type of response that we received,
+        // determines how to interpret the .Code given
+        // with it. 
+        ICMPType Type = 1;
+        // Code - The precise "status" given along with its .ICMPType.
+        // The Go generated package also contains a map with many of
+        // these codes and their corresponding descriptions.
+        uint32 Code = 2;
+}
+
+// ICMPType - The general type of ICMP response received from a host.
+enum ICMPType {
+        EchoReply = 0;
+        // 1 and 2 reserved
+        DestinationUnreachable = 3;
+        SourceQuench = 4; // Deprecated
+        RedirectMessage = 5;
+        // 6 deprecated 
+        // 7 reserved
+        EchoRequest = 8;
+        RouterAdvertisement = 9;
+        RouterSolicitation = 10;
+        TimeExceeded = 11;
+        BadIPHeader = 12;
+        Timestamp = 13;
+        TimestampReply = 14;
+        // 15-18 deprecated
+        // 19,20-29 reserved
+        // 30-39 deprecated
+        Photuris = 40;
+        MobilityProto = 41; // Experimental
+        ExtendedEchoRequest = 42;
+        ExtendedEchoReply = 43;
+        // 44-252 reserved
+        RFC3692Experiment1 = 253;
+        RFC3692Experiment2 = 254;
+        // 255 reserved
+}

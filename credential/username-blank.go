@@ -45,14 +45,16 @@ func NewBlankUsername() *BlankUsername {
 
 // ToORM - Get the SQL object for the BlankUsername credential.
 func (u *BlankUsername) ToORM(ctx context.Context) (credential.PublicORM, error) {
+	u.Type = credential.PublicType_BlankUsername
 	u.Username = ""
 	return (*Public)(u).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the BlankUsername credential.
-func (u *BlankUsername) ToPB(ctx context.Context) *credential.Public {
+func (u *BlankUsername) ToPB() *credential.Public {
+	u.Type = credential.PublicType_BlankUsername
 	u.Username = ""
-	return (*Public)(u).ToPB(ctx)
+	return (*Public)(u).ToPB()
 }
 
 // AsEntity - Returns the Public as a valid Maltego Entity.

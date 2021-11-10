@@ -43,12 +43,14 @@ func NewReplayableHash() *ReplayableHash {
 
 // ToORM - Get the SQL object for the ReplayableHash credential.
 func (h *ReplayableHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	h.Type = credential.PrivateType_ReplayableHash
 	return (*PasswordHash)(h).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the ReplayableHash credential.
-func (h *ReplayableHash) ToPB(ctx context.Context) *credential.Private {
-	return (*PasswordHash)(h).ToPB(ctx)
+func (h *ReplayableHash) ToPB() *credential.Private {
+	h.Type = credential.PrivateType_ReplayableHash
+	return (*PasswordHash)(h).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

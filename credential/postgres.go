@@ -47,12 +47,14 @@ func NewPostgresMD5() *PostgresMD5 {
 
 // ToORM - Get the SQL object for the PostgresMD5 credential.
 func (p *PostgresMD5) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	p.Type = credential.PrivateType_PostgresMD5
 	return (*ReplayableHash)(p).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the PostgresMD5 credential.
-func (p *PostgresMD5) ToPB(ctx context.Context) *credential.Private {
-	return (*ReplayableHash)(p).ToPB(ctx)
+func (p *PostgresMD5) ToPB() *credential.Private {
+	p.Type = credential.PrivateType_PostgresMD5
+	return (*ReplayableHash)(p).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

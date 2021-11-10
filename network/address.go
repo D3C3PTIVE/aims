@@ -40,7 +40,7 @@ func (a *Address) ToORM(ctx context.Context) (network.AddressORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the Host
-func (a *Address) ToPB(ctx context.Context) *network.Address {
+func (a *Address) ToPB() *network.Address {
 	return (*network.Address)(a)
 }
 

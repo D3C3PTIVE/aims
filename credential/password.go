@@ -36,9 +36,9 @@ type Password Private
 
 // NewPassword - Create a new Password Credential.
 func NewPassword() *Password {
-	h := Password(Private{})
-	h.Type = credential.PrivateType_Password
-	return &h
+	p := Password(Private{})
+	p.Type = credential.PrivateType_Password
+	return &p
 }
 
 //
@@ -51,12 +51,14 @@ func NewPassword() *Password {
 // will throw a validation error when saving the password to DB. If you want to save
 // an empty password, you MUST change the .Type to PrivateType_BlankPassword.
 func (p *Password) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	p.Type = credential.PrivateType_Password
 	return (*Private)(p).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the Password credential.
-func (p *Password) ToPB(ctx context.Context) *credential.Private {
-	return (*Private)(p).ToPB(ctx)
+func (p *Password) ToPB() *credential.Private {
+	p.Type = credential.PrivateType_Password
+	return (*Private)(p).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

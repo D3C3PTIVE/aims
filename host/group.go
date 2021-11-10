@@ -19,29 +19,28 @@ package host
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"context"
+
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/maxlandon/aims/proto/gen/go/host"
 )
 
 // Group - A computer group of users.
 // This type will be closely related to the various aims/credential types.
-type Group struct {
-	*host.Group
+type Group host.Group
+
+// ToORM - Get the SQL object for the Group
+func (g *Group) ToORM(ctx context.Context) (host.GroupORM, error) {
+	return (*host.Group)(g).ToORM(ctx)
 }
 
-// NewGroup - Create a new aims.Group with its embedded Protobuf type.
-func NewGroup() *Group {
-	return &Group{
-		Group: &host.Group{},
-	}
-}
-
-// GroupFromPB - Get a Group from its Protobuf equivalent.
-func GroupFromPB(pb *host.Group) *Group {
-	return &Group{Group: pb}
+// ToPB - Get the Protobuf object for the Group
+func (g *Group) ToPB() *host.Group {
+	return (*host.Group)(g)
 }
 
 // AsEntity - Returns the Group as a valid Maltego Entity.
-func (u *Group) AsEntity() maltego.Entity {
-	return maltego.Entity{}
+func (g *Group) AsEntity() maltego.Entity {
+	return maltego.NewEntity(g)
 }

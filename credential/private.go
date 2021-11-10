@@ -43,7 +43,7 @@ func (p *Private) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the Private credential.
-func (p *Private) ToPB(ctx context.Context) *credential.Private {
+func (p *Private) ToPB() *credential.Private {
 	return (*credential.Private)(p)
 }
 

@@ -7,12 +7,15 @@ import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
 import "types/types.proto";
 
+// Common
 import "host/os.proto";
 import "host/port.proto";
 import "host/user.proto";
 import "network/network.proto";
 import "network/packet.proto";
-import "scan/scan.proto";
+
+// Scanners
+import "scan/nmap/nmap.proto";
 
 // Host - Represents a remote computer host in DB
 message Host {
@@ -53,40 +56,41 @@ message Host {
   repeated network.Address Addresses = 23 [(gorm.field).many_to_many = {}];
 
   // Nmap ---------------------------------------
-  // @gotags: xml:"hostnames>hostname"
-  repeated Hostname Hostnames = 34;
-  // @gotags: xml:"ports>port"
-  repeated Port Ports = 36;
-  // @gotags: xml:"ports>extraports"
-  repeated ExtraPort ExtraPorts = 33;
   // @gotags: xml:"os"
-  OS OS = 24; 
+  OS OS = 30; 
   // @gotags: xml:"status"
-  Status Status = 32;
+  Status Status = 31;
   // @gotags: xml:"distance"
-  network.Distance Distance = 55 [(gorm.field).belongs_to = {}];
+  network.Distance Distance = 32 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"starttime,attr,omitempty"
-  google.protobuf.Timestamp StartTime = 31;
+  google.protobuf.Timestamp StartTime = 33;
   // @gotags: xml:"endtime,attr,omitempty"
-  google.protobuf.Timestamp EndTime = 40;         // Might have issues here with XML unmarshalling
+  google.protobuf.Timestamp EndTime = 34;         // Might have issues here with XML unmarshalling
   // @gotags: xml:"ipidsequence"
-  network.IPIDSequence IPIDSequence = 41 [(gorm.field).belongs_to = {}];
+  network.IPIDSequence IPIDSequence = 35[(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcpsequence"
-  network.TCPSequence TCPSequence = 25 [(gorm.field).belongs_to = {}];
+  network.TCPSequence TCPSequence = 36[(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcptssequence"
-  network.TCPTSSequence TCPTSSequence = 26 [(gorm.field).belongs_to = {}];
+  network.TCPTSSequence TCPTSSequence = 37 [(gorm.field).belongs_to = {}];
+  network.ICMPResponse ICMPResponse = 38;
   // @gotags: xml:"times"
-  scan.Times Times = 27 [(gorm.field).belongs_to = {}];
+  network.Times Times = 39 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"trace"
-  network.Trace Trace = 28 [(gorm.field).belongs_to = {}];
+  network.Trace Trace = 40 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"uptime"
-  Uptime Uptime = 29;
+  Uptime Uptime = 41;
   // @gotags: xml:"comment,attr"
-  string Comment = 30;
+  string Comment = 42;
   // @gotags: xml:"hostscript>script"
-  repeated scan.NmapScript HostScripts = 35 [(gorm.field).many_to_many = {}];
+  repeated scan.nmap.Script HostScripts = 43 [(gorm.field).many_to_many = {}];
   // @gotags: xml:"smurf"
-  repeated scan.Smurf Smurfs = 37 [(gorm.field).many_to_many = {}];
+  repeated scan.nmap.Smurf Smurfs = 44 [(gorm.field).many_to_many = {}];
+  // @gotags: xml:"hostnames>hostname"
+  repeated Hostname Hostnames = 45;
+  // @gotags: xml:"ports>port"
+  repeated Port Ports = 46;
+  // @gotags: xml:"ports>extraports"
+  repeated ExtraPort ExtraPorts = 47;
 }
 
 // A hostname for a host.

@@ -55,12 +55,14 @@ func NewNTLMHash() *NTLMHash {
 
 // ToORM - Get the SQL object for the NTLMHash credential.
 func (h *NTLMHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
+	h.Type = credential.PrivateType_NTLMHash
 	return (*Private)(h).ToORM(ctx)
 }
 
 // ToPB - Get the Protobuf object for the NTLMHash credential.
-func (h *NTLMHash) ToPB(ctx context.Context) *credential.Private {
-	return (*Private)(h).ToPB(ctx)
+func (h *NTLMHash) ToPB() *credential.Private {
+	h.Type = credential.PrivateType_NTLMHash
+	return (*Private)(h).ToPB()
 }
 
 // AsEntity - Returns the Private as a valid Maltego Entity.

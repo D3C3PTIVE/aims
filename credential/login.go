@@ -106,7 +106,7 @@ func (l *Login) ToORM(ctx context.Context) (credential.LoginORM, error) {
 }
 
 // ToPB - Get the Protobuf object for the credential Login.
-func (l *Login) ToPB(ctx context.Context) *credential.Login {
+func (l *Login) ToPB() *credential.Login {
 	return (*credential.Login)(l)
 }
 

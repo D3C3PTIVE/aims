@@ -8,7 +8,7 @@ import (
 	types "github.com/infobloxopen/protoc-gen-gorm/types"
 	gorm "github.com/jinzhu/gorm"
 	network "github.com/maxlandon/aims/proto/gen/go/network"
-	scan "github.com/maxlandon/aims/proto/gen/go/scan"
+	nmap "github.com/maxlandon/aims/proto/gen/go/scan/nmap"
 	go_uuid "github.com/satori/go.uuid"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -26,7 +26,7 @@ type HostORM struct {
 	DistanceId      *go_uuid.UUID
 	EndTime         *time.Time
 	ExtraPorts      []*ExtraPortORM          `gorm:"foreignkey:HostId;association_foreignkey:Id"`
-	HostScripts     []*scan.NmapScriptORM    `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_nmap_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:NmapScriptId"`
+	HostScripts     []*nmap.ScriptORM        `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:ScriptId"`
 	Hostnames       []*HostnameORM           `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	IPIDSequence    *network.IPIDSequenceORM `gorm:"foreignkey:IPIDSequenceId;association_foreignkey:Id"`
 	IPIDSequenceId  *go_uuid.UUID
@@ -41,14 +41,14 @@ type HostORM struct {
 	Ports           []*PortORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	Purpose         string
 	Scope           string
-	Smurfs          []*scan.SmurfORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_smurves;jointable_foreignkey:HostId;association_jointable_foreignkey:SmurfId"`
+	Smurfs          []*nmap.SmurfORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_smurves;jointable_foreignkey:HostId;association_jointable_foreignkey:SmurfId"`
 	StartTime       *time.Time
 	Status          *StatusORM              `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	TCPSequence     *network.TCPSequenceORM `gorm:"foreignkey:TCPSequenceId;association_foreignkey:Id"`
 	TCPSequenceId   *go_uuid.UUID
 	TCPTSSequence   *network.TCPTSSequenceORM `gorm:"foreignkey:TCPTSSequenceId;association_foreignkey:Id"`
 	TCPTSSequenceId *go_uuid.UUID
-	Times           *scan.TimesORM `gorm:"foreignkey:TimesId;association_foreignkey:Id"`
+	Times           *network.TimesORM `gorm:"foreignkey:TimesId;association_foreignkey:Id"`
 	TimesId         *go_uuid.UUID
 	Trace           *network.TraceORM `gorm:"foreignkey:TraceId;association_foreignkey:Id"`
 	TraceId         *go_uuid.UUID
@@ -120,39 +120,6 @@ func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 			}
 		} else {
 			to.Addresses = append(to.Addresses, nil)
-		}
-	}
-	for _, v := range m.Hostnames {
-		if v != nil {
-			if tempHostnames, cErr := v.ToORM(ctx); cErr == nil {
-				to.Hostnames = append(to.Hostnames, &tempHostnames)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.Hostnames = append(to.Hostnames, nil)
-		}
-	}
-	for _, v := range m.Ports {
-		if v != nil {
-			if tempPorts, cErr := v.ToORM(ctx); cErr == nil {
-				to.Ports = append(to.Ports, &tempPorts)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.Ports = append(to.Ports, nil)
-		}
-	}
-	for _, v := range m.ExtraPorts {
-		if v != nil {
-			if tempExtraPorts, cErr := v.ToORM(ctx); cErr == nil {
-				to.ExtraPorts = append(to.ExtraPorts, &tempExtraPorts)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.ExtraPorts = append(to.ExtraPorts, nil)
 		}
 	}
 	if m.Status != nil {
@@ -235,6 +202,39 @@ func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 			to.Smurfs = append(to.Smurfs, nil)
 		}
 	}
+	for _, v := range m.Hostnames {
+		if v != nil {
+			if tempHostnames, cErr := v.ToORM(ctx); cErr == nil {
+				to.Hostnames = append(to.Hostnames, &tempHostnames)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Hostnames = append(to.Hostnames, nil)
+		}
+	}
+	for _, v := range m.Ports {
+		if v != nil {
+			if tempPorts, cErr := v.ToORM(ctx); cErr == nil {
+				to.Ports = append(to.Ports, &tempPorts)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Ports = append(to.Ports, nil)
+		}
+	}
+	for _, v := range m.ExtraPorts {
+		if v != nil {
+			if tempExtraPorts, cErr := v.ToORM(ctx); cErr == nil {
+				to.ExtraPorts = append(to.ExtraPorts, &tempExtraPorts)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.ExtraPorts = append(to.ExtraPorts, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(HostWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -290,39 +290,6 @@ func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 			}
 		} else {
 			to.Addresses = append(to.Addresses, nil)
-		}
-	}
-	for _, v := range m.Hostnames {
-		if v != nil {
-			if tempHostnames, cErr := v.ToPB(ctx); cErr == nil {
-				to.Hostnames = append(to.Hostnames, &tempHostnames)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.Hostnames = append(to.Hostnames, nil)
-		}
-	}
-	for _, v := range m.Ports {
-		if v != nil {
-			if tempPorts, cErr := v.ToPB(ctx); cErr == nil {
-				to.Ports = append(to.Ports, &tempPorts)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.Ports = append(to.Ports, nil)
-		}
-	}
-	for _, v := range m.ExtraPorts {
-		if v != nil {
-			if tempExtraPorts, cErr := v.ToPB(ctx); cErr == nil {
-				to.ExtraPorts = append(to.ExtraPorts, &tempExtraPorts)
-			} else {
-				return to, cErr
-			}
-		} else {
-			to.ExtraPorts = append(to.ExtraPorts, nil)
 		}
 	}
 	if m.Status != nil {
@@ -401,6 +368,39 @@ func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 			}
 		} else {
 			to.Smurfs = append(to.Smurfs, nil)
+		}
+	}
+	for _, v := range m.Hostnames {
+		if v != nil {
+			if tempHostnames, cErr := v.ToPB(ctx); cErr == nil {
+				to.Hostnames = append(to.Hostnames, &tempHostnames)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Hostnames = append(to.Hostnames, nil)
+		}
+	}
+	for _, v := range m.Ports {
+		if v != nil {
+			if tempPorts, cErr := v.ToPB(ctx); cErr == nil {
+				to.Ports = append(to.Ports, &tempPorts)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Ports = append(to.Ports, nil)
+		}
+	}
+	for _, v := range m.ExtraPorts {
+		if v != nil {
+			if tempExtraPorts, cErr := v.ToPB(ctx); cErr == nil {
+				to.ExtraPorts = append(to.ExtraPorts, &tempExtraPorts)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.ExtraPorts = append(to.ExtraPorts, nil)
 		}
 	}
 	if posthook, ok := interface{}(m).(HostWithAfterToPB); ok {
@@ -947,6 +947,7 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 	var updatedIPIDSequence bool
 	var updatedTCPSequence bool
 	var updatedTCPTSSequence bool
+	var updatedICMPResponse bool
 	var updatedTimes bool
 	var updatedTrace bool
 	var updatedUptime bool
@@ -1055,18 +1056,6 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 		}
 		if f == prefix+"Addresses" {
 			patchee.Addresses = patcher.Addresses
-			continue
-		}
-		if f == prefix+"Hostnames" {
-			patchee.Hostnames = patcher.Hostnames
-			continue
-		}
-		if f == prefix+"Ports" {
-			patchee.Ports = patcher.Ports
-			continue
-		}
-		if f == prefix+"ExtraPorts" {
-			patchee.ExtraPorts = patcher.ExtraPorts
 			continue
 		}
 		if !updatedOS && strings.HasPrefix(f, prefix+"OS.") {
@@ -1243,6 +1232,29 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 			patchee.TCPTSSequence = patcher.TCPTSSequence
 			continue
 		}
+		if !updatedICMPResponse && strings.HasPrefix(f, prefix+"ICMPResponse.") {
+			if patcher.ICMPResponse == nil {
+				patchee.ICMPResponse = nil
+				continue
+			}
+			if patchee.ICMPResponse == nil {
+				patchee.ICMPResponse = &network.ICMPResponse{}
+			}
+			childMask := &field_mask.FieldMask{}
+			for j := i; j < len(updateMask.Paths); j++ {
+				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"ICMPResponse."); trimPath != updateMask.Paths[j] {
+					childMask.Paths = append(childMask.Paths, trimPath)
+				}
+			}
+			if err := gorm1.MergeWithMask(patcher.ICMPResponse, patchee.ICMPResponse, childMask); err != nil {
+				return nil, nil
+			}
+		}
+		if f == prefix+"ICMPResponse" {
+			updatedICMPResponse = true
+			patchee.ICMPResponse = patcher.ICMPResponse
+			continue
+		}
 		if !updatedTimes && strings.HasPrefix(f, prefix+"Times.") {
 			updatedTimes = true
 			if patcher.Times == nil {
@@ -1250,9 +1262,9 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 				continue
 			}
 			if patchee.Times == nil {
-				patchee.Times = &scan.Times{}
+				patchee.Times = &network.Times{}
 			}
-			if o, err := scan.DefaultApplyFieldMaskTimes(ctx, patchee.Times, patcher.Times, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Times.", db); err != nil {
+			if o, err := network.DefaultApplyFieldMaskTimes(ctx, patchee.Times, patcher.Times, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Times.", db); err != nil {
 				return nil, err
 			} else {
 				patchee.Times = o
@@ -1318,6 +1330,18 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 		}
 		if f == prefix+"Smurfs" {
 			patchee.Smurfs = patcher.Smurfs
+			continue
+		}
+		if f == prefix+"Hostnames" {
+			patchee.Hostnames = patcher.Hostnames
+			continue
+		}
+		if f == prefix+"Ports" {
+			patchee.Ports = patcher.Ports
+			continue
+		}
+		if f == prefix+"ExtraPorts" {
+			patchee.ExtraPorts = patcher.ExtraPorts
 			continue
 		}
 	}

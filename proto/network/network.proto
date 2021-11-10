@@ -44,18 +44,30 @@ message Distance {
   int32 Value = 2;
 }
 
+// Times - Contains time statistics for a Nmap scan
+message Times {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+
+  // @gotags: xml:"srtt,attr"
+  string SRTT = 10;
+  // @gotags: xml:"rttvar,attr"
+  string RTT = 11;
+  // @gotags: xml:"to,attr"
+  string To = 12;
+}
+
 // Address - A network address
 message Address {
-  // GORM --------------------------------
   option (gorm.opts).ormable = true;
-
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true"
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true"
   google.protobuf.Timestamp UpdatedAt = 5;
-  // -------------------------------------
 
   // @gotags: xml:"addr,attr"
   gorm.types.InetValue Addr = 10;          

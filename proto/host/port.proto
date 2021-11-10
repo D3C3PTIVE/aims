@@ -8,7 +8,7 @@ import "options/gorm.proto";
 import "types/types.proto";
 
 import "network/service.proto";
-import "scan/scan.proto";
+import "scan/nmap/nmap.proto";
 
 // Port - A port on a host
 message Port {
@@ -33,7 +33,7 @@ message Port {
   // @gotags: xml:"state"
   State State = 14;
   // @gotags: xml:"script"
-  repeated scan.NmapScript Scripts = 15 [(gorm.field).many_to_many = {}];
+  repeated scan.nmap.Script Scripts = 15 [(gorm.field).many_to_many = {}];
 
   // @gotags: xml:"count"
   int32 Count = 20;
@@ -53,6 +53,7 @@ message Reason {
   int32 Count = 4;
 }
 
+// ExtraPort - Contains the information about the closed and filtered ports
 message ExtraPort {
   option (gorm.opts).ormable = true;
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
