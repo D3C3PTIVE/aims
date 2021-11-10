@@ -1,49 +1,63 @@
 syntax = "proto3";
 
-package nmap;
+package scan.nmap;
 
 // DB -----------
 import "options/gorm.proto";
 import "types/types.proto";
 import "google/protobuf/timestamp.proto";
 
-import "scan/scan.proto";
-import "host/host.proto";
-
-// Run - Represents a Nmap scan before, after or while being run. 
-// As long as we cannot import db.Host objects (circular imports), we will
-// declare a similar NmapScan type in the Go code, and use it when needed.
-message Run {
-  // GORM --------------------------------
+// Script - Represents a Nmap Scripting Engine Script.
+// The inner elements can be an arbitrary collection of Tables and Elements. They can be empty
+message Script {
   option (gorm.opts).ormable = true;
-
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true"
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true"
   google.protobuf.Timestamp UpdatedAt = 5;
-  // -------------------------------------
 
-  string Args = 10;
-  string ProfileName = 11;
-  string Scanner = 12;
-  string StartStr = 13;
-  string Version = 14;
-  string XMLOutputVersion = 15;
-  scan.Debugging Debugging = 16 [(gorm.field).belongs_to = {}];
-  scan.Stats Stats = 17 [(gorm.field).belongs_to = {}];
-  scan.Info ScanInfo = 18 [(gorm.field).belongs_to = {}];
-  google.protobuf.Timestamp Start = 19;
-  scan.Verbose Verbose = 20 [(gorm.field).belongs_to = {}];
-  repeated host.Host Hosts = 21 [(gorm.field).many_to_many = {}];          
-  repeated scan.NmapScript PreScripts = 22 [(gorm.field).many_to_many = {}];
-  repeated scan.NmapScript PostScripts = 23 [(gorm.field).many_to_many = {}];
-  repeated scan.Target Targets = 24 [(gorm.field).many_to_many = {}];
-  repeated scan.Task TaskBegin = 25 [(gorm.field).many_to_many = {}];
-  repeated scan.TaskProgress TaskProgress = 26 [(gorm.field).many_to_many = {}];
-  repeated scan.Task TaskEnd = 27 [(gorm.field).many_to_many = {}];
+  // @gotags: xml:"output,attr"
+  string Output = 10;
+  // @gotags: xml:"elem,omitempty"
+  repeated Element Elements = 11;
+  // @gotags: xml:"table,omitempty"
+  repeated Table Tables = 12;
+}
 
-  repeated string NmapErrors = 28;
-  // bytes rawXML = 30;
+// elements - The smallest building block for scripts/tables. Key is optional
+message Element {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"key,attr,omitempty"
+  string Key = 10;
+  // @gotags: xml:",innerxml"
+  string Value = 11;
+}
+
+// Table - An arbitrary collection of (sub-)Tables and Elements. Can be empty
+message Table {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"key,attr,omitempty"
+  string Key = 10;
+  // @gotags: xml:"table,omitempty"
+  repeated Table Tables = 11;
+  // @gotags: xml:"elem,omitempty"
+  repeated Element Elements = 12;
+}
+
+// Smurf - Contains responses from a smurf attack
+message Smurf {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+
+  // @gotags: xml:"responses,attr"
+  string Responses = 10;
 }
