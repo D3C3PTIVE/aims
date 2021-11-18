@@ -32,8 +32,8 @@ type Username Public
 // NewUsername - Create a new Username Public credential.
 // Using this type ensures that its .Username field is not
 // nil when saved into DB by default.
-func NewUsername() *Username {
-	h := Username(Public{})
+func NewUsername(user string) *Username {
+	h := Username(Public{Username: user})
 	h.Type = credential.PublicType_Username
 	return &h
 }

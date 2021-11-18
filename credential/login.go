@@ -40,18 +40,17 @@ type Login credential.Login
 // Creation & Update Functions
 //
 
-// InvalidateLoginOpts - A template used to submit a Login invalidation request with
-// an InvalidateLogin() call. None of these fields are nil by default, but some of their
+// LoginOptions - A template used as a parameter to functions creating/updating/
+// invalidating logins. None of these fields are nil by default, but some of their
 // own values are checked in the InvalidateLogin() function.
 // Each field in this struct list its fields checked by InvalidateLogin().
 // NOTE: At no point any ID will be required from any of those types, so this function
 // does NOT require any database-existing object.
-type InvalidateLoginOpts struct {
-
+type LoginOptions struct {
 	// Port - A port is lower-level item that we require to check a login.
 	// This is so because the credential.Service that you must pass as a
 	// field is usually an attribute of a host.Port.
-	Port host.Port
+	// Port host.Port
 
 	// Service - The service against which a Login has been performed.
 	// Fields that are checked:
@@ -75,6 +74,13 @@ type InvalidateLoginOpts struct {
 	Status credential.LoginStatus
 }
 
+// NewLogin - This method is responsible for creating a credential.Login
+// object which ties a credential.Core to the .Service in the LoginOptions,
+// it is a valid credential for.
+func NewLogin(core *Core, opts *LoginOptions) (*Core, *Login, error) {
+	return &Core{}, &Login{}, nil
+}
+
 // InvalidateLogin - Checks to see if a credential.Login exists for a given set of details.
 // If it does exists, we then appropriately set the status to one of our failure statuses.
 //
@@ -83,7 +89,7 @@ type InvalidateLoginOpts struct {
 //         to the InvalidateLoginOpts documentation for a list of each of those required.
 //
 // Raises an error if any of the above options are missing
-func InvalidateLogin(opts *InvalidateLoginOpts) (err error) {
+func InvalidateLogin(opts *LoginOptions) (err error) {
 
 	// Check the Port+Service fields validity,
 	// and create any missing stuff if needed.
@@ -114,13 +120,12 @@ func (l *Login) ToPB() *credential.Login {
 // Database Scopes
 //
 
-// ForHostsAndServices - Finds all credential.Logins that are associated with a list of hosts and/or services.
-func ForHostsAndServices(hosts []*host.Host, services ...[]*network.Service) {
-}
-
 // ForHost - Finds all credential.Logins associated with a Host.
 func ForHost(h *host.Host) {
+}
 
+// ForHostsAndServices - Finds all credential.Logins that are associated with a list of hosts and/or services.
+func ForHostsAndServices(hosts []*host.Host, services ...[]*network.Service) {
 }
 
 //

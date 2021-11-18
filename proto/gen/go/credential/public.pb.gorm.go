@@ -15,8 +15,10 @@ import (
 )
 
 type PublicORM struct {
+	Claims    string
 	CoreId    *go_uuid.UUID
 	CreatedAt *time.Time
+	Data      string
 	Id        go_uuid.UUID `gorm:"type:uuid;primary_key"`
 	Type      int32
 	UpdatedAt *time.Time
@@ -56,6 +58,8 @@ func (m *Public) ToORM(ctx context.Context) (PublicORM, error) {
 	}
 	to.Type = int32(m.Type)
 	to.Username = m.Username
+	to.Data = m.Data
+	to.Claims = m.Claims
 	if posthook, ok := interface{}(m).(PublicWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -81,6 +85,8 @@ func (m *PublicORM) ToPB(ctx context.Context) (Public, error) {
 	}
 	to.Type = PublicType(m.Type)
 	to.Username = m.Username
+	to.Data = m.Data
+	to.Claims = m.Claims
 	if posthook, ok := interface{}(m).(PublicWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
 	}
@@ -448,6 +454,14 @@ func DefaultApplyFieldMaskPublic(ctx context.Context, patchee *Public, patcher *
 		}
 		if f == prefix+"Username" {
 			patchee.Username = patcher.Username
+			continue
+		}
+		if f == prefix+"Data" {
+			patchee.Data = patcher.Data
+			continue
+		}
+		if f == prefix+"Claims" {
+			patchee.Claims = patcher.Claims
 			continue
 		}
 	}

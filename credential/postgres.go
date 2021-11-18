@@ -34,8 +34,8 @@ import (
 type PostgresMD5 NonReplayableHash
 
 // NewPostgresMD5 - Create a new PostgreSQL MD5 Credential and its embedded Protobuf type.
-func NewPostgresMD5() *PostgresMD5 {
-	md := PostgresMD5(ReplayableHash{})
+func NewPostgresMD5(hash []byte) *PostgresMD5 {
+	md := PostgresMD5(ReplayableHash{Data: string(hash)})
 	md.Type = credential.PrivateType_PostgresMD5
 	md.JTRFormat = "raw-md5,postgres"
 	return &md

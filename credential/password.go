@@ -35,8 +35,8 @@ import (
 type Password Private
 
 // NewPassword - Create a new Password Credential.
-func NewPassword() *Password {
-	p := Password(Private{})
+func NewPassword(data string) *Password {
+	p := Password(Private{Data: data})
 	p.Type = credential.PrivateType_Password
 	return &p
 }

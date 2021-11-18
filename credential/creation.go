@@ -20,7 +20,7 @@ package credential
 
 import "github.com/maxlandon/aims/proto/gen/go/credential"
 
-// CreateOptions - A type holding the objects (either optional or required
+// CreateOptions - A template holding the objects (either optional or required
 // depending on the context) that can be passed as parameter to functions
 // creating either credential.Cores, Logins, pairs, etc.
 // Each of these functions generally describes the fields that matter to it,
@@ -33,34 +33,34 @@ type CreateOptions struct {
 	// Public - The credential.Public that we tried.
 	// .Username  - if PublicType_Username  (required)
 	// .Key,      - if PublicType_Key       (required)
-	Public *Public
+	Public Public
 
 	// Private - The credential.Private that we tried.
 	// .Data    - checked against the .PrivateType (required)
-	Private *Private
+	Private Private
 
 	// Origin - The origin of the credentials that we are submitting
 	// for creation: this also contains ALL elements for this origin:
 	// ports, services, tools and filenames we need depending on the
 	// proclaimed .Type attribute of the Origin.
-	Origin *Origin
+	Origin Origin
 
 	// Realm - The credential realm to which the Public/Private belong.
-	Realm *credential.Realm
+	Realm credential.Realm
 }
 
-// CreateCredential - Create a credential.Core, and all the sub-objects that
+// NewCore - Create a credential.Core, and all the sub-objects that
 // it depends upon. Some assertions might be made in this function, but they
 // are kept to the bare minimum, and the purpose of the Options parameter is
 // to make callers able to prepare their call in more detail.
-func CreateCredential(opts *CreateOptions) *Core {
-	return &Core{}
+func NewCore(opts *CreateOptions) (*Core, error) {
+	return &Core{}, nil
 }
 
-// CreateCredentialAndLogin - Create a credential.Core and its associated
-// credential.Login. This, in effect, ties the Core with a Service passed
-// in the options (required), through the created Login type.
-// The login contains the credential.Core created/fetched in this function.
-func CreateCredentialAndLogin(opts *CreateOptions) *Login {
-	return &Login{}
+// NewCoreAndLogin - Create a credential.Core and its associated
+// credential.Login. This, in effect, ties the Core with a Service
+// passed in the options (required), through the created Login type.
+// NOTE: Public and Private types used are those of LoginOpts, NOT CreateOptions.
+func NewCoreAndLogin(opts *CreateOptions, loginOpts *LoginOptions) (*Login, error) {
+	return &Login{}, nil
 }

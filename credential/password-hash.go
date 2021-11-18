@@ -33,8 +33,8 @@ type PasswordHash Private
 // NewPasswordHash - Create a new PasswordHash Credential.
 // Its .Type attribute is set to PrivateType_NonReplayableHash by default, so
 // when you know that is not the case, do not forget to change it if needed.
-func NewPasswordHash() *PasswordHash {
-	h := PasswordHash(Private{})
+func NewPasswordHash(hash []byte) *PasswordHash {
+	h := PasswordHash(Private{Data: string(hash)})
 	h.Type = credential.PrivateType_NonReplayableHash
 	return &h
 }

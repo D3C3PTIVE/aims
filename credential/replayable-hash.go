@@ -31,8 +31,8 @@ import (
 type ReplayableHash PasswordHash
 
 // NewReplayableHash - Create a new ReplayableHash Credential.
-func NewReplayableHash() *ReplayableHash {
-	h := ReplayableHash(PasswordHash{})
+func NewReplayableHash(hash []byte) *ReplayableHash {
+	h := ReplayableHash(PasswordHash{Data: string(hash)})
 	h.Type = credential.PrivateType_ReplayableHash
 	return &h
 }

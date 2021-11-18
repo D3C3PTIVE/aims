@@ -42,8 +42,8 @@ import (
 type NTLMHash Private
 
 // NewNTLMHash - Create a new NTLM hash Credential.
-func NewNTLMHash() *NTLMHash {
-	h := NTLMHash(Private{})
+func NewNTLMHash(hash []byte) *NTLMHash {
+	h := NTLMHash(Private{Data: string(hash)})
 	h.Type = credential.PrivateType_NTLMHash
 	h.JTRFormat = "nt,lm"
 	return &h

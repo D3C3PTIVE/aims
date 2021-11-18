@@ -32,8 +32,8 @@ import (
 type NonReplayableHash PasswordHash
 
 // NewNonReplayableHash - Create a new NonReplayableHash Credential.
-func NewNonReplayableHash() *NonReplayableHash {
-	h := NonReplayableHash(PasswordHash{})
+func NewNonReplayableHash(hash []byte) *NonReplayableHash {
+	h := NonReplayableHash(PasswordHash{Data: string(hash)})
 	h.Type = credential.PrivateType_NonReplayableHash
 	return &h
 }
