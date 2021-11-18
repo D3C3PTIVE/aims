@@ -18,6 +18,7 @@ type ScriptORM struct {
 	CreatedAt *time.Time
 	Elements  []*ElementORM `gorm:"foreignkey:ScriptId;association_foreignkey:Id"`
 	Id        go_uuid.UUID  `gorm:"type:uuid;primary_key"`
+	Name      string
 	Output    string
 	Tables    []*TableORM `gorm:"foreignkey:ScriptId;association_foreignkey:Id"`
 	UpdatedAt *time.Time
@@ -54,6 +55,7 @@ func (m *Script) ToORM(ctx context.Context) (ScriptORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
+	to.Name = m.Name
 	to.Output = m.Output
 	for _, v := range m.Elements {
 		if v != nil {
@@ -100,6 +102,7 @@ func (m *ScriptORM) ToPB(ctx context.Context) (Script, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
+	to.Name = m.Name
 	to.Output = m.Output
 	for _, v := range m.Elements {
 		if v != nil {
@@ -781,6 +784,10 @@ func DefaultApplyFieldMaskScript(ctx context.Context, patchee *Script, patcher *
 		if f == prefix+"UpdatedAt" {
 			updatedUpdatedAt = true
 			patchee.UpdatedAt = patcher.UpdatedAt
+			continue
+		}
+		if f == prefix+"Name" {
+			patchee.Name = patcher.Name
 			continue
 		}
 		if f == prefix+"Output" {

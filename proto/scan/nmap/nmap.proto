@@ -18,12 +18,14 @@ message Script {
   // @gotags: display:"Updated at" readonly:"true"
   google.protobuf.Timestamp UpdatedAt = 5;
 
+  // gotags: xml:"id,attr"
+  string Name = 10;
   // @gotags: xml:"output,attr"
-  string Output = 10;
+  string Output = 11;
   // @gotags: xml:"elem,omitempty"
-  repeated Element Elements = 11;
+  repeated Element Elements = 12;
   // @gotags: xml:"table,omitempty"
-  repeated Table Tables = 12;
+  repeated Table Tables = 13;
 }
 
 // elements - The smallest building block for scripts/tables. Key is optional
