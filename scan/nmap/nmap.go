@@ -21,17 +21,17 @@ package nmap
 import (
 	"encoding/xml"
 
-	"github.com/maxlandon/aims/proto/gen/go/scan/nmap"
+	"github.com/maxlandon/aims/scan"
 	"github.com/maxlandon/gondor/maltego"
 )
 
 // Run - The results of an Nmap scan that has been ran.
 // This object is the root of the complete output XML tree of the scan.
-type Run nmap.Run
+type Run scan.Run
 
 // FromRun - If you have ran a Scan and parsed its XML output
-// into an nmap.Run protobuf type, you can create a scan out of it.
-func FromRun(pb *nmap.Run) *Run {
+// into an scan.Run protobuf type, you can create a scan out of it.
+func FromRun(pb *scan.Run) *Run {
 	return (*Run)(pb)
 }
 
@@ -39,7 +39,7 @@ func FromRun(pb *nmap.Run) *Run {
 // parse it and return a Run with its contents. If the unmarshalling fails,
 // it returns both the model and the error, so always check the latter.
 func FromXML(data []byte) (*Run, error) {
-	r := &nmap.Run{}
+	r := &scan.Run{}
 	err := xml.Unmarshal(data, r)
 	return (*Run)(r), err
 }

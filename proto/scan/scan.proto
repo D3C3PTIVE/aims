@@ -50,7 +50,8 @@ message Run {
   // @gotags: xml:"scaninfo" 
   Info Info = 18 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"start,attr" 
-  google.protobuf.Timestamp Start = 19;
+  int64 Start = 19;
+  //google.protobuf.Timestamp Start = 19;
   // @gotags: xml:"verbose" 
   Verbose Verbose = 20 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"host" 
@@ -217,3 +218,6 @@ message HostStats {
   int32 Total = 12;
 }
 
+// message Timestamp {
+//   int64 Time = 1;
+// }

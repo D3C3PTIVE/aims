@@ -35,7 +35,7 @@ type RunORM struct {
 	RawXML           string
 	Scanner          string
 	SessionId        go_uuid.UUID
-	Start            *time.Time
+	Start            int64
 	StartStr         string
 	Stats            *StatsORM `gorm:"foreignkey:StatsId;association_foreignkey:Id"`
 	StatsId          *go_uuid.UUID
@@ -121,10 +121,7 @@ func (m *Run) ToORM(ctx context.Context) (RunORM, error) {
 		}
 		to.Info = &tempInfo
 	}
-	if m.Start != nil {
-		t := m.Start.AsTime()
-		to.Start = &t
-	}
+	to.Start = m.Start
 	if m.Verbose != nil {
 		tempVerbose, err := m.Verbose.ToORM(ctx)
 		if err != nil {
@@ -264,9 +261,7 @@ func (m *RunORM) ToPB(ctx context.Context) (Run, error) {
 		}
 		to.Info = &tempInfo
 	}
-	if m.Start != nil {
-		to.Start = timestamppb.New(*m.Start)
-	}
+	to.Start = m.Start
 	if m.Verbose != nil {
 		tempVerbose, err := m.Verbose.ToPB(ctx)
 		if err != nil {
@@ -1497,7 +1492,6 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 	var updatedDebugging bool
 	var updatedStats bool
 	var updatedInfo bool
-	var updatedStart bool
 	var updatedVerbose bool
 	for i, f := range updateMask.Paths {
 		if f == prefix+"Id" {
@@ -1645,26 +1639,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 			patchee.Info = patcher.Info
 			continue
 		}
-		if !updatedStart && strings.HasPrefix(f, prefix+"Start.") {
-			if patcher.Start == nil {
-				patchee.Start = nil
-				continue
-			}
-			if patchee.Start == nil {
-				patchee.Start = &timestamppb.Timestamp{}
-			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"Start."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
-			}
-			if err := gorm1.MergeWithMask(patcher.Start, patchee.Start, childMask); err != nil {
-				return nil, nil
-			}
-		}
 		if f == prefix+"Start" {
-			updatedStart = true
 			patchee.Start = patcher.Start
 			continue
 		}
