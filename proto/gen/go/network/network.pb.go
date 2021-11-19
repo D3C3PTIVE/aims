@@ -323,10 +323,10 @@ type Address struct {
 
 	// @gotags: display:"ID" readonly:"true"
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
-	// @gotags: display:"Created at" readonly:"true"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
-	// @gotags: display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: xml:"addr,attr"
 	Addr *types.InetValue `protobuf:"bytes,10,opt,name=Addr,proto3" json:"Addr,omitempty" xml:"addr,attr"`
 	// @gotags: xml:"addrtype,attr"

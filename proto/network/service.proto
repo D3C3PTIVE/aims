@@ -13,9 +13,9 @@ message Service {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true" strict:"yes"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
-  // @gotags: display:"Created at" readonly:"true"
-  google.protobuf.Timestamp CreatedAt = 4;
-  // @gotags: display:"Updated at" readonly:"true"
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4; 
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // Nmap

@@ -24,7 +24,7 @@ type HostORM struct {
 	CreatedAt       *time.Time
 	Distance        *network.DistanceORM `gorm:"foreignkey:DistanceId;association_foreignkey:Id"`
 	DistanceId      *go_uuid.UUID
-	EndTime         *time.Time
+	EndTime         int64
 	ExtraPorts      []*ExtraPortORM          `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	HostScripts     []*nmap.ScriptORM        `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:ScriptId"`
 	Hostnames       []*HostnameORM           `gorm:"foreignkey:HostId;association_foreignkey:Id"`
@@ -42,7 +42,7 @@ type HostORM struct {
 	Purpose         string
 	Scope           string
 	Smurfs          []*nmap.SmurfORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_smurves;jointable_foreignkey:HostId;association_jointable_foreignkey:SmurfId"`
-	StartTime       *time.Time
+	StartTime       int64
 	Status          *StatusORM              `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	TCPSequence     *network.TCPSequenceORM `gorm:"foreignkey:TCPSequenceId;association_foreignkey:Id"`
 	TCPSequenceId   *go_uuid.UUID
@@ -136,14 +136,8 @@ func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 		}
 		to.Distance = &tempDistance
 	}
-	if m.StartTime != nil {
-		t := m.StartTime.AsTime()
-		to.StartTime = &t
-	}
-	if m.EndTime != nil {
-		t := m.EndTime.AsTime()
-		to.EndTime = &t
-	}
+	to.StartTime = m.StartTime
+	to.EndTime = m.EndTime
 	if m.IPIDSequence != nil {
 		tempIPIDSequence, err := m.IPIDSequence.ToORM(ctx)
 		if err != nil {
@@ -306,12 +300,8 @@ func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 		}
 		to.Distance = &tempDistance
 	}
-	if m.StartTime != nil {
-		to.StartTime = timestamppb.New(*m.StartTime)
-	}
-	if m.EndTime != nil {
-		to.EndTime = timestamppb.New(*m.EndTime)
-	}
+	to.StartTime = m.StartTime
+	to.EndTime = m.EndTime
 	if m.IPIDSequence != nil {
 		tempIPIDSequence, err := m.IPIDSequence.ToPB(ctx)
 		if err != nil {
@@ -942,8 +932,6 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 	var updatedOS bool
 	var updatedStatus bool
 	var updatedDistance bool
-	var updatedStartTime bool
-	var updatedEndTime bool
 	var updatedIPIDSequence bool
 	var updatedTCPSequence bool
 	var updatedTCPTSSequence bool
@@ -1123,49 +1111,11 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 			patchee.Distance = patcher.Distance
 			continue
 		}
-		if !updatedStartTime && strings.HasPrefix(f, prefix+"StartTime.") {
-			if patcher.StartTime == nil {
-				patchee.StartTime = nil
-				continue
-			}
-			if patchee.StartTime == nil {
-				patchee.StartTime = &timestamppb.Timestamp{}
-			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"StartTime."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
-			}
-			if err := gorm1.MergeWithMask(patcher.StartTime, patchee.StartTime, childMask); err != nil {
-				return nil, nil
-			}
-		}
 		if f == prefix+"StartTime" {
-			updatedStartTime = true
 			patchee.StartTime = patcher.StartTime
 			continue
 		}
-		if !updatedEndTime && strings.HasPrefix(f, prefix+"EndTime.") {
-			if patcher.EndTime == nil {
-				patchee.EndTime = nil
-				continue
-			}
-			if patchee.EndTime == nil {
-				patchee.EndTime = &timestamppb.Timestamp{}
-			}
-			childMask := &field_mask.FieldMask{}
-			for j := i; j < len(updateMask.Paths); j++ {
-				if trimPath := strings.TrimPrefix(updateMask.Paths[j], prefix+"EndTime."); trimPath != updateMask.Paths[j] {
-					childMask.Paths = append(childMask.Paths, trimPath)
-				}
-			}
-			if err := gorm1.MergeWithMask(patcher.EndTime, patchee.EndTime, childMask); err != nil {
-				return nil, nil
-			}
-		}
 		if f == prefix+"EndTime" {
-			updatedEndTime = true
 			patchee.EndTime = patcher.EndTime
 			continue
 		}

@@ -20,9 +20,9 @@ message Run {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
-  // @gotags: display:"Created at" readonly:"true"
+  // @gotags: display:"Created at" readonly:"true" xml:"-"
   google.protobuf.Timestamp CreatedAt = 4;
-  // @gotags: display:"Updated at" readonly:"true"
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // An optional session from which the scan runs.
@@ -51,7 +51,6 @@ message Run {
   Info Info = 18 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"start,attr" 
   int64 Start = 19;
-  //google.protobuf.Timestamp Start = 19;
   // @gotags: xml:"verbose" 
   Verbose Verbose = 20 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"host" 
@@ -126,7 +125,7 @@ message Task {
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
 
   // @gotags: xml:"time,attr"
-  google.protobuf.Timestamp Time = 10;
+  int64 Time = 10;
   // @gotags: xml:"task,attr"
   string Task = 11;
   // @gotags: xml:"extrainfo,attr"
@@ -145,9 +144,9 @@ message TaskProgress {
   // @gotags: xml:"task,attr"
   string Task = 12;
   // @gotags: xml:"etc,attr"
-  google.protobuf.Timestamp Etc = 13;
+  int64 Etc = 13;
   // @gotags: xml:"time,attr"
-  google.protobuf.Timestamp Time = 14;
+  int64 Time = 14;
 }
 
 // Target - This type can be used as an Input object to a scan, 
@@ -192,7 +191,7 @@ message Finished {
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
 
   // @gotags: xml:"time,attr"
-  google.protobuf.Timestamp Time = 10;
+  int64 Time = 10;
   // @gotags: xml:"timestr,attr"
   string TimeStr = 11;
   // @gotags: xml:"elapsed,attr"

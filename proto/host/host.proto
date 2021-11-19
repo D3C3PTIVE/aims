@@ -63,9 +63,9 @@ message Host {
   // @gotags: xml:"distance"
   network.Distance Distance = 32 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"starttime,attr,omitempty"
-  google.protobuf.Timestamp StartTime = 33;
+  int64 StartTime = 33;
   // @gotags: xml:"endtime,attr,omitempty"
-  google.protobuf.Timestamp EndTime = 34;         // Might have issues here with XML unmarshalling
+  int64 EndTime = 34;         // Might have issues here with XML unmarshalling
   // @gotags: xml:"ipidsequence"
   network.IPIDSequence IPIDSequence = 35[(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcpsequence"
@@ -98,9 +98,9 @@ message Hostname {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true" strict:"yes"
   gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
-  // @gotags: display:"Created at" readonly:"true"
+  // @gotags: display:"Created at" readonly:"true" xml:"-"
   google.protobuf.Timestamp CreatedAt = 4;
-  // @gotags: display:"Updated at" readonly:"true"
+  // @gotags: display:"Updated at" readonly:"true" xml:"-"
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // @gotags: display:"Name" xml:"name,attr"
