@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package hosts;
+
+import "host/user.proto";
+
+// Users is a service that allows to interact with all users.
+service Users {
+   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+   rpc GetUser(ReadUserRequest) returns (ReadUserResponse) {}
+   rpc GetUserMany(ReadUserRequest) returns (ReadUserResponse) {}
+   rpc UpsertUser(UpsertUserRequest) returns (UpsertUserResponse) {}
+   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
+}
+
+message CreateUserRequest {
+    repeated host.User Users = 1;
+}
+
+message CreateUserResponse {
+    repeated host.User Users = 1;
+}
+
+message ReadUserRequest{
+    host.User User = 1;
+}
+
+message ReadUserResponse{
+    repeated host.User Users = 1;
+}
+
+message ReadUserManyRequest{
+    host.User User = 1;
+}
+
+message ReadUserManyResponse{
+    repeated host.User Users = 1;
+}
+
+message UpsertUserRequest{
+    repeated host.User Users = 1;
+}
+
+message UpsertUserResponse{
+    repeated host.User Users = 1;
+}
+
+message DeleteUserRequest{
+    repeated host.User Users = 1;
+}
+
+message DeleteUserResponse{
+    repeated host.User Users = 1;
+}
+

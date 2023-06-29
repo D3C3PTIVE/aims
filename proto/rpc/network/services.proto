@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package network;
+
+import "network/service.proto";
+
+// Repository is a service that allows to interact with all hosts.
+service Services {
+   rpc CreateService(CreateServiceRequest) returns (CreateServiceResponse) {}
+   rpc GetService(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc GetServiceMany(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc UpsertService(UpsertServiceRequest) returns (UpsertServiceResponse) {}
+   rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse) {}
+}
+
+message CreateServiceRequest {
+    repeated network.Service Services = 1;
+}
+
+message CreateServiceResponse {
+    repeated network.Service Services = 1;
+}
+
+message ReadServiceRequest{
+    network.Service Service = 1;
+}
+
+message ReadServiceResponse{
+    repeated network.Service Services = 1;
+}
+
+message ReadServiceManyRequest{
+    network.Service Service = 1;
+}
+
+message ReadServiceManyResponse{
+    repeated network.Service Services = 1;
+}
+
+message UpsertServiceRequest{
+    repeated network.Service Services = 1;
+}
+
+message UpsertServiceResponse{
+    repeated network.Service Services = 1;
+}
+
+message DeleteServiceRequest{
+    repeated network.Service Services = 1;
+}
+
+message DeleteServiceResponse{
+    repeated network.Service Services = 1;
+}
+

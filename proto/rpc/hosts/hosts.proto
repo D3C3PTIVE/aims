@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package hosts;
+
+import "host/host.proto";
+
+// Hosts is a service that allows to interact with all hosts.
+service Hosts {
+   rpc CreateHost(CreateHostRequest) returns (CreateHostResponse) {}
+   rpc GetHost(ReadHostRequest) returns (ReadHostResponse) {}
+   rpc GetHostMany(ReadHostRequest) returns (ReadHostResponse) {}
+   rpc UpsertHost(UpsertHostRequest) returns (UpsertHostResponse) {}
+   rpc DeleteHost(DeleteHostRequest) returns (DeleteHostResponse) {}
+}
+
+message CreateHostRequest {
+    repeated host.Host Hosts = 1;
+}
+
+message CreateHostResponse {
+    repeated host.Host Hosts = 1;
+}
+
+message ReadHostRequest{
+    host.Host Host = 1;
+}
+
+message ReadHostResponse{
+    repeated host.Host Hosts = 1;
+}
+
+message ReadHostManyRequest{
+    host.Host Host = 1;
+}
+
+message ReadHostManyResponse{
+    repeated host.Host Hosts = 1;
+}
+
+message UpsertHostRequest{
+    repeated host.Host Hosts = 1;
+}
+
+message UpsertHostResponse{
+    repeated host.Host Hosts = 1;
+}
+
+message DeleteHostRequest{
+    repeated host.Host Hosts = 1;
+}
+
+message DeleteHostResponse{
+    repeated host.Host Hosts = 1;
+}

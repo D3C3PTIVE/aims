@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package scans;
+
+import "scan/scan.proto";
+
+// Scans is a service that allows to interact with all AIMS scans.
+service Scans {
+   rpc CreateScan(CreateScanRequest) returns (CreateScanResponse) {}
+   rpc GetScan(ReadScanRequest) returns (ReadScanResponse) {}
+   rpc GetScanMany(ReadScanRequest) returns (ReadScanResponse) {}
+   rpc UpsertScan(UpsertScanRequest) returns (UpsertScanResponse) {}
+   rpc DeleteScan(DeleteScanRequest) returns (DeleteScanResponse) {}
+}
+
+message CreateScanRequest {
+    repeated scan.Run Scans = 1;
+}
+
+message CreateScanResponse {
+    repeated scan.Run Scans = 1;
+}
+
+message ReadScanRequest{
+    scan.Run Scan = 1;
+}
+
+message ReadScanResponse{
+    repeated scan.Run Scans = 1;
+}
+
+message ReadScanManyRequest{
+    scan.Run Scan = 1;
+}
+
+message ReadScanManyResponse{
+    repeated scan.Run Scans = 1;
+}
+
+message UpsertScanRequest{
+    repeated scan.Run Scans = 1;
+}
+
+message UpsertScanResponse{
+    repeated scan.Run Scans = 1;
+}
+
+message DeleteScanRequest{
+    repeated scan.Run Scans = 1;
+}
+
+message DeleteScanResponse{
+    repeated scan.Run Scans = 1;
+}
+
