@@ -2,7 +2,7 @@
 # AIMS Makefile
 #
 
-EXECUTABLES = protoc protoc-gen-go protoc-go-inject-tag protoc-gen-gorm $(GO)
+EXECUTABLES = protoc protoc-gen-go protoc-go-inject-tag $(GO)
 K := $(foreach exec,$(EXECUTABLES),\
         $(if $(shell which $(exec)),some string,$(error "No $(exec) in PATH")))
 
@@ -23,8 +23,11 @@ deps:
 .PHONY: gen
 gen:
 	cd proto
+
 	# Generate the code for Protobuf definitions
-	buf generate
+	buf generate --template buf.gen-gorm.yaml
+	buf generate --template buf.gen-grpc.yaml
+
 	# Generate struct tags on Go code
 	./maltego-tags.sh
 
