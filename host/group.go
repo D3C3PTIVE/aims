@@ -21,21 +21,20 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	"github.com/maxlandon/aims/proto/gen/go/host"
+	"github.com/maxlandon/gondor/maltego"
 )
 
 // Group - A computer group of users.
 // This type will be closely related to the various aims/credential types.
 type Group host.Group
 
-// ToORM - Get the SQL object for the Group
+// ToORM - Get the SQL object for the Group.
 func (g *Group) ToORM(ctx context.Context) (host.GroupORM, error) {
 	return (*host.Group)(g).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Group
+// ToPB - Get the Protobuf object for the Group.
 func (g *Group) ToPB() *host.Group {
 	return (*host.Group)(g)
 }

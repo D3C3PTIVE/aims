@@ -24,7 +24,6 @@ import (
 
 	uuid "github.com/satori/go.uuid"
 
-	"github.com/maxlandon/aims/host"
 	"github.com/maxlandon/aims/proto/gen/go/scan"
 )
 
@@ -86,19 +85,6 @@ func (r *Run) AddResult(res *Result) (err error) {
 		return errors.New("Result is not tied to any scan.Run")
 	}
 	return
-}
-
-// YieldHosts - After starting running the scan, you can access the scanned targets
-// asynchronously, as they are processed by the scanner. This is useful when your
-// scans span on long durations, but you want to have fresh access to their findings.
-//
-// In the case of an Nmap scan, the Run type will periodically try to parse
-// the output XML tree, which is kind-of continuously populated by Nmap. In fact,
-// only the .Hosts list of the Run is continuously updated, and we yield them here.
-// This yield is possible by manually adding XML closing tags for parsing the tree.
-func (r *Run) YieldHosts() <-chan host.Host {
-	hosts := make(chan host.Host, 100)
-	return hosts
 }
 
 //

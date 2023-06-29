@@ -21,9 +21,8 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	"github.com/maxlandon/aims/proto/gen/go/host"
+	"github.com/maxlandon/gondor/maltego"
 )
 
 // Port - A port on a Host.
@@ -35,12 +34,12 @@ type Port host.Port
 // General Functions
 //
 
-// ToORM - Get the SQL object for the Port
+// ToORM - Get the SQL object for the Port.
 func (p *Port) ToORM(ctx context.Context) (host.PortORM, error) {
 	return (*host.Port)(p).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Port
+// ToPB - Get the Protobuf object for the Port.
 func (p *Port) ToPB() *host.Port {
 	return (*host.Port)(p)
 }

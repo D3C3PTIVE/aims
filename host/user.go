@@ -21,9 +21,8 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	"github.com/maxlandon/aims/proto/gen/go/host"
+	"github.com/maxlandon/gondor/maltego"
 )
 
 // User - A computer (login) user.
@@ -34,12 +33,12 @@ type User host.User
 // General Functions
 //
 
-// ToORM - Get the SQL object for the User
+// ToORM - Get the SQL object for the User.
 func (u *User) ToORM(ctx context.Context) (host.UserORM, error) {
 	return (*host.User)(u).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the User
+// ToPB - Get the Protobuf object for the User.
 func (u *User) ToPB() *host.User {
 	return (*host.User)(u)
 }
