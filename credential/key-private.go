@@ -105,7 +105,6 @@ func (p *PrivateKey) AsCertificate() *x509.Certificate {
 }
 
 func (p *PrivateKey) toValidData() (key interface{}, data []byte, isPKCS1 bool) {
-
 	// Start with PKIX standard
 	key, err := x509.ParsePKIXPublicKey([]byte(p.Data))
 

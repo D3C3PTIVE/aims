@@ -18,7 +18,9 @@ package credential
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "github.com/maxlandon/aims/proto/gen/go/credential"
+import (
+	"github.com/maxlandon/aims/proto/gen/go/credential"
+)
 
 // CreateOptions - A template holding the objects (either optional or required
 // depending on the context) that can be passed as parameter to functions
