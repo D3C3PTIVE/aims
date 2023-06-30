@@ -25,33 +25,73 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
+	"github.com/maxlandon/aims/proto/gen/go/credential"
 	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
 )
 
 type server struct {
+	db *gorm.DB
 	*credentials.UnimplementedCredentialsServer
 }
 
 func New(db *gorm.DB) *server {
-	return &server{}
+	return &server{db: db}
 }
 
-func (server) CreateCredential(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
+func (s *server) CreateCredential(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCredential not implemented")
 }
 
-func (server) GetCredential(context.Context, *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCredential not implemented")
+func (s *server) GetCredential(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
+	// Convert to ORM model
+	cred, err := req.GetCredential().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query
+	creds := []*credential.CoreORM{}
+	err = s.db.Where(cred).First(&creds).Error
+
+	credspb := []*credential.Core{}
+	for _, cred := range creds {
+		pb, _ := cred.ToPB(ctx)
+		credspb = append(credspb, &pb)
+	}
+
+	// Response
+	res := &credentials.ReadCredentialResponse{Credentials: credspb}
+
+	return res, err
 }
 
-func (server) GetCredentialMany(context.Context, *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCredentialMany not implemented")
+func (s *server) GetCredentialMany(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
+	// Convert to ORM model
+	cred, err := req.GetCredential().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query
+	creds := []*credential.CoreORM{}
+	err = s.db.Where(cred).Find(&creds).Error
+
+	credspb := []*credential.Core{}
+	for _, cred := range creds {
+		pb, _ := cred.ToPB(ctx)
+		credspb = append(credspb, &pb)
+	}
+
+	// Response
+	res := &credentials.ReadCredentialResponse{Credentials: credspb}
+
+	return res, err
 }
 
-func (server) UpsertCredential(context.Context, *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
+func (s *server) UpsertCredential(context.Context, *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertCredential not implemented")
 }
 
-func (server) DeleteCredential(context.Context, *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
+func (s *server) DeleteCredential(context.Context, *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCredential not implemented")
 }

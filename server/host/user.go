@@ -29,11 +29,12 @@ import (
 )
 
 type userServer struct {
+	db *gorm.DB
 	*hosts.UnimplementedUsersServer
 }
 
 func NewUsers(db *gorm.DB) *userServer {
-	return &userServer{}
+	return &userServer{db: db}
 }
 
 func (userServer) CreateUser(context.Context, *hosts.CreateUserRequest) (*hosts.CreateUserResponse, error) {

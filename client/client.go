@@ -1,13 +1,5 @@
 package client
 
-import (
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/scans"
-	"google.golang.org/grpc"
-)
-
 /*
    AIMS (Attacked Infrastructure Modular Specification)
    Copyright (C) 2021 Maxime Landon
@@ -25,6 +17,15 @@ import (
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
+import (
+	"google.golang.org/grpc"
+
+	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
+	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
+	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
+	"github.com/maxlandon/aims/proto/gen/go/rpc/scans"
+)
 
 // Client connects to an AIMS database through a gRPC connection.
 // The client can be passed around to use the different services

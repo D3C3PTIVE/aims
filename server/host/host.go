@@ -29,11 +29,12 @@ import (
 )
 
 type server struct {
+	db *gorm.DB
 	*hosts.UnimplementedHostsServer
 }
 
 func New(db *gorm.DB) *server {
-	return &server{}
+	return &server{db: db}
 }
 
 func (server) CreateHost(context.Context, *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {

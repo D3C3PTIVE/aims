@@ -21,36 +21,77 @@ package network
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+
+	pb "github.com/maxlandon/aims/proto/gen/go/network"
+	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
 )
 
 type server struct {
+	db *gorm.DB
 	*network.UnimplementedServicesServer
 }
 
 func New(db *gorm.DB) *server {
-	return &server{}
+	return &server{db: db}
 }
 
-func (server) CreateService(context.Context, *network.CreateServiceRequest) (*network.CreateServiceResponse, error) {
+func (s *server) CreateService(ctx context.Context, req *network.CreateServiceRequest) (*network.CreateServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateService not implemented")
 }
 
-func (server) GetService(context.Context, *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetService not implemented")
+func (s *server) GetService(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
+	// Convert to ORM model
+	service, err := req.GetService().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query
+	services := []*pb.ServiceORM{}
+	err = s.db.Where(service).First(&services).Error
+
+	servicespb := []*pb.Service{}
+	for _, service := range services {
+		pb, _ := service.ToPB(ctx)
+		servicespb = append(servicespb, &pb)
+	}
+
+	// Response
+	res := &network.ReadServiceResponse{Services: servicespb}
+
+	return res, err
 }
 
-func (server) GetServiceMany(context.Context, *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServiceMany not implemented")
+func (s *server) GetServiceMany(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
+	// Convert to ORM model
+	service, err := req.GetService().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Query
+	services := []*pb.ServiceORM{}
+	err = s.db.Where(service).Find(&services).Error
+
+	servicespb := []*pb.Service{}
+	for _, service := range services {
+		pb, _ := service.ToPB(ctx)
+		servicespb = append(servicespb, &pb)
+	}
+
+	// Response
+	res := &network.ReadServiceResponse{Services: servicespb}
+
+	return res, err
 }
 
-func (server) UpsertService(context.Context, *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {
+func (s *server) UpsertService(ctx context.Context, req *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertService not implemented")
 }
 
-func (server) DeleteService(context.Context, *network.DeleteServiceRequest) (*network.DeleteServiceResponse, error) {
+func (s *server) DeleteService(ctx context.Context, req *network.DeleteServiceRequest) (*network.DeleteServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteService not implemented")
 }

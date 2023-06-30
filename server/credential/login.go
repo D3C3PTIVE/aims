@@ -29,11 +29,12 @@ import (
 )
 
 type loginServer struct {
+	db *gorm.DB
 	*credentials.UnimplementedLoginsServer
 }
 
 func NewLoginServer(db *gorm.DB) *loginServer {
-	return &loginServer{}
+	return &loginServer{db: db}
 }
 
 func (loginServer) CreateLogin(context.Context, *credentials.CreateLoginRequest) (*credentials.CreateLoginResponse, error) {
