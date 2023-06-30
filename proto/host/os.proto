@@ -18,7 +18,7 @@ message OS {
 message OSMatch {
         // @inject_tag: xml:"name,attr"
         string Name = 1;
-        // @inject_tag: xml:"accurary,attr"
+        // @inject_tag: xml:"accuracy,attr"
         int32 Accuracy = 2;
         // @inject_tag: xml:"line,attr"
         int32 Line = 3;

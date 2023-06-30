@@ -96,8 +96,8 @@ type OSMatch struct {
 
 	// @inject_tag: xml:"name,attr"
 	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty" xml:"name,attr"`
-	// @inject_tag: xml:"accurary,attr"
-	Accuracy int32 `protobuf:"varint,2,opt,name=Accuracy,proto3" json:"Accuracy,omitempty" xml:"accurary,attr"`
+	// @inject_tag: xml:"accuracy,attr"
+	Accuracy int32 `protobuf:"varint,2,opt,name=Accuracy,proto3" json:"Accuracy,omitempty" xml:"accuracy,attr"`
 	// @inject_tag: xml:"line,attr"
 	Line int32 `protobuf:"varint,3,opt,name=Line,proto3" json:"Line,omitempty" xml:"line,attr"`
 	// @inject_tag: xml:"osclass,attr"
