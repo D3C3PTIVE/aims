@@ -35,52 +35,52 @@ type Run struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// An optional session from which the scan runs.
 	SessionId *types.UUID `protobuf:"bytes,8,opt,name=SessionId,proto3" json:"SessionId,omitempty"`
 	// An optional host (on which is a session/beacon) from which the scan runs.
 	HostId *types.UUID `protobuf:"bytes,9,opt,name=HostId,proto3" json:"HostId,omitempty"`
 	// Nmap --------------------------------
 	// @gotags: xml:"args,attr"
-	Args string `protobuf:"bytes,10,opt,name=Args,proto3" json:"Args,omitempty"`
+	Args string `protobuf:"bytes,10,opt,name=Args,proto3" json:"Args,omitempty" xml:"args,attr"`
 	// @gotags: xml:"profile_name,attr"
-	ProfileName string `protobuf:"bytes,11,opt,name=ProfileName,proto3" json:"ProfileName,omitempty"`
+	ProfileName string `protobuf:"bytes,11,opt,name=ProfileName,proto3" json:"ProfileName,omitempty" xml:"profile_name,attr"`
 	// @gotags: xml:"scanner,attr"
-	Scanner string `protobuf:"bytes,12,opt,name=Scanner,proto3" json:"Scanner,omitempty"`
+	Scanner string `protobuf:"bytes,12,opt,name=Scanner,proto3" json:"Scanner,omitempty" xml:"scanner,attr"`
 	// @gotags: xml:"startstr,attr"
-	StartStr string `protobuf:"bytes,13,opt,name=StartStr,proto3" json:"StartStr,omitempty"`
+	StartStr string `protobuf:"bytes,13,opt,name=StartStr,proto3" json:"StartStr,omitempty" xml:"startstr,attr"`
 	// @gotags: xml:"version,attr"
-	Version string `protobuf:"bytes,14,opt,name=Version,proto3" json:"Version,omitempty"`
+	Version string `protobuf:"bytes,14,opt,name=Version,proto3" json:"Version,omitempty" xml:"version,attr"`
 	// @gotags: xml:"xmloutputversion,attr"
-	XMLOutputVersion string `protobuf:"bytes,15,opt,name=XMLOutputVersion,proto3" json:"XMLOutputVersion,omitempty"`
+	XMLOutputVersion string `protobuf:"bytes,15,opt,name=XMLOutputVersion,proto3" json:"XMLOutputVersion,omitempty" xml:"xmloutputversion,attr"`
 	// @gotags: xml:"debugging"
-	Debugging *Debugging `protobuf:"bytes,16,opt,name=Debugging,proto3" json:"Debugging,omitempty"`
+	Debugging *Debugging `protobuf:"bytes,16,opt,name=Debugging,proto3" json:"Debugging,omitempty" xml:"debugging"`
 	// @gotags: xml:"runstats"
-	Stats *Stats `protobuf:"bytes,17,opt,name=Stats,proto3" json:"Stats,omitempty"`
+	Stats *Stats `protobuf:"bytes,17,opt,name=Stats,proto3" json:"Stats,omitempty" xml:"runstats"`
 	// @gotags: xml:"scaninfo"
-	Info *Info `protobuf:"bytes,18,opt,name=Info,proto3" json:"Info,omitempty"`
+	Info *Info `protobuf:"bytes,18,opt,name=Info,proto3" json:"Info,omitempty" xml:"scaninfo"`
 	// @gotags: xml:"start,attr"
-	Start int64 `protobuf:"varint,19,opt,name=Start,proto3" json:"Start,omitempty"`
+	Start int64 `protobuf:"varint,19,opt,name=Start,proto3" json:"Start,omitempty" xml:"start,attr"`
 	// @gotags: xml:"verbose"
-	Verbose *Verbose `protobuf:"bytes,20,opt,name=Verbose,proto3" json:"Verbose,omitempty"`
+	Verbose *Verbose `protobuf:"bytes,20,opt,name=Verbose,proto3" json:"Verbose,omitempty" xml:"verbose"`
 	// @gotags: xml:"host"
-	Hosts []*host.Host `protobuf:"bytes,21,rep,name=Hosts,proto3" json:"Hosts,omitempty"`
+	Hosts []*host.Host `protobuf:"bytes,21,rep,name=Hosts,proto3" json:"Hosts,omitempty" xml:"host"`
 	// @gotags: xml:"prescript>script"
-	PreScripts []*nmap.Script `protobuf:"bytes,22,rep,name=PreScripts,proto3" json:"PreScripts,omitempty"`
+	PreScripts []*nmap.Script `protobuf:"bytes,22,rep,name=PreScripts,proto3" json:"PreScripts,omitempty" xml:"prescript>script"`
 	// @gotags: xml:"postscript>script"
-	PostScripts []*nmap.Script `protobuf:"bytes,23,rep,name=PostScripts,proto3" json:"PostScripts,omitempty"`
+	PostScripts []*nmap.Script `protobuf:"bytes,23,rep,name=PostScripts,proto3" json:"PostScripts,omitempty" xml:"postscript>script"`
 	// @gotags: xml:"target"
-	Targets []*Target `protobuf:"bytes,24,rep,name=Targets,proto3" json:"Targets,omitempty"`
+	Targets []*Target `protobuf:"bytes,24,rep,name=Targets,proto3" json:"Targets,omitempty" xml:"target"`
 	// @gotags: xml:"taskbegin"
-	Begin []*Task `protobuf:"bytes,25,rep,name=Begin,proto3" json:"Begin,omitempty"`
+	Begin []*Task `protobuf:"bytes,25,rep,name=Begin,proto3" json:"Begin,omitempty" xml:"taskbegin"`
 	// @gotags: xml:"taskprogress"
-	Progress []*TaskProgress `protobuf:"bytes,26,rep,name=Progress,proto3" json:"Progress,omitempty"`
+	Progress []*TaskProgress `protobuf:"bytes,26,rep,name=Progress,proto3" json:"Progress,omitempty" xml:"taskprogress"`
 	// @gotags: xml:"taskend"
-	End        []*Task  `protobuf:"bytes,27,rep,name=End,proto3" json:"End,omitempty"`
+	End        []*Task  `protobuf:"bytes,27,rep,name=End,proto3" json:"End,omitempty" xml:"taskend"`
 	NmapErrors []string `protobuf:"bytes,28,rep,name=NmapErrors,proto3" json:"NmapErrors,omitempty"`
 	RawXML     string   `protobuf:"bytes,30,opt,name=RawXML,proto3" json:"RawXML,omitempty"`
 	// Results - Generally, scans other than Nmap can produce
@@ -319,15 +319,15 @@ type Info struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"numservices,attr"
-	NumServices int32 `protobuf:"varint,10,opt,name=NumServices,proto3" json:"NumServices,omitempty"`
+	NumServices int32 `protobuf:"varint,10,opt,name=NumServices,proto3" json:"NumServices,omitempty" xml:"numservices,attr"`
 	// @gotags: xml:"protocol,attr"
-	Protocol string `protobuf:"bytes,11,opt,name=Protocol,proto3" json:"Protocol,omitempty"`
+	Protocol string `protobuf:"bytes,11,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"protocol,attr"`
 	// @gotags: xml:"scanflags,attr"
-	ScanFlags string `protobuf:"bytes,12,opt,name=ScanFlags,proto3" json:"ScanFlags,omitempty"`
+	ScanFlags string `protobuf:"bytes,12,opt,name=ScanFlags,proto3" json:"ScanFlags,omitempty" xml:"scanflags,attr"`
 	// @gotags: xml:"services,attr"
-	Services string `protobuf:"bytes,13,opt,name=Services,proto3" json:"Services,omitempty"`
+	Services string `protobuf:"bytes,13,opt,name=Services,proto3" json:"Services,omitempty" xml:"services,attr"`
 	// @gotags: xml:"type,attr"
-	Type string `protobuf:"bytes,14,opt,name=Type,proto3" json:"Type,omitempty"`
+	Type string `protobuf:"bytes,14,opt,name=Type,proto3" json:"Type,omitempty" xml:"type,attr"`
 }
 
 func (x *Info) Reset() {
@@ -412,7 +412,7 @@ type Verbose struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"level,attr"
-	Level int32 `protobuf:"varint,10,opt,name=Level,proto3" json:"Level,omitempty"`
+	Level int32 `protobuf:"varint,10,opt,name=Level,proto3" json:"Level,omitempty" xml:"level,attr"`
 }
 
 func (x *Verbose) Reset() {
@@ -469,7 +469,7 @@ type Debugging struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"level,attr"
-	Level int32 `protobuf:"varint,10,opt,name=Level,proto3" json:"Level,omitempty"`
+	Level int32 `protobuf:"varint,10,opt,name=Level,proto3" json:"Level,omitempty" xml:"level,attr"`
 }
 
 func (x *Debugging) Reset() {
@@ -526,11 +526,11 @@ type Task struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"time,attr"
-	Time int64 `protobuf:"varint,10,opt,name=Time,proto3" json:"Time,omitempty"`
+	Time int64 `protobuf:"varint,10,opt,name=Time,proto3" json:"Time,omitempty" xml:"time,attr"`
 	// @gotags: xml:"task,attr"
-	Task string `protobuf:"bytes,11,opt,name=Task,proto3" json:"Task,omitempty"`
+	Task string `protobuf:"bytes,11,opt,name=Task,proto3" json:"Task,omitempty" xml:"task,attr"`
 	// @gotags: xml:"extrainfo,attr"
-	ExtraInfo string `protobuf:"bytes,12,opt,name=ExtraInfo,proto3" json:"ExtraInfo,omitempty"`
+	ExtraInfo string `protobuf:"bytes,12,opt,name=ExtraInfo,proto3" json:"ExtraInfo,omitempty" xml:"extrainfo,attr"`
 }
 
 func (x *Task) Reset() {
@@ -601,15 +601,15 @@ type TaskProgress struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"percent,attr"
-	Percent float32 `protobuf:"fixed32,10,opt,name=Percent,proto3" json:"Percent,omitempty"`
+	Percent float32 `protobuf:"fixed32,10,opt,name=Percent,proto3" json:"Percent,omitempty" xml:"percent,attr"`
 	// @gotags: xml:"remaining,attr"
-	Remaining int32 `protobuf:"varint,11,opt,name=Remaining,proto3" json:"Remaining,omitempty"`
+	Remaining int32 `protobuf:"varint,11,opt,name=Remaining,proto3" json:"Remaining,omitempty" xml:"remaining,attr"`
 	// @gotags: xml:"task,attr"
-	Task string `protobuf:"bytes,12,opt,name=Task,proto3" json:"Task,omitempty"`
+	Task string `protobuf:"bytes,12,opt,name=Task,proto3" json:"Task,omitempty" xml:"task,attr"`
 	// @gotags: xml:"etc,attr"
-	Etc int64 `protobuf:"varint,13,opt,name=Etc,proto3" json:"Etc,omitempty"`
+	Etc int64 `protobuf:"varint,13,opt,name=Etc,proto3" json:"Etc,omitempty" xml:"etc,attr"`
 	// @gotags: xml:"time,attr"
-	Time int64 `protobuf:"varint,14,opt,name=Time,proto3" json:"Time,omitempty"`
+	Time int64 `protobuf:"varint,14,opt,name=Time,proto3" json:"Time,omitempty" xml:"time,attr"`
 }
 
 func (x *TaskProgress) Reset() {
@@ -705,11 +705,11 @@ type Target struct {
 	Port    uint32 `protobuf:"varint,8,opt,name=Port,proto3" json:"Port,omitempty"`
 	// Output (Nmap) -------------------
 	// @gotags: xml:"specification,attr"
-	Specification string `protobuf:"bytes,10,opt,name=Specification,proto3" json:"Specification,omitempty"`
+	Specification string `protobuf:"bytes,10,opt,name=Specification,proto3" json:"Specification,omitempty" xml:"specification,attr"`
 	// @gotags: xml:"status,attr"
-	Status string `protobuf:"bytes,11,opt,name=Status,proto3" json:"Status,omitempty"`
+	Status string `protobuf:"bytes,11,opt,name=Status,proto3" json:"Status,omitempty" xml:"status,attr"`
 	// @gotags: xml:"reason,attr"
-	Reason string `protobuf:"bytes,12,opt,name=Reason,proto3" json:"Reason,omitempty"`
+	Reason string `protobuf:"bytes,12,opt,name=Reason,proto3" json:"Reason,omitempty" xml:"reason,attr"`
 }
 
 func (x *Target) Reset() {
@@ -808,9 +808,9 @@ type Stats struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"finished"
-	Finished *Finished `protobuf:"bytes,10,opt,name=Finished,proto3" json:"Finished,omitempty"`
+	Finished *Finished `protobuf:"bytes,10,opt,name=Finished,proto3" json:"Finished,omitempty" xml:"finished"`
 	// @gotags: xml:"hosts"
-	Hosts *HostStats `protobuf:"bytes,11,opt,name=Hosts,proto3" json:"Hosts,omitempty"`
+	Hosts *HostStats `protobuf:"bytes,11,opt,name=Hosts,proto3" json:"Hosts,omitempty" xml:"hosts"`
 }
 
 func (x *Stats) Reset() {
@@ -874,17 +874,17 @@ type Finished struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"time,attr"
-	Time int64 `protobuf:"varint,10,opt,name=Time,proto3" json:"Time,omitempty"`
+	Time int64 `protobuf:"varint,10,opt,name=Time,proto3" json:"Time,omitempty" xml:"time,attr"`
 	// @gotags: xml:"timestr,attr"
-	TimeStr string `protobuf:"bytes,11,opt,name=TimeStr,proto3" json:"TimeStr,omitempty"`
+	TimeStr string `protobuf:"bytes,11,opt,name=TimeStr,proto3" json:"TimeStr,omitempty" xml:"timestr,attr"`
 	// @gotags: xml:"elapsed,attr"
-	Elapsed float32 `protobuf:"fixed32,12,opt,name=Elapsed,proto3" json:"Elapsed,omitempty"`
+	Elapsed float32 `protobuf:"fixed32,12,opt,name=Elapsed,proto3" json:"Elapsed,omitempty" xml:"elapsed,attr"`
 	// @gotags: xml:"summary,attr"
-	Summary string `protobuf:"bytes,13,opt,name=Summary,proto3" json:"Summary,omitempty"`
+	Summary string `protobuf:"bytes,13,opt,name=Summary,proto3" json:"Summary,omitempty" xml:"summary,attr"`
 	// @gotags: xml:"exit,attr"
-	Exit string `protobuf:"bytes,14,opt,name=Exit,proto3" json:"Exit,omitempty"`
+	Exit string `protobuf:"bytes,14,opt,name=Exit,proto3" json:"Exit,omitempty" xml:"exit,attr"`
 	// @gotags: xml:"errormsg,attr"
-	ErrorMsg string `protobuf:"bytes,15,opt,name=ErrorMsg,proto3" json:"ErrorMsg,omitempty"`
+	ErrorMsg string `protobuf:"bytes,15,opt,name=ErrorMsg,proto3" json:"ErrorMsg,omitempty" xml:"errormsg,attr"`
 }
 
 func (x *Finished) Reset() {
@@ -976,11 +976,11 @@ type HostStats struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"up,attr"
-	Up int32 `protobuf:"varint,10,opt,name=Up,proto3" json:"Up,omitempty"`
+	Up int32 `protobuf:"varint,10,opt,name=Up,proto3" json:"Up,omitempty" xml:"up,attr"`
 	// @gotags: xml:"down,attr"
-	Down int32 `protobuf:"varint,11,opt,name=Down,proto3" json:"Down,omitempty"`
+	Down int32 `protobuf:"varint,11,opt,name=Down,proto3" json:"Down,omitempty" xml:"down,attr"`
 	// @gotags: xml:"total,attr"
-	Total int32 `protobuf:"varint,12,opt,name=Total,proto3" json:"Total,omitempty"`
+	Total int32 `protobuf:"varint,12,opt,name=Total,proto3" json:"Total,omitempty" xml:"total,attr"`
 }
 
 func (x *HostStats) Reset() {

@@ -30,15 +30,15 @@ type User struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"` // -------------------------------------
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"` // -------------------------------------
 	// @gotags: display:"Name"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name"`
 	// @gotags: display:"UID"
-	UID    int32    `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty"`
+	UID    int32    `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty" display:"UID"`
 	Groups []*Group `protobuf:"bytes,12,rep,name=Groups,proto3" json:"Groups,omitempty"`
 }
 
@@ -123,15 +123,15 @@ type Group struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" hidden:"true" strict:"yes"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" hidden:"true" strict:"yes"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: display:"Name"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name"`
 	// @gotags: display:"Group ID"
-	GID     int32   `protobuf:"varint,11,opt,name=GID,proto3" json:"GID,omitempty"`
+	GID     int32   `protobuf:"varint,11,opt,name=GID,proto3" json:"GID,omitempty" display:"Group ID"`
 	Members []*User `protobuf:"bytes,12,rep,name=Members,proto3" json:"Members,omitempty"`
 }
 

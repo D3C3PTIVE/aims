@@ -16,5 +16,5 @@ plugins:
     out: gen/go
     opt: paths=source_relative
   # - name: go-inject-tag
-  #   out: .
+  #   out: gen/go
   #   opt: paths=source_relative

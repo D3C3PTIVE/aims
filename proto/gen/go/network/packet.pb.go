@@ -130,9 +130,9 @@ type Sequence struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"class,attr"
-	Class string `protobuf:"bytes,10,opt,name=Class,proto3" json:"Class,omitempty"`
+	Class string `protobuf:"bytes,10,opt,name=Class,proto3" json:"Class,omitempty" xml:"class,attr"`
 	// @gotags: xml:"values,attr"
-	Values string `protobuf:"bytes,11,opt,name=Values,proto3" json:"Values,omitempty"`
+	Values string `protobuf:"bytes,11,opt,name=Values,proto3" json:"Values,omitempty" xml:"values,attr"`
 }
 
 func (x *Sequence) Reset() {
@@ -196,11 +196,11 @@ type TCPSequence struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"index,attr"
-	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty"`
+	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty" xml:"index,attr"`
 	// @gotags: xml:"difficulty,attr"
-	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty"`
+	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty" xml:"difficulty,attr"`
 	// @gotags: xml:"values,attr"
-	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty"`
+	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty" xml:"values,attr"`
 }
 
 func (x *TCPSequence) Reset() {
@@ -271,11 +271,11 @@ type IPIDSequence struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"index,attr"
-	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty"`
+	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty" xml:"index,attr"`
 	// @gotags: xml:"difficulty,attr"
-	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty"`
+	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty" xml:"difficulty,attr"`
 	// @gotags: xml:"values,attr"
-	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty"`
+	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty" xml:"values,attr"`
 }
 
 func (x *IPIDSequence) Reset() {
@@ -346,11 +346,11 @@ type TCPTSSequence struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"index,attr"
-	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty"`
+	Index int32 `protobuf:"varint,10,opt,name=Index,proto3" json:"Index,omitempty" xml:"index,attr"`
 	// @gotags: xml:"difficulty,attr"
-	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty"`
+	Difficulty string `protobuf:"bytes,11,opt,name=Difficulty,proto3" json:"Difficulty,omitempty" xml:"difficulty,attr"`
 	// @gotags: xml:"values,attr"
-	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty"`
+	Values string `protobuf:"bytes,12,opt,name=Values,proto3" json:"Values,omitempty" xml:"values,attr"`
 }
 
 func (x *TCPTSSequence) Reset() {

@@ -97,23 +97,23 @@ type Public struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: display:"Created at" readonly:"true"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
 	// @gotags: display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
 	// @gotags: display:"Type" readonly:"true"
-	Type PublicType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PublicType" json:"Type,omitempty"`
+	Type PublicType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PublicType" json:"Type,omitempty" display:"Type" readonly:"true"`
 	// @gotags: display:"Username" readonly:"true"
-	Username string `protobuf:"bytes,11,opt,name=Username,proto3" json:"Username,omitempty"`
+	Username string `protobuf:"bytes,11,opt,name=Username,proto3" json:"Username,omitempty" display:"Username" readonly:"true"`
 	// Data - When the Public credential is a cryptographic key/certificate
 	// rather than a username, the key/certificate data is stored in this field.
 	// @gotags: display:"Data" readonly:"true"
-	Data string `protobuf:"bytes,12,opt,name=Data,proto3" json:"Data,omitempty"`
+	Data string `protobuf:"bytes,12,opt,name=Data,proto3" json:"Data,omitempty" display:"Data" readonly:"true"`
 	// Claims - Some public credentials, such as JSON Web Tokens,
 	// can bear claims, which are a list of key-value pairs. These
 	// claims are stored as the bytes of a JSON-marshalled map[string]interface{}
 	// A method is provided for credentials to get this map.
 	// @gotags: display:"Claims" readonly:"true"
-	Claims string `protobuf:"bytes,13,opt,name=Claims,proto3" json:"Claims,omitempty"`
+	Claims string `protobuf:"bytes,13,opt,name=Claims,proto3" json:"Claims,omitempty" display:"Claims" readonly:"true"`
 }
 
 func (x *Public) Reset() {

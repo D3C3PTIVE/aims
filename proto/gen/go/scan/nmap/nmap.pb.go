@@ -31,19 +31,19 @@ type Script struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// gotags: xml:"id,attr"
 	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
 	// @gotags: xml:"output,attr"
-	Output string `protobuf:"bytes,11,opt,name=Output,proto3" json:"Output,omitempty"`
+	Output string `protobuf:"bytes,11,opt,name=Output,proto3" json:"Output,omitempty" xml:"output,attr"`
 	// @gotags: xml:"elem,omitempty"
-	Elements []*Element `protobuf:"bytes,12,rep,name=Elements,proto3" json:"Elements,omitempty"`
+	Elements []*Element `protobuf:"bytes,12,rep,name=Elements,proto3" json:"Elements,omitempty" xml:"elem,omitempty"`
 	// @gotags: xml:"table,omitempty"
-	Tables []*Table `protobuf:"bytes,13,rep,name=Tables,proto3" json:"Tables,omitempty"`
+	Tables []*Table `protobuf:"bytes,13,rep,name=Tables,proto3" json:"Tables,omitempty" xml:"table,omitempty"`
 }
 
 func (x *Script) Reset() {
@@ -134,11 +134,11 @@ type Element struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"key,attr,omitempty"
-	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty"`
+	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" xml:"key,attr,omitempty"`
 	// @gotags: xml:",innerxml"
-	Value string `protobuf:"bytes,11,opt,name=Value,proto3" json:"Value,omitempty"`
+	Value string `protobuf:"bytes,11,opt,name=Value,proto3" json:"Value,omitempty" xml:",innerxml"`
 }
 
 func (x *Element) Reset() {
@@ -201,13 +201,13 @@ type Table struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"key,attr,omitempty"
-	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty"`
+	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" xml:"key,attr,omitempty"`
 	// @gotags: xml:"table,omitempty"
-	Tables []*Table `protobuf:"bytes,11,rep,name=Tables,proto3" json:"Tables,omitempty"`
+	Tables []*Table `protobuf:"bytes,11,rep,name=Tables,proto3" json:"Tables,omitempty" xml:"table,omitempty"`
 	// @gotags: xml:"elem,omitempty"
-	Elements []*Element `protobuf:"bytes,12,rep,name=Elements,proto3" json:"Elements,omitempty"`
+	Elements []*Element `protobuf:"bytes,12,rep,name=Elements,proto3" json:"Elements,omitempty" xml:"elem,omitempty"`
 }
 
 func (x *Table) Reset() {
@@ -277,9 +277,9 @@ type Smurf struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"responses,attr"
-	Responses string `protobuf:"bytes,10,opt,name=Responses,proto3" json:"Responses,omitempty"`
+	Responses string `protobuf:"bytes,10,opt,name=Responses,proto3" json:"Responses,omitempty" xml:"responses,attr"`
 }
 
 func (x *Smurf) Reset() {

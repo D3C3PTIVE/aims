@@ -31,11 +31,11 @@ type Trace struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"proto,attr"
-	Protocol string `protobuf:"bytes,10,opt,name=Protocol,proto3" json:"Protocol,omitempty"`
+	Protocol string `protobuf:"bytes,10,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"proto,attr"`
 	// @gotags: xml:"port,attr"
-	Port int32 `protobuf:"varint,11,opt,name=Port,proto3" json:"Port,omitempty"`
+	Port int32 `protobuf:"varint,11,opt,name=Port,proto3" json:"Port,omitempty" xml:"port,attr"`
 	// @gotags: xml:"hop"
-	Hops []*Hop `protobuf:"bytes,12,rep,name=Hops,proto3" json:"Hops,omitempty"`
+	Hops []*Hop `protobuf:"bytes,12,rep,name=Hops,proto3" json:"Hops,omitempty" xml:"hop"`
 }
 
 func (x *Trace) Reset() {
@@ -106,13 +106,13 @@ type Hop struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"ttl,attr"
-	TTL float32 `protobuf:"fixed32,11,opt,name=TTL,proto3" json:"TTL,omitempty"`
+	TTL float32 `protobuf:"fixed32,11,opt,name=TTL,proto3" json:"TTL,omitempty" xml:"ttl,attr"`
 	// @gotags: xml:"rtt,attr"
-	RTT string `protobuf:"bytes,12,opt,name=RTT,proto3" json:"RTT,omitempty"`
+	RTT string `protobuf:"bytes,12,opt,name=RTT,proto3" json:"RTT,omitempty" xml:"rtt,attr"`
 	// @gotags: xml:"ipaddr,attr"
-	IPAddr string `protobuf:"bytes,13,opt,name=IPAddr,proto3" json:"IPAddr,omitempty"`
+	IPAddr string `protobuf:"bytes,13,opt,name=IPAddr,proto3" json:"IPAddr,omitempty" xml:"ipaddr,attr"`
 	// @gotags: xml:"host,attr"
-	Host string `protobuf:"bytes,14,opt,name=Host,proto3" json:"Host,omitempty"`
+	Host string `protobuf:"bytes,14,opt,name=Host,proto3" json:"Host,omitempty" xml:"host,attr"`
 }
 
 func (x *Hop) Reset() {
@@ -190,7 +190,7 @@ type Distance struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"value,attr"
-	Value int32 `protobuf:"varint,2,opt,name=Value,proto3" json:"Value,omitempty"`
+	Value int32 `protobuf:"varint,2,opt,name=Value,proto3" json:"Value,omitempty" xml:"value,attr"`
 }
 
 func (x *Distance) Reset() {
@@ -246,13 +246,13 @@ type Times struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"srtt,attr"
-	SRTT string `protobuf:"bytes,10,opt,name=SRTT,proto3" json:"SRTT,omitempty"`
+	SRTT string `protobuf:"bytes,10,opt,name=SRTT,proto3" json:"SRTT,omitempty" xml:"srtt,attr"`
 	// @gotags: xml:"rttvar,attr"
-	RTT string `protobuf:"bytes,11,opt,name=RTT,proto3" json:"RTT,omitempty"`
+	RTT string `protobuf:"bytes,11,opt,name=RTT,proto3" json:"RTT,omitempty" xml:"rttvar,attr"`
 	// @gotags: xml:"to,attr"
-	To string `protobuf:"bytes,12,opt,name=To,proto3" json:"To,omitempty"`
+	To string `protobuf:"bytes,12,opt,name=To,proto3" json:"To,omitempty" xml:"to,attr"`
 }
 
 func (x *Times) Reset() {
@@ -322,17 +322,17 @@ type Address struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: xml:"addr,attr"
-	Addr *types.InetValue `protobuf:"bytes,10,opt,name=Addr,proto3" json:"Addr,omitempty"`
+	Addr *types.InetValue `protobuf:"bytes,10,opt,name=Addr,proto3" json:"Addr,omitempty" xml:"addr,attr"`
 	// @gotags: xml:"addrtype,attr"
-	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty"`
+	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty" xml:"addrtype,attr"`
 	// @gotags: xml:"vendor,attr"
-	Vendor string `protobuf:"bytes,12,opt,name=Vendor,proto3" json:"Vendor,omitempty"`
+	Vendor string `protobuf:"bytes,12,opt,name=Vendor,proto3" json:"Vendor,omitempty" xml:"vendor,attr"`
 }
 
 func (x *Address) Reset() {

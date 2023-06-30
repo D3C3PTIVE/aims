@@ -28,11 +28,11 @@ type OS struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @inject_tag: xml:"portused"
-	PortsUsed []*PortUsed `protobuf:"bytes,1,rep,name=PortsUsed,proto3" json:"PortsUsed,omitempty"`
+	PortsUsed []*PortUsed `protobuf:"bytes,1,rep,name=PortsUsed,proto3" json:"PortsUsed,omitempty" xml:"portused"`
 	// @inject_tag: xml:"osmatch"
-	Matches []*OSMatch `protobuf:"bytes,2,rep,name=Matches,proto3" json:"Matches,omitempty"`
+	Matches []*OSMatch `protobuf:"bytes,2,rep,name=Matches,proto3" json:"Matches,omitempty" xml:"osmatch"`
 	// @inject_tag: xml:"osfingerprint"
-	Fingerprints []*OSFingerprint `protobuf:"bytes,3,rep,name=Fingerprints,proto3" json:"Fingerprints,omitempty"`
+	Fingerprints []*OSFingerprint `protobuf:"bytes,3,rep,name=Fingerprints,proto3" json:"Fingerprints,omitempty" xml:"osfingerprint"`
 }
 
 func (x *OS) Reset() {
@@ -95,13 +95,13 @@ type OSMatch struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @inject_tag: xml:"name,attr"
-	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty" xml:"name,attr"`
 	// @inject_tag: xml:"accurary,attr"
-	Accuracy int32 `protobuf:"varint,2,opt,name=Accuracy,proto3" json:"Accuracy,omitempty"`
+	Accuracy int32 `protobuf:"varint,2,opt,name=Accuracy,proto3" json:"Accuracy,omitempty" xml:"accurary,attr"`
 	// @inject_tag: xml:"line,attr"
-	Line int32 `protobuf:"varint,3,opt,name=Line,proto3" json:"Line,omitempty"`
+	Line int32 `protobuf:"varint,3,opt,name=Line,proto3" json:"Line,omitempty" xml:"line,attr"`
 	// @inject_tag: xml:"osclass,attr"
-	Classes []*OSClass `protobuf:"bytes,4,rep,name=Classes,proto3" json:"Classes,omitempty"`
+	Classes []*OSClass `protobuf:"bytes,4,rep,name=Classes,proto3" json:"Classes,omitempty" xml:"osclass,attr"`
 }
 
 func (x *OSMatch) Reset() {
@@ -171,12 +171,12 @@ type PortUsed struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @inject_tag: xml:"portid,attr"
-	ID   uint32 `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	ID   uint32 `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty" xml:"portid,attr"`
 	OsID uint32 `protobuf:"varint,2,opt,name=OsID,proto3" json:"OsID,omitempty"`
 	// @inject_tag: xml:"state,attr"
-	State string `protobuf:"bytes,3,opt,name=State,proto3" json:"State,omitempty"`
+	State string `protobuf:"bytes,3,opt,name=State,proto3" json:"State,omitempty" xml:"state,attr"`
 	// @inject_tag: xml:"proto,attr"
-	Protocol string `protobuf:"bytes,4,opt,name=Protocol,proto3" json:"Protocol,omitempty"`
+	Protocol string `protobuf:"bytes,4,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"proto,attr"`
 }
 
 func (x *PortUsed) Reset() {
@@ -246,7 +246,7 @@ type OSFingerprint struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @inject_tag: xml:"fingerprint,attr"
-	Fingerprint string `protobuf:"bytes,1,opt,name=Fingerprint,proto3" json:"Fingerprint,omitempty"`
+	Fingerprint string `protobuf:"bytes,1,opt,name=Fingerprint,proto3" json:"Fingerprint,omitempty" xml:"fingerprint,attr"`
 }
 
 func (x *OSFingerprint) Reset() {
@@ -295,17 +295,17 @@ type OSClass struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @inject_tag: xml:"vendor,attr"
-	Vendor string `protobuf:"bytes,1,opt,name=Vendor,proto3" json:"Vendor,omitempty"`
+	Vendor string `protobuf:"bytes,1,opt,name=Vendor,proto3" json:"Vendor,omitempty" xml:"vendor,attr"`
 	// @inject_tag: xml:"osgen,attr"
-	OSGeneration string `protobuf:"bytes,2,opt,name=OSGeneration,proto3" json:"OSGeneration,omitempty"`
+	OSGeneration string `protobuf:"bytes,2,opt,name=OSGeneration,proto3" json:"OSGeneration,omitempty" xml:"osgen,attr"`
 	// @inject_tag: xml:"type,attr"
-	Type string `protobuf:"bytes,3,opt,name=Type,proto3" json:"Type,omitempty"`
+	Type string `protobuf:"bytes,3,opt,name=Type,proto3" json:"Type,omitempty" xml:"type,attr"`
 	// @inject_tag: xml:"accurary,attr"
-	Accuracy int32 `protobuf:"varint,4,opt,name=Accuracy,proto3" json:"Accuracy,omitempty"`
+	Accuracy int32 `protobuf:"varint,4,opt,name=Accuracy,proto3" json:"Accuracy,omitempty" xml:"accurary,attr"`
 	// @inject_tag: xml:"osfamily,attr"
-	Family os.Family `protobuf:"varint,5,opt,name=Family,proto3,enum=os.Family" json:"Family,omitempty"`
+	Family os.Family `protobuf:"varint,5,opt,name=Family,proto3,enum=os.Family" json:"Family,omitempty" xml:"osfamily,attr"`
 	// @inject_tag: xml:"cpe"
-	CPEs []string `protobuf:"bytes,6,rep,name=CPEs,proto3" json:"CPEs,omitempty"` // "Common Platform Enumeration" is standardized way to name software applications, OSs and Hardware platforms
+	CPEs []string `protobuf:"bytes,6,rep,name=CPEs,proto3" json:"CPEs,omitempty" xml:"cpe"` // "Common Platform Enumeration" is standardized way to name software applications, OSs and Hardware platforms
 }
 
 func (x *OSClass) Reset() {

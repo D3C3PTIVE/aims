@@ -32,28 +32,28 @@ type Port struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: xml:"portid,attr"
-	Number uint32 `protobuf:"varint,10,opt,name=Number,proto3" json:"Number,omitempty"`
+	Number uint32 `protobuf:"varint,10,opt,name=Number,proto3" json:"Number,omitempty" xml:"portid,attr"`
 	// Nmap --------------------------------
 	// @gotags: xml:"protocol,attr"
-	Protocol string `protobuf:"bytes,11,opt,name=Protocol,proto3" json:"Protocol,omitempty"`
+	Protocol string `protobuf:"bytes,11,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"protocol,attr"`
 	// @gotags: xml:"owner"
-	Owner string `protobuf:"bytes,12,opt,name=Owner,proto3" json:"Owner,omitempty"`
+	Owner string `protobuf:"bytes,12,opt,name=Owner,proto3" json:"Owner,omitempty" xml:"owner"`
 	// @gotags: xml:"service"
-	Service *network.Service `protobuf:"bytes,13,opt,name=Service,proto3" json:"Service,omitempty"`
+	Service *network.Service `protobuf:"bytes,13,opt,name=Service,proto3" json:"Service,omitempty" xml:"service"`
 	// @gotags: xml:"state"
-	State *State `protobuf:"bytes,14,opt,name=State,proto3" json:"State,omitempty"`
+	State *State `protobuf:"bytes,14,opt,name=State,proto3" json:"State,omitempty" xml:"state"`
 	// @gotags: xml:"script"
-	Scripts []*nmap.Script `protobuf:"bytes,15,rep,name=Scripts,proto3" json:"Scripts,omitempty"`
+	Scripts []*nmap.Script `protobuf:"bytes,15,rep,name=Scripts,proto3" json:"Scripts,omitempty" xml:"script"`
 	// @gotags: xml:"count"
-	Count int32 `protobuf:"varint,20,opt,name=Count,proto3" json:"Count,omitempty"`
+	Count int32 `protobuf:"varint,20,opt,name=Count,proto3" json:"Count,omitempty" xml:"count"`
 	// @gotags: xml:"extrareasons"
-	Reasons []*Reason `protobuf:"bytes,21,rep,name=Reasons,proto3" json:"Reasons,omitempty"`
+	Reasons []*Reason `protobuf:"bytes,21,rep,name=Reasons,proto3" json:"Reasons,omitempty" xml:"extrareasons"`
 }
 
 func (x *Port) Reset() {
@@ -173,9 +173,9 @@ type Reason struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"reason"
-	Reason string `protobuf:"bytes,3,opt,name=Reason,proto3" json:"Reason,omitempty"`
+	Reason string `protobuf:"bytes,3,opt,name=Reason,proto3" json:"Reason,omitempty" xml:"reason"`
 	// @gotags: xml:"count"
-	Count int32 `protobuf:"varint,4,opt,name=Count,proto3" json:"Count,omitempty"`
+	Count int32 `protobuf:"varint,4,opt,name=Count,proto3" json:"Count,omitempty" xml:"count"`
 }
 
 func (x *Reason) Reset() {
@@ -239,9 +239,9 @@ type ExtraPort struct {
 
 	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// @gotags: xml:"count"
-	Count int32 `protobuf:"varint,10,opt,name=Count,proto3" json:"Count,omitempty"`
+	Count int32 `protobuf:"varint,10,opt,name=Count,proto3" json:"Count,omitempty" xml:"count"`
 	// @gotags: xml:"extrareasons"
-	Reasons []*Reason `protobuf:"bytes,11,rep,name=Reasons,proto3" json:"Reasons,omitempty"`
+	Reasons []*Reason `protobuf:"bytes,11,rep,name=Reasons,proto3" json:"Reasons,omitempty" xml:"extrareasons"`
 }
 
 func (x *ExtraPort) Reset() {
@@ -304,20 +304,20 @@ type State struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// Nmap
 	// @gotags: xml:"state,attr"
-	State string `protobuf:"bytes,10,opt,name=State,proto3" json:"State,omitempty"`
+	State string `protobuf:"bytes,10,opt,name=State,proto3" json:"State,omitempty" xml:"state,attr"`
 	// @gotags: xml:"reason,attr"
-	Reason string `protobuf:"bytes,11,opt,name=Reason,proto3" json:"Reason,omitempty"`
+	Reason string `protobuf:"bytes,11,opt,name=Reason,proto3" json:"Reason,omitempty" xml:"reason,attr"`
 	// @gotags: xml:"reason_ip,attr"
-	ReasonIP string `protobuf:"bytes,12,opt,name=ReasonIP,proto3" json:"ReasonIP,omitempty"`
+	ReasonIP string `protobuf:"bytes,12,opt,name=ReasonIP,proto3" json:"ReasonIP,omitempty" xml:"reason_ip,attr"`
 	// @gotags: xml:"reason_ttl,attr"
-	ReasonTTL float32 `protobuf:"fixed32,13,opt,name=ReasonTTL,proto3" json:"ReasonTTL,omitempty"`
+	ReasonTTL float32 `protobuf:"fixed32,13,opt,name=ReasonTTL,proto3" json:"ReasonTTL,omitempty" xml:"reason_ttl,attr"`
 }
 
 func (x *State) Reset() {

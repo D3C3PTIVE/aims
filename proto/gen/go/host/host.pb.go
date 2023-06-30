@@ -32,74 +32,74 @@ type Host struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// General ------------------------------------
 	// @gotags: display:"MAC Address"
-	MAC string `protobuf:"bytes,10,opt,name=MAC,proto3" json:"MAC,omitempty"`
+	MAC string `protobuf:"bytes,10,opt,name=MAC,proto3" json:"MAC,omitempty" display:"MAC Address"`
 	// @gotags: display:"Comm"
-	Comm string `protobuf:"bytes,11,opt,name=Comm,proto3" json:"Comm,omitempty"`
+	Comm string `protobuf:"bytes,11,opt,name=Comm,proto3" json:"Comm,omitempty" display:"Comm"`
 	// @gotags: display:"OS Name"
-	OSName string `protobuf:"bytes,12,opt,name=OSName,proto3" json:"OSName,omitempty"`
+	OSName string `protobuf:"bytes,12,opt,name=OSName,proto3" json:"OSName,omitempty" display:"OS Name"`
 	// @gotags: display:"OS Flavor"
-	OSFlavor string `protobuf:"bytes,13,opt,name=OSFlavor,proto3" json:"OSFlavor,omitempty"`
+	OSFlavor string `protobuf:"bytes,13,opt,name=OSFlavor,proto3" json:"OSFlavor,omitempty" display:"OS Flavor"`
 	// @gotags: display:"OS Service Pack"
-	OSSp string `protobuf:"bytes,14,opt,name=OSSp,proto3" json:"OSSp,omitempty"`
+	OSSp string `protobuf:"bytes,14,opt,name=OSSp,proto3" json:"OSSp,omitempty" display:"OS Service Pack"`
 	// @gotags: display:"OS Language"
-	OSLang string `protobuf:"bytes,15,opt,name=OSLang,proto3" json:"OSLang,omitempty"`
+	OSLang string `protobuf:"bytes,15,opt,name=OSLang,proto3" json:"OSLang,omitempty" display:"OS Language"`
 	// @gotags: display:"OS Family"
-	OSFamily string `protobuf:"bytes,16,opt,name=OSFamily,proto3" json:"OSFamily,omitempty"`
+	OSFamily string `protobuf:"bytes,16,opt,name=OSFamily,proto3" json:"OSFamily,omitempty" display:"OS Family"`
 	// @gotags: display:"CPU Arch"
-	Arch string `protobuf:"bytes,17,opt,name=Arch,proto3" json:"Arch,omitempty"`
+	Arch string `protobuf:"bytes,17,opt,name=Arch,proto3" json:"Arch,omitempty" display:"CPU Arch"`
 	// @gotags: display:"Purpose"
-	Purpose string `protobuf:"bytes,18,opt,name=Purpose,proto3" json:"Purpose,omitempty"`
+	Purpose string `protobuf:"bytes,18,opt,name=Purpose,proto3" json:"Purpose,omitempty" display:"Purpose"`
 	// @gotags: display:"Info"
-	Info string `protobuf:"bytes,19,opt,name=Info,proto3" json:"Info,omitempty"`
+	Info string `protobuf:"bytes,19,opt,name=Info,proto3" json:"Info,omitempty" display:"Info"`
 	// @gotags: display:"Scope"
-	Scope string `protobuf:"bytes,20,opt,name=Scope,proto3" json:"Scope,omitempty"`
+	Scope string `protobuf:"bytes,20,opt,name=Scope,proto3" json:"Scope,omitempty" display:"Scope"`
 	// @gotags: display:"Virtual Host"
-	VirtualHost string             `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty"`
+	VirtualHost string             `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty" display:"Virtual Host"`
 	Users       []*User            `protobuf:"bytes,22,rep,name=Users,proto3" json:"Users,omitempty"`
 	Addresses   []*network.Address `protobuf:"bytes,23,rep,name=Addresses,proto3" json:"Addresses,omitempty"`
 	// Nmap ---------------------------------------
 	// @gotags: xml:"os"
-	OS *OS `protobuf:"bytes,30,opt,name=OS,proto3" json:"OS,omitempty"`
+	OS *OS `protobuf:"bytes,30,opt,name=OS,proto3" json:"OS,omitempty" xml:"os"`
 	// @gotags: xml:"status"
-	Status *Status `protobuf:"bytes,31,opt,name=Status,proto3" json:"Status,omitempty"`
+	Status *Status `protobuf:"bytes,31,opt,name=Status,proto3" json:"Status,omitempty" xml:"status"`
 	// @gotags: xml:"distance"
-	Distance *network.Distance `protobuf:"bytes,32,opt,name=Distance,proto3" json:"Distance,omitempty"`
+	Distance *network.Distance `protobuf:"bytes,32,opt,name=Distance,proto3" json:"Distance,omitempty" xml:"distance"`
 	// @gotags: xml:"starttime,attr,omitempty"
-	StartTime int64 `protobuf:"varint,33,opt,name=StartTime,proto3" json:"StartTime,omitempty"`
+	StartTime int64 `protobuf:"varint,33,opt,name=StartTime,proto3" json:"StartTime,omitempty" xml:"starttime,attr,omitempty"`
 	// @gotags: xml:"endtime,attr,omitempty"
-	EndTime int64 `protobuf:"varint,34,opt,name=EndTime,proto3" json:"EndTime,omitempty"` // Might have issues here with XML unmarshalling
+	EndTime int64 `protobuf:"varint,34,opt,name=EndTime,proto3" json:"EndTime,omitempty" xml:"endtime,attr,omitempty"` // Might have issues here with XML unmarshalling
 	// @gotags: xml:"ipidsequence"
-	IPIDSequence *network.IPIDSequence `protobuf:"bytes,35,opt,name=IPIDSequence,proto3" json:"IPIDSequence,omitempty"`
+	IPIDSequence *network.IPIDSequence `protobuf:"bytes,35,opt,name=IPIDSequence,proto3" json:"IPIDSequence,omitempty" xml:"ipidsequence"`
 	// @gotags: xml:"tcpsequence"
-	TCPSequence *network.TCPSequence `protobuf:"bytes,36,opt,name=TCPSequence,proto3" json:"TCPSequence,omitempty"`
+	TCPSequence *network.TCPSequence `protobuf:"bytes,36,opt,name=TCPSequence,proto3" json:"TCPSequence,omitempty" xml:"tcpsequence"`
 	// @gotags: xml:"tcptssequence"
-	TCPTSSequence *network.TCPTSSequence `protobuf:"bytes,37,opt,name=TCPTSSequence,proto3" json:"TCPTSSequence,omitempty"`
+	TCPTSSequence *network.TCPTSSequence `protobuf:"bytes,37,opt,name=TCPTSSequence,proto3" json:"TCPTSSequence,omitempty" xml:"tcptssequence"`
 	ICMPResponse  *network.ICMPResponse  `protobuf:"bytes,38,opt,name=ICMPResponse,proto3" json:"ICMPResponse,omitempty"`
 	// @gotags: xml:"times"
-	Times *network.Times `protobuf:"bytes,39,opt,name=Times,proto3" json:"Times,omitempty"`
+	Times *network.Times `protobuf:"bytes,39,opt,name=Times,proto3" json:"Times,omitempty" xml:"times"`
 	// @gotags: xml:"trace"
-	Trace *network.Trace `protobuf:"bytes,40,opt,name=Trace,proto3" json:"Trace,omitempty"`
+	Trace *network.Trace `protobuf:"bytes,40,opt,name=Trace,proto3" json:"Trace,omitempty" xml:"trace"`
 	// @gotags: xml:"uptime"
-	Uptime *Uptime `protobuf:"bytes,41,opt,name=Uptime,proto3" json:"Uptime,omitempty"`
+	Uptime *Uptime `protobuf:"bytes,41,opt,name=Uptime,proto3" json:"Uptime,omitempty" xml:"uptime"`
 	// @gotags: xml:"comment,attr"
-	Comment string `protobuf:"bytes,42,opt,name=Comment,proto3" json:"Comment,omitempty"`
+	Comment string `protobuf:"bytes,42,opt,name=Comment,proto3" json:"Comment,omitempty" xml:"comment,attr"`
 	// @gotags: xml:"hostscript>script"
-	HostScripts []*nmap.Script `protobuf:"bytes,43,rep,name=HostScripts,proto3" json:"HostScripts,omitempty"`
+	HostScripts []*nmap.Script `protobuf:"bytes,43,rep,name=HostScripts,proto3" json:"HostScripts,omitempty" xml:"hostscript>script"`
 	// @gotags: xml:"smurf"
-	Smurfs []*nmap.Smurf `protobuf:"bytes,44,rep,name=Smurfs,proto3" json:"Smurfs,omitempty"`
+	Smurfs []*nmap.Smurf `protobuf:"bytes,44,rep,name=Smurfs,proto3" json:"Smurfs,omitempty" xml:"smurf"`
 	// @gotags: xml:"hostnames>hostname"
-	Hostnames []*Hostname `protobuf:"bytes,45,rep,name=Hostnames,proto3" json:"Hostnames,omitempty"`
+	Hostnames []*Hostname `protobuf:"bytes,45,rep,name=Hostnames,proto3" json:"Hostnames,omitempty" xml:"hostnames>hostname"`
 	// @gotags: xml:"ports>port"
-	Ports []*Port `protobuf:"bytes,46,rep,name=Ports,proto3" json:"Ports,omitempty"`
+	Ports []*Port `protobuf:"bytes,46,rep,name=Ports,proto3" json:"Ports,omitempty" xml:"ports>port"`
 	// @gotags: xml:"ports>extraports"
-	ExtraPorts []*ExtraPort `protobuf:"bytes,47,rep,name=ExtraPorts,proto3" json:"ExtraPorts,omitempty"`
+	ExtraPorts []*ExtraPort `protobuf:"bytes,47,rep,name=ExtraPorts,proto3" json:"ExtraPorts,omitempty" xml:"ports>extraports"`
 }
 
 func (x *Host) Reset() {
@@ -386,15 +386,15 @@ type Hostname struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Id *types.UUID `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
 	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
 	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: display:"Name" xml:"name,attr"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name" xml:"name,attr"`
 	// @gotags: display:"Type" xml:"type,attr"
-	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty"`
+	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty" display:"Type" xml:"type,attr"`
 }
 
 func (x *Hostname) Reset() {
@@ -471,9 +471,9 @@ type Uptime struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: xml:"seconds,attr"
-	Seconds int32 `protobuf:"varint,1,opt,name=Seconds,proto3" json:"Seconds,omitempty"`
+	Seconds int32 `protobuf:"varint,1,opt,name=Seconds,proto3" json:"Seconds,omitempty" xml:"seconds,attr"`
 	// @gotags: xml:"lastboot,attr"
-	LastBoot string `protobuf:"bytes,2,opt,name=LastBoot,proto3" json:"LastBoot,omitempty"`
+	LastBoot string `protobuf:"bytes,2,opt,name=LastBoot,proto3" json:"LastBoot,omitempty" xml:"lastboot,attr"`
 }
 
 func (x *Uptime) Reset() {
@@ -529,11 +529,11 @@ type Status struct {
 	unknownFields protoimpl.UnknownFields
 
 	// @gotags: xml:"state,attr"
-	State string `protobuf:"bytes,1,opt,name=State,proto3" json:"State,omitempty"`
+	State string `protobuf:"bytes,1,opt,name=State,proto3" json:"State,omitempty" xml:"state,attr"`
 	// @gotags: xml:"reason,attr"
-	Reason string `protobuf:"bytes,2,opt,name=Reason,proto3" json:"Reason,omitempty"`
+	Reason string `protobuf:"bytes,2,opt,name=Reason,proto3" json:"Reason,omitempty" xml:"reason,attr"`
 	// @gotags: xml:"reason_ttl,attr"
-	ReasonTTL string `protobuf:"bytes,3,opt,name=ReasonTTL,proto3" json:"ReasonTTL,omitempty"`
+	ReasonTTL string `protobuf:"bytes,3,opt,name=ReasonTTL,proto3" json:"ReasonTTL,omitempty" xml:"reason_ttl,attr"`
 }
 
 func (x *Status) Reset() {
