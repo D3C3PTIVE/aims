@@ -5,7 +5,6 @@ package host;
 // DB -----------
 import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
-import "types/types.proto";
 
 // User - An operating-system user. 
 message User {
@@ -13,7 +12,7 @@ message User {
   option (gorm.opts).ormable = true;
 
   // @gotags: display:"ID" readonly:"true" strict:"yes"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: display:"Created at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp CreatedAt = 4; 
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 
@@ -33,7 +32,7 @@ message Group {
   option (gorm.opts).ormable = true;
 
   // @gotags: display:"ID" hidden:"true" strict:"yes"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: display:"Created at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 

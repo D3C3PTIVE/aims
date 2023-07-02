@@ -1,4 +1,4 @@
-find ./gen/ -not -path "gen/go/rpc*" -print0 | while IFS= read -r -d '' file
+find . -not -path "rpc*" -print0 | while IFS= read -r -d '' file
 do 
     if [[ $file == *.pb.go ]]; then
         echo "${file}"

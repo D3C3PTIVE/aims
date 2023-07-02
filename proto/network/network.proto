@@ -10,7 +10,7 @@ import "types/types.proto";
 // Trace Represents the trace to a host, including the hops
 message Trace {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"proto,attr"
   string Protocol = 10;
@@ -23,7 +23,7 @@ message Trace {
 // Hop - An IP hop to a host
 message Hop {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"ttl,attr"
   float TTL = 11;
@@ -38,7 +38,7 @@ message Hop {
 // Distance - The number of hops before reaching the host
 message Distance {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"value,attr"
   int32 Value = 2;
@@ -48,8 +48,7 @@ message Distance {
 message Times {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
-
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"srtt,attr"
   string SRTT = 10;
@@ -63,7 +62,7 @@ message Times {
 message Address {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
   // @gotags: display:"Created at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 

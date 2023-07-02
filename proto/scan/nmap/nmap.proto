@@ -4,7 +4,6 @@ package scan.nmap;
 
 // DB -----------
 import "options/gorm.proto";
-import "types/types.proto";
 import "google/protobuf/timestamp.proto";
 
 // Script - Represents a Nmap Scripting Engine Script.
@@ -12,7 +11,7 @@ import "google/protobuf/timestamp.proto";
 message Script {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: display:"Created at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 
@@ -32,7 +31,7 @@ message Script {
 message Element {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"key,attr,omitempty"
   string Key = 10;
@@ -44,7 +43,7 @@ message Element {
 message Table {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"key,attr,omitempty"
   string Key = 10;
@@ -58,7 +57,7 @@ message Table {
 message Smurf {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"responses,attr"
   string Responses = 10;

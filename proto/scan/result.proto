@@ -4,7 +4,6 @@ package scan;
 
 // DB -----------
 import "options/gorm.proto";
-import "types/types.proto";
 import "google/protobuf/timestamp.proto";
 
 import "host/port.proto";
@@ -21,17 +20,18 @@ import "network/service.proto";
 // A Result is not meant to be saved in a database: 
 // it is only used as a feeder type for the scan.Run.
 message Result {
-  gorm.types.UUID ScanId = 1;
+  option (gorm.opts).ormable = true;
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
-  host.Host Host = 2;
-  network.Address Address = 3;
-  host.Port Port = 4;
-  network.Service Service = 5;
+  host.Host Host = 2 [(gorm.field).belongs_to = {}];;
+  network.Address Address = 3 [(gorm.field).belongs_to = {}];;
+  host.Port Port = 4 [(gorm.field).belongs_to = {}];;
+  network.Service Service = 5 [(gorm.field).belongs_to = {}];;
 
   // Data - The output data of a scan for a given protocol/service,
   // eg. if the scan is an SSH one, this will contain the SSH result.
   // If you pass your service-specific results in there, be sure to
   // add a branch case in the Go scan package, in which you populate
   // the entity tree with it.
-  bytes Data = 10;
+  string Data = 10;
 }

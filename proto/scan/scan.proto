@@ -4,7 +4,6 @@ package scan;
 
 // DB -----------
 import "options/gorm.proto";
-import "types/types.proto";
 import "google/protobuf/timestamp.proto";
 
 import "host/host.proto";
@@ -19,16 +18,16 @@ import "scan/result.proto";
 message Run {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true"
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: display:"Created at" readonly:"true" xml:"-"
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // An optional session from which the scan runs.
-  gorm.types.UUID SessionId = 8;
+  string SessionId = 8;
   // An optional host (on which is a session/beacon) from which the scan runs.
-  gorm.types.UUID HostId = 9;
+  string HostId = 9;
 
   // Nmap --------------------------------
   // @gotags: xml:"args,attr" 
@@ -81,14 +80,14 @@ message Run {
   // The scan.Run has methods and internal logic to deal
   // with populating and/or pushing and/or validating results
   // as they come during a scan.
-  repeated Result Results = 40;
+  repeated Result Results = 40 [(gorm.field).many_to_many = {}];
 }
 
 // Info - A general overview of a Scan, with basic information
 // on targeted/found services, protocols and flags.
 message Info {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"numservices,attr"
   int32 NumServices = 10;
@@ -105,7 +104,7 @@ message Info {
 // Verbose - Contains the verbosity level of the scan
 message Verbose {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"level,attr"
   int32 Level = 10;
@@ -114,7 +113,7 @@ message Verbose {
 // Debugging - Contains the debugging level of the scan
 message Debugging {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: xml:"level,attr"
   int32 Level = 10;
 }
@@ -122,7 +121,7 @@ message Debugging {
 // Task - Information about a task
 message Task {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"time,attr"
   int64 Time = 10;
@@ -135,7 +134,7 @@ message Task {
 // TaskProgress - Progression of a task
 message TaskProgress {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"percent,attr"
   float Percent = 10;
@@ -157,7 +156,7 @@ message TaskProgress {
 // <target specification="domain.does.not.exist" status="skipped" reason="invalid"/>
 message Target {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // Input ---------------------------
   string Address = 5;
@@ -177,7 +176,7 @@ message Target {
 // Stats - Contains statistics for a Nmap scan
 message Stats {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"finished"
   Finished Finished = 10;
@@ -188,7 +187,7 @@ message Stats {
 // Finished - Statistics for a Scan after it has run.
 message Finished {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"time,attr"
   int64 Time = 10;
@@ -207,7 +206,7 @@ message Finished {
 // Host - Contains the amount of up/down hosts and total count
 message HostStats {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"up,attr"
   int32 Up = 10;

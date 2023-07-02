@@ -5,12 +5,11 @@ package network;
 // DB -----------
 import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
-import "types/types.proto";
 
 // Sequence - Represents a detected Sequence
 message Sequence {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
  // @gotags: xml:"class,attr"
  string Class = 10;
@@ -21,7 +20,7 @@ message Sequence {
 // TCPSequence - Represents a detected TCP Sequence
 message TCPSequence {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"index,attr"
   int32 Index = 10; 
@@ -34,7 +33,7 @@ message TCPSequence {
 // IPIDSequence - Represents a detected IP ID Sequence
 message IPIDSequence {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"index,attr"
   int32 Index = 10; 
@@ -47,7 +46,7 @@ message IPIDSequence {
 // TCPTSSequence - Represents a detected TCP TS Sequence
 message TCPTSSequence {
   option (gorm.opts).ormable = true;
-  gorm.types.UUID Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
   // @gotags: xml:"index,attr"
   int32 Index = 10; 
@@ -61,14 +60,17 @@ message TCPTSSequence {
 // The TTL given by the response is stored in the Host object
 // or the Scan Run object, but is not related to ICMP in anyway.
 message ICMPResponse {
-        // Type - The type of response that we received,
-        // determines how to interpret the .Code given
-        // with it. 
-        ICMPType Type = 1;
-        // Code - The precise "status" given along with its .ICMPType.
-        // The Go generated package also contains a map with many of
-        // these codes and their corresponding descriptions.
-        uint32 Code = 2;
+  option (gorm.opts).ormable = true;
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+
+  // Type - The type of response that we received,
+  // determines how to interpret the .Code given
+  // with it. 
+  ICMPType Type = 2;
+  // Code - The precise "status" given along with its .ICMPType.
+  // The Go generated package also contains a map with many of
+  // these codes and their corresponding descriptions.
+  uint32 Code = 3;
 }
 
 // ICMPType - The general type of ICMP response received from a host.
