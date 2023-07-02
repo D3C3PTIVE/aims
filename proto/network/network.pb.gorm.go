@@ -5,7 +5,6 @@ import (
 	fmt "fmt"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	types "github.com/infobloxopen/protoc-gen-gorm/types"
 	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -332,7 +331,7 @@ type TimesWithAfterToPB interface {
 }
 
 type AddressORM struct {
-	Addr      *types.Inet `gorm:"type:varchar(48)"`
+	Addr      string
 	CreatedAt *time.Time
 	Id        string `gorm:"type:uuid;primary_key"`
 	Type      string
@@ -364,11 +363,7 @@ func (m *Address) ToORM(ctx context.Context) (AddressORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
-	if m.Addr != nil {
-		if to.Addr, err = types.ParseInet(m.Addr.Value); err != nil {
-			return to, err
-		}
-	}
+	to.Addr = m.Addr
 	to.Type = m.Type
 	to.Vendor = m.Vendor
 	if posthook, ok := interface{}(m).(AddressWithAfterToORM); ok {
@@ -394,9 +389,7 @@ func (m *AddressORM) ToPB(ctx context.Context) (Address, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
-	if m.Addr != nil && m.Addr.IPNet != nil {
-		to.Addr = &types.InetValue{Value: m.Addr.String()}
-	}
+	to.Addr = m.Addr
 	to.Type = m.Type
 	to.Vendor = m.Vendor
 	if posthook, ok := interface{}(m).(AddressWithAfterToPB); ok {

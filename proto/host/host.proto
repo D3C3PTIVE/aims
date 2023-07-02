@@ -53,8 +53,10 @@ message Host {
   string Scope = 20;
   // @gotags: display:"Virtual Host" 
   string VirtualHost = 21;
+
   repeated User Users = 22;
-  repeated network.Address Addresses = 23;
+  // @gotags: xml:"address" 
+  repeated network.Address Addresses = 23 [(gorm.field).many_to_many = {}];
 
   // Nmap ---------------------------------------
   // @gotags: xml:"os"

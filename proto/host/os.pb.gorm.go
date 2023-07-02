@@ -246,8 +246,8 @@ type OSMatchWithAfterToPB interface {
 
 type PortUsedORM struct {
 	Id       string `gorm:"type:uuid;primary_key"`
+	Number   uint32
 	OSId     *string
-	OsID     uint32
 	Protocol string
 	State    string
 }
@@ -268,7 +268,7 @@ func (m *PortUsed) ToORM(ctx context.Context) (PortUsedORM, error) {
 		}
 	}
 	to.Id = m.Id
-	to.OsID = m.OsID
+	to.Number = m.Number
 	to.State = m.State
 	to.Protocol = m.Protocol
 	if posthook, ok := interface{}(m).(PortUsedWithAfterToORM); ok {
@@ -288,7 +288,7 @@ func (m *PortUsedORM) ToPB(ctx context.Context) (PortUsed, error) {
 		}
 	}
 	to.Id = m.Id
-	to.OsID = m.OsID
+	to.Number = m.Number
 	to.State = m.State
 	to.Protocol = m.Protocol
 	if posthook, ok := interface{}(m).(PortUsedWithAfterToPB); ok {
@@ -1510,8 +1510,8 @@ func DefaultApplyFieldMaskPortUsed(ctx context.Context, patchee *PortUsed, patch
 			patchee.Id = patcher.Id
 			continue
 		}
-		if f == prefix+"OsID" {
-			patchee.OsID = patcher.OsID
+		if f == prefix+"Number" {
+			patchee.Number = patcher.Number
 			continue
 		}
 		if f == prefix+"State" {

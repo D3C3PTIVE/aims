@@ -38,12 +38,20 @@ func Migrate(db *gorm.DB) error {
 		network.TraceORM{},
 		network.ServiceORM{},
 
+		// OS
+		host.OSFingerprintORM{},
+		host.OSMatchORM{},
+		host.OSORM{},
+
 		// Host
 		host.StateORM{},
-		host.PortORM{},
-		host.ExtraPortORM{},
-		host.ReasonORM{},
 		host.StatusORM{},
+		host.ReasonORM{},
+
+		host.PortORM{},
+		host.PortUsedORM{},
+		host.ExtraPortORM{},
+
 		host.HostnameORM{},
 		host.UserORM{},
 		host.GroupORM{},

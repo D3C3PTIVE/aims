@@ -19,12 +19,13 @@ package host
 */
 
 import (
-	"context"
+	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/gondor/maltego"
 )
 
 // Host - A physical or virtual computer host.
@@ -33,78 +34,221 @@ import (
 type Host host.Host
 
 //
-// [ General Functions ] --------------------------------------------------
-//
-
-// ToORM - Get the SQL object for the Host.
-func (h *Host) ToORM(ctx context.Context) (host.HostORM, error) {
-	return (*host.Host)(h).ToORM(ctx)
-}
-
-// ToPB - Get the Protobuf object for the Host.
-func (h *Host) ToPB() *host.Host {
-	return (*host.Host)(h)
-}
-
-// AsEntity - Returns the Host as a valid Maltego Entity.
-func (h *Host) AsEntity() maltego.Entity {
-	return maltego.Entity{}
-}
-
-//
 // [ Display Functions ] --------------------------------------------------
 //
 
-// Table returns the headers and their row contents from a list of network services.
-func Table(hosts ...*host.Host) (headers []string, rows [][]string) {
-	// Headers
-	headers = append(headers, []string{
-		"Id",
-		"Hostnames",
-		"OSName",
-		"OSFamily",
-		"Arch",
-		"Addresses",
-		"Status",
-	}...)
+// TableHeaders returns all weighted table headers for a table of hosts.
+func Headers() (headers []display.Options) {
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
 
-	for _, h := range hosts {
-		var row []string
+	add("ID", 1)
+	add("Hostnames", 1)
+	add("OS Name", 1)
+	add("OS Family", 1)
+	add("Addresses", 1)
 
-		// ID & Naming
-		row = append(row, display.FormatSmallID(h.Id))
+	add("Status", 2)
+	add("Hops", 2)
 
+	add("Arch", 3)
+	add("MAC", 3)
+	add("Purpose", 3)
+
+	return headers
+}
+
+// DetailHeaders returns the headers for a detailed host view.
+func Details() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	// Core
+	add("ID", 1)
+	add("OS Name", 1)
+	add("OS Family", 1)
+	add("Arch", 1)
+	add("Status", 1)
+	add("Comment", 1)
+
+	add("Purpose", 3)
+	add("MAC", 3)
+	add("Virtual Host", 3)
+
+	// Network
+	add("Hostnames", 4)
+	add("Addresses", 4)
+	add("Hops", 4)
+	add("Route", 4)
+
+	// Tools
+	add("Hosts scripts", 4)
+
+	return headers
+}
+
+// Completions returns some columns to be combined into
+// completion candidates and/or their descriptions.
+func Completions() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("ID", 1)
+	add("Hostnames", 4)
+	add("OS Name", 1)
+	add("Addresses", 4)
+
+	return headers
+}
+
+// Fields maps field names to their value generators
+var Fields = map[string]func(h *host.Host) string{
+	// Table
+	"ID": func(h *host.Host) string {
+		if h.Status.State == "up" {
+			return color.HiGreenString(display.FormatSmallID(h.Id))
+		}
+		return display.FormatSmallID(h.Id)
+	},
+	"Hostnames": func(h *host.Host) string {
 		var hostnames []string
 		for _, hn := range h.Hostnames {
 			hostnames = append(hostnames, hn.Name)
 		}
-		row = append(row, strings.Join(hostnames, "\n"))
-
-		// OS Information determination.
-		var osName, osFamily string
-		osName, osFamily = h.OSName, h.OSFamily
-		row = append(row, osName, osFamily)
-
-		// Hardware
-		row = append(row, h.Arch)
-
-		// Addressing
+		return strings.Join(hostnames, "\n")
+	},
+	"OS Name": func(h *host.Host) string {
+		osName, _ := osMatched(h)
+		return osName
+	},
+	"OS Family": func(h *host.Host) string {
+		_, fam := osMatched(h)
+		return fam
+	},
+	"Addresses": func(h *host.Host) string {
 		var addresses []string
 		for _, hn := range h.Addresses {
-			addresses = append(addresses, hn.Addr.Value)
+			addresses = append(addresses, hn.Addr)
 		}
-		row = append(row, strings.Join(addresses, "\n"))
+		return strings.Join(addresses, "\n")
+	},
 
-		// Status
-		row = append(row, h.Status.State)
+	"Status": func(h *host.Host) string {
+		return ""
+	},
+	"Hops": func(h *host.Host) string {
+		if h.Trace == nil {
+			return ""
+		}
 
-		rows = append(rows, row)
+		return fmt.Sprint(len(h.Trace.Hops))
+	},
+	"Arch": getProbableCPU,
+	"MAC":  func(h *host.Host) string { return h.MAC },
+	"Purpose": func(h *host.Host) string {
+		// Look at OS matches for various types.
+		// Don't include them all, just 2/3 more recurring ones.
+		return ""
+	},
+
+	// Details
+	"Route": func(h *host.Host) string {
+		if h.Trace == nil {
+			return ""
+		}
+
+		var hops []string
+		for _, hop := range h.Trace.Hops {
+			hopDisplay := color.HiBlackString("| ") + color.YellowString(hop.Host) + " - " + hop.IPAddr
+			hops = append(hops, hopDisplay)
+		}
+
+		return strings.Join(hops, "\n")
+	},
+}
+
+func osMatched(h *host.Host) (osName, osFamily string) {
+	if len(h.OS.Matches) == 0 {
+		return
+	}
+
+	var strongest *host.OSMatch
+	var second *host.OSMatch
+
+	for _, m := range h.OS.Matches {
+		if strongest == nil {
+			strongest = m
+			continue
+		}
+
+		if m.Accuracy > strongest.Accuracy {
+			second = strongest
+			strongest = m
+		}
+	}
+
+	if strongest.Name != "" {
+		exact := "[~"
+		if strongest.Accuracy == 100 {
+			exact = strings.TrimSuffix(exact, "~")
+		}
+		osName = color.HiBlackString("%s%d%%] ", exact, strongest.Accuracy) + strongest.Name
+	} else if second != nil {
+		exact := "[~"
+		if second.Accuracy == 100 {
+			exact = strings.TrimSuffix(exact, "~")
+		}
+		osName = color.HiBlackString("%s%d%%] ", exact, second.Accuracy) + second.Name
 	}
 
 	return
 }
 
-// Details prints a detailed information page for a given host.
-func Details(h *host.Host) (details string) {
-	return
+func getProbableCPU(h *host.Host) string {
+	if h.Arch != "" {
+		return h.Arch
+	}
+
+	if h.OS == nil || h.OS.Matches == nil {
+		return ""
+	}
+
+	architectures := map[*regexp.Regexp]int{
+		regexp.MustCompile("x86"):    0,
+		regexp.MustCompile("i386"):   0,
+		regexp.MustCompile("x64"):    0,
+		regexp.MustCompile("x86_64"): 0,
+		regexp.MustCompile("amd64"):  0,
+		regexp.MustCompile("arm"):    0,
+		regexp.MustCompile("arm64"):  0,
+	}
+
+	for _, m := range h.OS.Matches {
+		for arch := range architectures {
+			if arch.MatchString(m.Name) {
+				architectures[arch]++
+			}
+		}
+	}
+
+	var cpuArch string
+	most := 0
+
+	for arch, count := range architectures {
+		if count > most {
+			most = count
+			cpuArch = arch.String()
+		}
+	}
+
+	if most == 0 || cpuArch == "" {
+		return ""
+	}
+
+	return color.HiBlackString("%d] ", most) + cpuArch
 }

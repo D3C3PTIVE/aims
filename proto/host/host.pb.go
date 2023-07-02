@@ -62,9 +62,10 @@ type Host struct {
 	// @gotags: display:"Scope"
 	Scope string `protobuf:"bytes,20,opt,name=Scope,proto3" json:"Scope,omitempty" display:"Scope"`
 	// @gotags: display:"Virtual Host"
-	VirtualHost string             `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty" display:"Virtual Host"`
-	Users       []*User            `protobuf:"bytes,22,rep,name=Users,proto3" json:"Users,omitempty"`
-	Addresses   []*network.Address `protobuf:"bytes,23,rep,name=Addresses,proto3" json:"Addresses,omitempty"`
+	VirtualHost string  `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty" display:"Virtual Host"`
+	Users       []*User `protobuf:"bytes,22,rep,name=Users,proto3" json:"Users,omitempty"`
+	// @gotags: xml:"address"
+	Addresses []*network.Address `protobuf:"bytes,23,rep,name=Addresses,proto3" json:"Addresses,omitempty" xml:"address"`
 	// Nmap ---------------------------------------
 	// @gotags: xml:"os"
 	OS *OS `protobuf:"bytes,30,opt,name=OS,proto3" json:"OS,omitempty" xml:"os"`

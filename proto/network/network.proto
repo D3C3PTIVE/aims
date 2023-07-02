@@ -5,7 +5,6 @@ package network;
 // DB -----------
 import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
-import "types/types.proto";
 
 // Trace Represents the trace to a host, including the hops
 message Trace {
@@ -69,7 +68,7 @@ message Address {
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // @gotags: xml:"addr,attr"
-  gorm.types.InetValue Addr = 10;          
+  string Addr = 10;          
   // @gotags: xml:"addrtype,attr"
   string Type = 11;        
   // @gotags: xml:"vendor,attr"
