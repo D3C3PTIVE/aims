@@ -22,9 +22,9 @@ import (
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
+	"github.com/maxlandon/aims/proto/rpc/credentials"
+	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/maxlandon/aims/proto/rpc/network"
 	"github.com/maxlandon/aims/server/credential"
 	"github.com/maxlandon/aims/server/host"
 	networkServer "github.com/maxlandon/aims/server/network"
