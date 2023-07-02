@@ -21,7 +21,7 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/gondor/maltego"
 )
 

@@ -3,10 +3,10 @@ package db
 import (
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
-	"github.com/maxlandon/aims/proto/gen/go/host"
-	"github.com/maxlandon/aims/proto/gen/go/network"
-	"github.com/maxlandon/aims/proto/gen/go/scan"
+	"github.com/maxlandon/aims/proto/credential"
+	"github.com/maxlandon/aims/proto/host"
+	"github.com/maxlandon/aims/proto/network"
+	"github.com/maxlandon/aims/proto/scan"
 )
 
 /*
@@ -30,13 +30,24 @@ import (
 // Schema returns all AIMS objects to be registered as a database schema.
 func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		// Host
-		host.HostORM{},
-		host.GroupORM{},
-
 		// Network
-		network.ServiceORM{},
 		network.AddressORM{},
+		network.TimesORM{},
+		network.DistanceORM{},
+		network.HopORM{},
+		network.TraceORM{},
+		network.ServiceORM{},
+
+		// Host
+		host.StateORM{},
+		host.PortORM{},
+		host.ExtraPortORM{},
+		host.ReasonORM{},
+		host.StatusORM{},
+		host.HostnameORM{},
+		host.UserORM{},
+		host.GroupORM{},
+		host.HostORM{},
 
 		// Credentials
 		credential.CoreORM{},

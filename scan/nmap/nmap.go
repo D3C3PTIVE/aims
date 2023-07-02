@@ -38,10 +38,10 @@ func FromRun(pb *scan.Run) *Run {
 // FromXML - Given the output of an Nmap Scan as a string in XML format,
 // parse it and return a Run with its contents. If the unmarshalling fails,
 // it returns both the model and the error, so always check the latter.
-func FromXML(data []byte) (*Run, error) {
+func FromXML(data []byte) (*scan.Run, error) {
 	r := &scan.Run{}
 	err := xml.Unmarshal(data, r)
-	return (*Run)(r), err
+	return r, err
 }
 
 // AsEntity - Returns the Scan as a valid Maltego Entity.

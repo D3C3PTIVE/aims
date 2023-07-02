@@ -23,7 +23,8 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/maxlandon/aims/proto/gen/go/network"
+	"github.com/maxlandon/aims/host"
+	"github.com/maxlandon/aims/proto/network"
 )
 
 // Service - A service somewhere on a network.
@@ -48,4 +49,17 @@ func (s *Service) ToPB() *network.Service {
 // AsEntity - Returns the Service as a valid Maltego Entity.
 func (s *Service) AsEntity() maltego.Entity {
 	return maltego.Entity{}
+}
+
+// Table returns the headers and their row contents from a list of network services.
+func Table(services ...host.Port) (headers, rows []string) {
+	// Headers
+	headers = append(headers, []string{
+		"ID",
+		"Number",
+		"Proto", // Combined transport/application protocol when possible
+		"State", // Combined or relevant port/service state
+	}...)
+
+	return
 }

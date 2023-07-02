@@ -21,7 +21,7 @@ package scan
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/gen/go/scan"
+	"github.com/maxlandon/aims/proto/scan"
 )
 
 // Target - This type can be used as an Input object to a scan,

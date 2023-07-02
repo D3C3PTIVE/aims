@@ -21,7 +21,7 @@ package network
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/gen/go/network"
+	"github.com/maxlandon/aims/proto/network"
 	"github.com/maxlandon/gondor/maltego"
 )
 

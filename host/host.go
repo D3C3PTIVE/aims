@@ -20,11 +20,10 @@ package host
 
 import (
 	"context"
-	"reflect"
+	"strings"
 
-	"github.com/infobloxopen/protoc-gen-gorm/types"
-	"github.com/maxlandon/aims/internal/display"
-	"github.com/maxlandon/aims/proto/gen/go/host"
+	"github.com/maxlandon/aims/display"
+	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/gondor/maltego"
 )
 
@@ -56,76 +55,56 @@ func (h *Host) AsEntity() maltego.Entity {
 // [ Display Functions ] --------------------------------------------------
 //
 
-// Headers returns the entity's fields as a list to be used in a table row.
-// The headers parameter can be used to restrict printing to some fields.
-// Those headers strings should be the name of the field as used by the
-// reflect package (ie. the name used in the source code).
-func (h *Host) Headers(headers ...string) (names []string, indexes [][]int) {
-	var heads []string
+// Table returns the headers and their row contents from a list of network services.
+func Table(hosts ...*host.Host) (headers []string, rows [][]string) {
+	// Headers
+	headers = append(headers, []string{
+		"Id",
+		"Hostnames",
+		"OSName",
+		"OSFamily",
+		"Arch",
+		"Addresses",
+		"Status",
+	}...)
 
-	if len(headers) == 0 {
-		heads = append(heads, []string{
-			"Id",
-			"OSName",
-			"OSFamily",
-			"Arch",
-			"MAC",
-			"Purpose",
-			// "Status",
-		}...)
-	} else {
-		heads = headers
+	for _, h := range hosts {
+		var row []string
+
+		// ID & Naming
+		row = append(row, display.FormatSmallID(h.Id))
+
+		var hostnames []string
+		for _, hn := range h.Hostnames {
+			hostnames = append(hostnames, hn.Name)
+		}
+		row = append(row, strings.Join(hostnames, "\n"))
+
+		// OS Information determination.
+		var osName, osFamily string
+		osName, osFamily = h.OSName, h.OSFamily
+		row = append(row, osName, osFamily)
+
+		// Hardware
+		row = append(row, h.Arch)
+
+		// Addressing
+		var addresses []string
+		for _, hn := range h.Addresses {
+			addresses = append(addresses, hn.Addr.Value)
+		}
+		row = append(row, strings.Join(addresses, "\n"))
+
+		// Status
+		row = append(row, h.Status.State)
+
+		rows = append(rows, row)
 	}
 
-	fType := reflect.TypeOf(h).Elem()
-
-	// For each field, check if it has a display tag to use.
-	for _, header := range heads {
-		field, ok := fType.FieldByName(header)
-		if !ok {
-			continue
-		}
-
-		// Determine the header string value.
-		displayTag, ok := field.Tag.Lookup("display")
-		if ok {
-			names = append(names, displayTag)
-		} else {
-			names = append(names, field.Name)
-		}
-
-		// And keep the index to be used by rows.
-		indexes = append(indexes, field.Index)
-	}
-
-	return names, indexes
+	return
 }
 
-// Values returns a list of field names that
-// should be used as headers in a table of hosts.
-func (h *Host) Rows(filters ...string) []string {
-	// field, _ := reflect.TypeOf(h).FieldByName("Testing")
-	return nil
-}
-
-func (h *Host) Values(indexes [][]int) []string {
-	fType := reflect.Indirect(reflect.ValueOf(h))
-	f := reflect.TypeOf(h).Elem()
-	values := make([]string, len(indexes))
-
-	for i, index := range indexes {
-		field := fType.FieldByIndex(index)
-		val := field.Interface()
-		tfield := f.FieldByIndex(index)
-
-		// Adjustments
-		if tfield.Name == "Id" {
-			id := val.(*types.UUID)
-			values[i] = display.FormatSmallID(id.String())
-		} else {
-			values[i] = val.(string)
-		}
-	}
-
-	return values
+// Details prints a detailed information page for a given host.
+func Details(h *host.Host) (details string) {
+	return
 }

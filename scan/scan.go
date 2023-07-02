@@ -19,12 +19,9 @@ package scan
 */
 
 import (
-	"errors"
 	"strings"
 
-	uuid "github.com/satori/go.uuid"
-
-	"github.com/maxlandon/aims/proto/gen/go/scan"
+	"github.com/maxlandon/aims/proto/scan"
 )
 
 // Run - Represents a scan before, after or while being run.
@@ -64,9 +61,7 @@ func (r *Run) AddTarget(t *Target) {
 // InitResult - Instantiate a new result that has the Run UUID in ref.
 // The rest of the object can be populated by the user as he wishes.
 func (r *Run) InitResult() *Result {
-	return &Result{
-		ScanId: r.Id,
-	}
+	return &Result{}
 }
 
 // AddResult - Return a Result (which must be created with construtor: has mapped ID)
@@ -81,9 +76,9 @@ func (r *Run) InitResult() *Result {
 // Result can hold a host, service, port, etc. It is always advised to pass objects that
 // are themselves coming from other tools/pipes, so as to keep track of them in complex workflows.
 func (r *Run) AddResult(res *Result) (err error) {
-	if res.ScanId == nil || res.ScanId.String() == uuid.Nil.String() {
-		return errors.New("Result is not tied to any scan.Run")
-	}
+	// if res.Id == "" || res.Id == uuid.Nil.String() {
+	// 	return errors.New("Result is not tied to any scan.Run")
+	// }
 	return
 }
 

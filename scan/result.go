@@ -19,7 +19,7 @@ package scan
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/scan"
+	"github.com/maxlandon/aims/proto/scan"
 )
 
 // Result - A type containing various objects that are outputs of a scan.

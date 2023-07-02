@@ -20,7 +20,6 @@ package credential
 
 import (
 	"bytes"
-	"context"
 	"crypto/des"
 	"encoding/binary"
 	"encoding/hex"
@@ -53,12 +52,6 @@ func NewNTLMHash(hash []byte) *NTLMHash {
 // General Functions
 //
 
-// ToORM - Get the SQL object for the NTLMHash credential.
-func (h *NTLMHash) ToORM(ctx context.Context) (credential.PrivateORM, error) {
-	h.Type = credential.PrivateType_NTLMHash
-	return (*Private)(h).ToORM(ctx)
-}
-
 // ToPB - Get the Protobuf object for the NTLMHash credential.
 func (h *NTLMHash) ToPB() *credential.Private {
 	h.Type = credential.PrivateType_NTLMHash
@@ -86,7 +79,7 @@ func (h *NTLMHash) HexDigest(hash []byte) (digest string) {
 }
 
 // LMHexDigestFromPassword - Converts a Private.Data to an LanManager Hash hex digest.
-// Handles passwords over the LanManager limit of 14 characters by treating them as '' for the
+// Handles passwords over the LanManager limit of 14 characters by treating them as ” for the
 // LanManager Hash calculation.
 //
 // @param password_data the plain text password
@@ -111,8 +104,8 @@ func (h *NTLMHash) LMHexDigestFromPassword(password string) (digest string) {
 
 // NTLMHexDigestFromPassword - Converts a Private.Password.Data to a NTLM Hash hex digest.
 //
-//  @param password_data the plain text password
-//  @return a 32 character hexadecimal string
+//	@param password_data the plain text password
+//	@return a 32 character hexadecimal string
 func (h *NTLMHash) NTLMHexDigestFromPassword(password string) (digest string) {
 	var hash [21]byte
 	hache := md4.New()
