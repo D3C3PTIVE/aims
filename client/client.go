@@ -21,10 +21,10 @@ package client
 import (
 	"google.golang.org/grpc"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/scans"
+	"github.com/maxlandon/aims/proto/rpc/credentials"
+	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/maxlandon/aims/proto/rpc/network"
+	"github.com/maxlandon/aims/proto/rpc/scans"
 )
 
 // Client connects to an AIMS database through a gRPC connection.
@@ -34,12 +34,12 @@ type Client struct {
 	conn *grpc.ClientConn
 
 	// Services
-	hosts.HostsClient
-	hosts.UsersClient
-	network.ServicesClient
-	credentials.CredentialsClient
-	credentials.LoginsClient
-	scans.ScansClient
+	Hosts    hosts.HostsClient
+	Users    hosts.UsersClient
+	Services network.ServicesClient
+	Creds    credentials.CredentialsClient
+	Logins   credentials.LoginsClient
+	Scans    scans.ScansClient
 }
 
 // New initializes an AIMS client RPC interface.
@@ -55,13 +55,13 @@ func NewFrom(conn *grpc.ClientConn) (c *Client, err error) {
 	}
 
 	c = &Client{
-		conn:              conn,
-		HostsClient:       hosts.NewHostsClient(conn),
-		UsersClient:       hosts.NewUsersClient(conn),
-		ServicesClient:    network.NewServicesClient(conn),
-		CredentialsClient: credentials.NewCredentialsClient(conn),
-		LoginsClient:      credentials.NewLoginsClient(conn),
-		ScansClient:       scans.NewScansClient(conn),
+		conn:     conn,
+		Hosts:    hosts.NewHostsClient(conn),
+		Users:    hosts.NewUsersClient(conn),
+		Services: network.NewServicesClient(conn),
+		Creds:    credentials.NewCredentialsClient(conn),
+		Logins:   credentials.NewLoginsClient(conn),
+		Scans:    scans.NewScansClient(conn),
 	}
 
 	return
@@ -69,30 +69,30 @@ func NewFrom(conn *grpc.ClientConn) (c *Client, err error) {
 
 // Hosts returns the service to interact with database hosts.
 func Hosts(c *Client) hosts.HostsClient {
-	return c.HostsClient
+	return c.Hosts
 }
 
 // Users returns the service to interact with database users.
 func Users(c *Client) hosts.UsersClient {
-	return c.UsersClient
+	return c.Users
 }
 
 // Services returns the service to interact with database services.
 func Services(c *Client) network.ServicesClient {
-	return c.ServicesClient
+	return c.Services
 }
 
 // Credentials returns the service to interact with database credentials.
 func Credentials(c *Client) credentials.CredentialsClient {
-	return c.CredentialsClient
+	return c.Creds
 }
 
 // Logins returns the service to interact with database logins.
 func Logins(c *Client) credentials.LoginsClient {
-	return c.LoginsClient
+	return c.Logins
 }
 
 // Scans returns the service to interact with database scans.
 func Scans(c *Client) scans.ScansClient {
-	return c.ScansClient
+	return c.Scans
 }
