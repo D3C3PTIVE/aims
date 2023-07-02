@@ -20,6 +20,7 @@ package display
 
 import (
 	"github.com/jedib0t/go-pretty/v6/table"
+	"golang.org/x/term"
 )
 
 // TableWith requires a type parameter consisting of a type for which a corresponding map
@@ -68,6 +69,19 @@ func populate(rows [][]string, options *opts) *table.Table {
 	}
 
 	// Adapt to terminal size.
+	// The index of the value range obtained also gives the
+	// maximum weight allowed for the table.
+	width, height, err := term.GetSize(int(stderrTerm.Fd()))
+	if err != nil {
+		width, height = 80, 80
+	}
+
+	// By default, give some hints to the table itself.
+	tb.SetAllowedRowLength(width)
+	maxWeight := getMaximumWeight(width, height)
+
+	// But ensure we don't get too far anyway.
+	headers, rows = adaptTableSize(headers, rows, maxWeight, options)
 
 	// Add final headers
 	var heads table.Row
@@ -101,12 +115,12 @@ func removeEmptyColumns() columnCleaner {
 		var filteredHeaders []string
 		filteredRows := make([][]string, len(rows))
 
-		for columnIndex, header := range headers {
+		for index, header := range headers {
 			empty := true
 
 			for _, row := range rows {
-				if len(row) > columnIndex {
-					if row[columnIndex] != "" {
+				if len(row) > index {
+					if row[index] != "" {
 						empty = false
 						break
 					}
@@ -116,7 +130,7 @@ func removeEmptyColumns() columnCleaner {
 			if !empty {
 				filteredHeaders = append(filteredHeaders, header)
 				for i := range filteredRows {
-					filteredRows[i] = append(filteredRows[i], rows[i][columnIndex])
+					filteredRows[i] = append(filteredRows[i], rows[i][index])
 				}
 			}
 		}

@@ -99,9 +99,9 @@ func Completions() []display.Options {
 	}
 
 	add("ID", 1)
-	add("Hostnames", 4)
+	add("Hostnames", 1)
 	add("OS Name", 1)
-	add("Addresses", 4)
+	add("Addresses", 1)
 
 	return headers
 }
@@ -197,13 +197,13 @@ func osMatched(h *host.Host) (osName, osFamily string) {
 		if strongest.Accuracy == 100 {
 			exact = strings.TrimSuffix(exact, "~")
 		}
-		osName = color.HiBlackString("%s%d%%] ", exact, strongest.Accuracy) + strongest.Name
+		osName = color.HiBlackString("%s%d%%|%d] ", exact, strongest.Accuracy, len(h.OS.Matches)) + strongest.Name
 	} else if second != nil {
 		exact := "[~"
 		if second.Accuracy == 100 {
 			exact = strings.TrimSuffix(exact, "~")
 		}
-		osName = color.HiBlackString("%s%d%%] ", exact, second.Accuracy) + second.Name
+		osName = color.HiBlackString("%s%d%%|%d] ", exact, second.Accuracy, len(h.OS.Matches)) + second.Name
 	}
 
 	return
@@ -250,5 +250,5 @@ func getProbableCPU(h *host.Host) string {
 		return ""
 	}
 
-	return color.HiBlackString("%d] ", most) + cpuArch
+	return color.HiBlackString("[%d] ", most) + cpuArch
 }

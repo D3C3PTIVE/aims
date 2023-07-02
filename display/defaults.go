@@ -19,15 +19,53 @@ package display
 */
 
 import (
+	"os"
+	"sort"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 )
+
+// Those variables are very important to realine low-level code: all virtual terminal
+// escape sequences should always be sent and read through the raw terminal file, even
+// if people start using io.MultiWriters and os.Pipes involving basic IO.
+var (
+	stdoutTerm *os.File
+	stdinTerm  *os.File
+	stderrTerm *os.File
+)
+
+func init() {
+	stdoutTerm = os.Stdout
+	stdoutTerm = os.Stderr
+	stderrTerm = os.Stdin
+}
 
 var terminalWeightSizes = map[int]int{
 	1: 80,
 	2: 160,
 	3: 240,
 	4: 320,
+}
+
+func getMaximumWeight(width, height int) int {
+	max := 0
+	maxes := make([]int, len(terminalWeightSizes)+1)
+
+	for i, threshold := range terminalWeightSizes {
+		maxes[i] = threshold
+	}
+
+	sort.Ints(maxes)
+
+	for w, threshold := range maxes {
+		if threshold > width {
+			break
+		}
+		max = w
+	}
+
+	return max
 }
 
 var (
@@ -125,3 +163,39 @@ var (
 		},
 	}
 )
+
+func adaptTableSize(headers []string, rows [][]string, maxWeight int, options *opts) ([]string, [][]string) {
+	var maxed []string
+	maxRows := make([][]string, len(rows))
+
+	all := options.headers
+	allW := options.weights
+
+	weighted := 0
+	real := 0
+
+	for _, r := range headers {
+		real++
+		for _, head := range all {
+			if head == r {
+				break
+			}
+			weighted++
+		}
+
+		if allW[r] > maxWeight {
+			break
+		}
+	}
+
+	headers = headers[:real]
+
+	for _, header := range headers {
+		maxed = append(maxed, header)
+		for i := range rows {
+			maxRows[i] = rows[i][:real]
+		}
+	}
+
+	return maxed, maxRows
+}
