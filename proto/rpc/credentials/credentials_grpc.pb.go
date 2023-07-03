@@ -19,22 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Credentials_CreateCredential_FullMethodName  = "/credentials.Credentials/CreateCredential"
-	Credentials_GetCredential_FullMethodName     = "/credentials.Credentials/GetCredential"
-	Credentials_GetCredentialMany_FullMethodName = "/credentials.Credentials/GetCredentialMany"
-	Credentials_UpsertCredential_FullMethodName  = "/credentials.Credentials/UpsertCredential"
-	Credentials_DeleteCredential_FullMethodName  = "/credentials.Credentials/DeleteCredential"
+	Credentials_Create_FullMethodName = "/credentials.Credentials/Create"
+	Credentials_Read_FullMethodName   = "/credentials.Credentials/Read"
+	Credentials_List_FullMethodName   = "/credentials.Credentials/List"
+	Credentials_Upsert_FullMethodName = "/credentials.Credentials/Upsert"
+	Credentials_Delete_FullMethodName = "/credentials.Credentials/Delete"
 )
 
 // CredentialsClient is the client API for Credentials service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CredentialsClient interface {
-	CreateCredential(ctx context.Context, in *CreateCredentialRequest, opts ...grpc.CallOption) (*CreateCredentialResponse, error)
-	GetCredential(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error)
-	GetCredentialMany(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error)
-	UpsertCredential(ctx context.Context, in *UpsertCredentialRequest, opts ...grpc.CallOption) (*UpsertCredentialResponse, error)
-	DeleteCredential(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error)
+	Create(ctx context.Context, in *CreateCredentialRequest, opts ...grpc.CallOption) (*CreateCredentialResponse, error)
+	Read(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error)
+	List(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error)
+	Upsert(ctx context.Context, in *UpsertCredentialRequest, opts ...grpc.CallOption) (*UpsertCredentialResponse, error)
+	Delete(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error)
 }
 
 type credentialsClient struct {
@@ -45,45 +45,45 @@ func NewCredentialsClient(cc grpc.ClientConnInterface) CredentialsClient {
 	return &credentialsClient{cc}
 }
 
-func (c *credentialsClient) CreateCredential(ctx context.Context, in *CreateCredentialRequest, opts ...grpc.CallOption) (*CreateCredentialResponse, error) {
+func (c *credentialsClient) Create(ctx context.Context, in *CreateCredentialRequest, opts ...grpc.CallOption) (*CreateCredentialResponse, error) {
 	out := new(CreateCredentialResponse)
-	err := c.cc.Invoke(ctx, Credentials_CreateCredential_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Credentials_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *credentialsClient) GetCredential(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error) {
+func (c *credentialsClient) Read(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error) {
 	out := new(ReadCredentialResponse)
-	err := c.cc.Invoke(ctx, Credentials_GetCredential_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Credentials_Read_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *credentialsClient) GetCredentialMany(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error) {
+func (c *credentialsClient) List(ctx context.Context, in *ReadCredentialRequest, opts ...grpc.CallOption) (*ReadCredentialResponse, error) {
 	out := new(ReadCredentialResponse)
-	err := c.cc.Invoke(ctx, Credentials_GetCredentialMany_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Credentials_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *credentialsClient) UpsertCredential(ctx context.Context, in *UpsertCredentialRequest, opts ...grpc.CallOption) (*UpsertCredentialResponse, error) {
+func (c *credentialsClient) Upsert(ctx context.Context, in *UpsertCredentialRequest, opts ...grpc.CallOption) (*UpsertCredentialResponse, error) {
 	out := new(UpsertCredentialResponse)
-	err := c.cc.Invoke(ctx, Credentials_UpsertCredential_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Credentials_Upsert_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *credentialsClient) DeleteCredential(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error) {
+func (c *credentialsClient) Delete(ctx context.Context, in *DeleteCredentialRequest, opts ...grpc.CallOption) (*DeleteCredentialResponse, error) {
 	out := new(DeleteCredentialResponse)
-	err := c.cc.Invoke(ctx, Credentials_DeleteCredential_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Credentials_Delete_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +94,11 @@ func (c *credentialsClient) DeleteCredential(ctx context.Context, in *DeleteCred
 // All implementations must embed UnimplementedCredentialsServer
 // for forward compatibility
 type CredentialsServer interface {
-	CreateCredential(context.Context, *CreateCredentialRequest) (*CreateCredentialResponse, error)
-	GetCredential(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error)
-	GetCredentialMany(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error)
-	UpsertCredential(context.Context, *UpsertCredentialRequest) (*UpsertCredentialResponse, error)
-	DeleteCredential(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error)
+	Create(context.Context, *CreateCredentialRequest) (*CreateCredentialResponse, error)
+	Read(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error)
+	List(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error)
+	Upsert(context.Context, *UpsertCredentialRequest) (*UpsertCredentialResponse, error)
+	Delete(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error)
 	mustEmbedUnimplementedCredentialsServer()
 }
 
@@ -106,20 +106,20 @@ type CredentialsServer interface {
 type UnimplementedCredentialsServer struct {
 }
 
-func (UnimplementedCredentialsServer) CreateCredential(context.Context, *CreateCredentialRequest) (*CreateCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateCredential not implemented")
+func (UnimplementedCredentialsServer) Create(context.Context, *CreateCredentialRequest) (*CreateCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedCredentialsServer) GetCredential(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCredential not implemented")
+func (UnimplementedCredentialsServer) Read(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
-func (UnimplementedCredentialsServer) GetCredentialMany(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetCredentialMany not implemented")
+func (UnimplementedCredentialsServer) List(context.Context, *ReadCredentialRequest) (*ReadCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedCredentialsServer) UpsertCredential(context.Context, *UpsertCredentialRequest) (*UpsertCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertCredential not implemented")
+func (UnimplementedCredentialsServer) Upsert(context.Context, *UpsertCredentialRequest) (*UpsertCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Upsert not implemented")
 }
-func (UnimplementedCredentialsServer) DeleteCredential(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteCredential not implemented")
+func (UnimplementedCredentialsServer) Delete(context.Context, *DeleteCredentialRequest) (*DeleteCredentialResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
 func (UnimplementedCredentialsServer) mustEmbedUnimplementedCredentialsServer() {}
 
@@ -134,92 +134,92 @@ func RegisterCredentialsServer(s grpc.ServiceRegistrar, srv CredentialsServer) {
 	s.RegisterService(&Credentials_ServiceDesc, srv)
 }
 
-func _Credentials_CreateCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Credentials_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CredentialsServer).CreateCredential(ctx, in)
+		return srv.(CredentialsServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Credentials_CreateCredential_FullMethodName,
+		FullMethod: Credentials_Create_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CredentialsServer).CreateCredential(ctx, req.(*CreateCredentialRequest))
+		return srv.(CredentialsServer).Create(ctx, req.(*CreateCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Credentials_GetCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Credentials_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CredentialsServer).GetCredential(ctx, in)
+		return srv.(CredentialsServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Credentials_GetCredential_FullMethodName,
+		FullMethod: Credentials_Read_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CredentialsServer).GetCredential(ctx, req.(*ReadCredentialRequest))
+		return srv.(CredentialsServer).Read(ctx, req.(*ReadCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Credentials_GetCredentialMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Credentials_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CredentialsServer).GetCredentialMany(ctx, in)
+		return srv.(CredentialsServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Credentials_GetCredentialMany_FullMethodName,
+		FullMethod: Credentials_List_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CredentialsServer).GetCredentialMany(ctx, req.(*ReadCredentialRequest))
+		return srv.(CredentialsServer).List(ctx, req.(*ReadCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Credentials_UpsertCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Credentials_Upsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpsertCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CredentialsServer).UpsertCredential(ctx, in)
+		return srv.(CredentialsServer).Upsert(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Credentials_UpsertCredential_FullMethodName,
+		FullMethod: Credentials_Upsert_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CredentialsServer).UpsertCredential(ctx, req.(*UpsertCredentialRequest))
+		return srv.(CredentialsServer).Upsert(ctx, req.(*UpsertCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Credentials_DeleteCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Credentials_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteCredentialRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CredentialsServer).DeleteCredential(ctx, in)
+		return srv.(CredentialsServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Credentials_DeleteCredential_FullMethodName,
+		FullMethod: Credentials_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CredentialsServer).DeleteCredential(ctx, req.(*DeleteCredentialRequest))
+		return srv.(CredentialsServer).Delete(ctx, req.(*DeleteCredentialRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -232,24 +232,24 @@ var Credentials_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CredentialsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateCredential",
-			Handler:    _Credentials_CreateCredential_Handler,
+			MethodName: "Create",
+			Handler:    _Credentials_Create_Handler,
 		},
 		{
-			MethodName: "GetCredential",
-			Handler:    _Credentials_GetCredential_Handler,
+			MethodName: "Read",
+			Handler:    _Credentials_Read_Handler,
 		},
 		{
-			MethodName: "GetCredentialMany",
-			Handler:    _Credentials_GetCredentialMany_Handler,
+			MethodName: "List",
+			Handler:    _Credentials_List_Handler,
 		},
 		{
-			MethodName: "UpsertCredential",
-			Handler:    _Credentials_UpsertCredential_Handler,
+			MethodName: "Upsert",
+			Handler:    _Credentials_Upsert_Handler,
 		},
 		{
-			MethodName: "DeleteCredential",
-			Handler:    _Credentials_DeleteCredential_Handler,
+			MethodName: "Delete",
+			Handler:    _Credentials_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

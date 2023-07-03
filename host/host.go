@@ -72,20 +72,20 @@ func Details() []display.Options {
 	add("OS Family", 1)
 	add("Arch", 1)
 	add("Status", 1)
-	add("Comment", 1)
 
-	add("Purpose", 3)
-	add("MAC", 3)
-	add("Virtual Host", 3)
+	add("Purpose", 2)
+	add("MAC", 2)
+	add("Virtual Host", 2)
 
 	// Network
-	add("Hostnames", 4)
-	add("Addresses", 4)
-	add("Hops", 4)
-	add("Route", 4)
+	add("Hostnames", 3)
+	add("Addresses", 3)
+	add("Hops", 3)
+	// add("Route", 3) -- command-line flaag --traceroute
 
 	// Tools
-	add("Hosts scripts", 4)
+	add("Comment", 4)
+	add("Hosts scripts", 5)
 
 	return headers
 }
@@ -153,7 +153,28 @@ var Fields = map[string]func(h *host.Host) string{
 	"Purpose": func(h *host.Host) string {
 		// Look at OS matches for various types.
 		// Don't include them all, just 2/3 more recurring ones.
-		return ""
+		if h.Purpose != "" {
+			return h.Purpose
+		}
+
+		times := map[string]int{}
+
+		for _, m := range h.OS.Matches {
+			for _, c := range m.Classes {
+				println(c.Type)
+				if c.Type != "" {
+					times[c.Type]++
+				}
+			}
+		}
+
+		var purposes []string
+		for name, times := range times {
+			typeStr := name + display.Dim + fmt.Sprintf("(%d)", times)
+			purposes = append(purposes, typeStr)
+		}
+
+		return strings.Join(purposes, " | ")
 	},
 
 	// Details
@@ -162,13 +183,18 @@ var Fields = map[string]func(h *host.Host) string{
 			return ""
 		}
 
-		var hops []string
-		for _, hop := range h.Trace.Hops {
-			hopDisplay := color.HiBlackString("| ") + color.YellowString(hop.Host) + " - " + hop.IPAddr
-			hops = append(hops, hopDisplay)
+		routes := "\n" + display.Reset
+
+		for i := len(h.Trace.Hops) - 1; i >= 0; i-- {
+			hop := h.Trace.Hops[i]
+			line := display.Dim + "  |_ "
+			rtt := display.Dim + fmt.Sprintf("%*s", 6, hop.RTT) + display.Reset
+			ipPad := fmt.Sprintf("%*s  ", 18, hop.IPAddr)
+			line += rtt + ipPad + display.Bold + display.FgYellow + hop.Host + display.Reset
+			routes += line + "\n"
 		}
 
-		return strings.Join(hops, "\n")
+		return strings.TrimSuffix(routes, "\n")
 	},
 }
 

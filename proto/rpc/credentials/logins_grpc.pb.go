@@ -19,22 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Logins_CreateLogin_FullMethodName  = "/credentials.Logins/CreateLogin"
-	Logins_GetLogin_FullMethodName     = "/credentials.Logins/GetLogin"
-	Logins_GetLoginMany_FullMethodName = "/credentials.Logins/GetLoginMany"
-	Logins_UpsertLogin_FullMethodName  = "/credentials.Logins/UpsertLogin"
-	Logins_DeleteLogin_FullMethodName  = "/credentials.Logins/DeleteLogin"
+	Logins_Create_FullMethodName = "/credentials.Logins/Create"
+	Logins_Read_FullMethodName   = "/credentials.Logins/Read"
+	Logins_List_FullMethodName   = "/credentials.Logins/List"
+	Logins_Upsert_FullMethodName = "/credentials.Logins/Upsert"
+	Logins_Delete_FullMethodName = "/credentials.Logins/Delete"
 )
 
 // LoginsClient is the client API for Logins service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LoginsClient interface {
-	CreateLogin(ctx context.Context, in *CreateLoginRequest, opts ...grpc.CallOption) (*CreateLoginResponse, error)
-	GetLogin(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error)
-	GetLoginMany(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error)
-	UpsertLogin(ctx context.Context, in *UpsertLoginRequest, opts ...grpc.CallOption) (*UpsertLoginResponse, error)
-	DeleteLogin(ctx context.Context, in *DeleteLoginRequest, opts ...grpc.CallOption) (*DeleteLoginResponse, error)
+	Create(ctx context.Context, in *CreateLoginRequest, opts ...grpc.CallOption) (*CreateLoginResponse, error)
+	Read(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error)
+	List(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error)
+	Upsert(ctx context.Context, in *UpsertLoginRequest, opts ...grpc.CallOption) (*UpsertLoginResponse, error)
+	Delete(ctx context.Context, in *DeleteLoginRequest, opts ...grpc.CallOption) (*DeleteLoginResponse, error)
 }
 
 type loginsClient struct {
@@ -45,45 +45,45 @@ func NewLoginsClient(cc grpc.ClientConnInterface) LoginsClient {
 	return &loginsClient{cc}
 }
 
-func (c *loginsClient) CreateLogin(ctx context.Context, in *CreateLoginRequest, opts ...grpc.CallOption) (*CreateLoginResponse, error) {
+func (c *loginsClient) Create(ctx context.Context, in *CreateLoginRequest, opts ...grpc.CallOption) (*CreateLoginResponse, error) {
 	out := new(CreateLoginResponse)
-	err := c.cc.Invoke(ctx, Logins_CreateLogin_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Logins_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *loginsClient) GetLogin(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error) {
+func (c *loginsClient) Read(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error) {
 	out := new(ReadLoginResponse)
-	err := c.cc.Invoke(ctx, Logins_GetLogin_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Logins_Read_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *loginsClient) GetLoginMany(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error) {
+func (c *loginsClient) List(ctx context.Context, in *ReadLoginRequest, opts ...grpc.CallOption) (*ReadLoginResponse, error) {
 	out := new(ReadLoginResponse)
-	err := c.cc.Invoke(ctx, Logins_GetLoginMany_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Logins_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *loginsClient) UpsertLogin(ctx context.Context, in *UpsertLoginRequest, opts ...grpc.CallOption) (*UpsertLoginResponse, error) {
+func (c *loginsClient) Upsert(ctx context.Context, in *UpsertLoginRequest, opts ...grpc.CallOption) (*UpsertLoginResponse, error) {
 	out := new(UpsertLoginResponse)
-	err := c.cc.Invoke(ctx, Logins_UpsertLogin_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Logins_Upsert_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *loginsClient) DeleteLogin(ctx context.Context, in *DeleteLoginRequest, opts ...grpc.CallOption) (*DeleteLoginResponse, error) {
+func (c *loginsClient) Delete(ctx context.Context, in *DeleteLoginRequest, opts ...grpc.CallOption) (*DeleteLoginResponse, error) {
 	out := new(DeleteLoginResponse)
-	err := c.cc.Invoke(ctx, Logins_DeleteLogin_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Logins_Delete_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +94,11 @@ func (c *loginsClient) DeleteLogin(ctx context.Context, in *DeleteLoginRequest, 
 // All implementations must embed UnimplementedLoginsServer
 // for forward compatibility
 type LoginsServer interface {
-	CreateLogin(context.Context, *CreateLoginRequest) (*CreateLoginResponse, error)
-	GetLogin(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error)
-	GetLoginMany(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error)
-	UpsertLogin(context.Context, *UpsertLoginRequest) (*UpsertLoginResponse, error)
-	DeleteLogin(context.Context, *DeleteLoginRequest) (*DeleteLoginResponse, error)
+	Create(context.Context, *CreateLoginRequest) (*CreateLoginResponse, error)
+	Read(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error)
+	List(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error)
+	Upsert(context.Context, *UpsertLoginRequest) (*UpsertLoginResponse, error)
+	Delete(context.Context, *DeleteLoginRequest) (*DeleteLoginResponse, error)
 	mustEmbedUnimplementedLoginsServer()
 }
 
@@ -106,20 +106,20 @@ type LoginsServer interface {
 type UnimplementedLoginsServer struct {
 }
 
-func (UnimplementedLoginsServer) CreateLogin(context.Context, *CreateLoginRequest) (*CreateLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateLogin not implemented")
+func (UnimplementedLoginsServer) Create(context.Context, *CreateLoginRequest) (*CreateLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedLoginsServer) GetLogin(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLogin not implemented")
+func (UnimplementedLoginsServer) Read(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
-func (UnimplementedLoginsServer) GetLoginMany(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLoginMany not implemented")
+func (UnimplementedLoginsServer) List(context.Context, *ReadLoginRequest) (*ReadLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedLoginsServer) UpsertLogin(context.Context, *UpsertLoginRequest) (*UpsertLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertLogin not implemented")
+func (UnimplementedLoginsServer) Upsert(context.Context, *UpsertLoginRequest) (*UpsertLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Upsert not implemented")
 }
-func (UnimplementedLoginsServer) DeleteLogin(context.Context, *DeleteLoginRequest) (*DeleteLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteLogin not implemented")
+func (UnimplementedLoginsServer) Delete(context.Context, *DeleteLoginRequest) (*DeleteLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
 func (UnimplementedLoginsServer) mustEmbedUnimplementedLoginsServer() {}
 
@@ -134,92 +134,92 @@ func RegisterLoginsServer(s grpc.ServiceRegistrar, srv LoginsServer) {
 	s.RegisterService(&Logins_ServiceDesc, srv)
 }
 
-func _Logins_CreateLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Logins_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LoginsServer).CreateLogin(ctx, in)
+		return srv.(LoginsServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Logins_CreateLogin_FullMethodName,
+		FullMethod: Logins_Create_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginsServer).CreateLogin(ctx, req.(*CreateLoginRequest))
+		return srv.(LoginsServer).Create(ctx, req.(*CreateLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Logins_GetLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Logins_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LoginsServer).GetLogin(ctx, in)
+		return srv.(LoginsServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Logins_GetLogin_FullMethodName,
+		FullMethod: Logins_Read_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginsServer).GetLogin(ctx, req.(*ReadLoginRequest))
+		return srv.(LoginsServer).Read(ctx, req.(*ReadLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Logins_GetLoginMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Logins_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LoginsServer).GetLoginMany(ctx, in)
+		return srv.(LoginsServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Logins_GetLoginMany_FullMethodName,
+		FullMethod: Logins_List_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginsServer).GetLoginMany(ctx, req.(*ReadLoginRequest))
+		return srv.(LoginsServer).List(ctx, req.(*ReadLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Logins_UpsertLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Logins_Upsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpsertLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LoginsServer).UpsertLogin(ctx, in)
+		return srv.(LoginsServer).Upsert(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Logins_UpsertLogin_FullMethodName,
+		FullMethod: Logins_Upsert_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginsServer).UpsertLogin(ctx, req.(*UpsertLoginRequest))
+		return srv.(LoginsServer).Upsert(ctx, req.(*UpsertLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Logins_DeleteLogin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Logins_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LoginsServer).DeleteLogin(ctx, in)
+		return srv.(LoginsServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Logins_DeleteLogin_FullMethodName,
+		FullMethod: Logins_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginsServer).DeleteLogin(ctx, req.(*DeleteLoginRequest))
+		return srv.(LoginsServer).Delete(ctx, req.(*DeleteLoginRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -232,24 +232,24 @@ var Logins_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*LoginsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateLogin",
-			Handler:    _Logins_CreateLogin_Handler,
+			MethodName: "Create",
+			Handler:    _Logins_Create_Handler,
 		},
 		{
-			MethodName: "GetLogin",
-			Handler:    _Logins_GetLogin_Handler,
+			MethodName: "Read",
+			Handler:    _Logins_Read_Handler,
 		},
 		{
-			MethodName: "GetLoginMany",
-			Handler:    _Logins_GetLoginMany_Handler,
+			MethodName: "List",
+			Handler:    _Logins_List_Handler,
 		},
 		{
-			MethodName: "UpsertLogin",
-			Handler:    _Logins_UpsertLogin_Handler,
+			MethodName: "Upsert",
+			Handler:    _Logins_Upsert_Handler,
 		},
 		{
-			MethodName: "DeleteLogin",
-			Handler:    _Logins_DeleteLogin_Handler,
+			MethodName: "Delete",
+			Handler:    _Logins_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

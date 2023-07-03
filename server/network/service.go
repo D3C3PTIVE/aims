@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	pb "github.com/maxlandon/aims/proto/gen/go/network"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/network"
+	pb "github.com/maxlandon/aims/proto/network"
+	"github.com/maxlandon/aims/proto/rpc/network"
 )
 
 type server struct {
@@ -35,14 +35,14 @@ type server struct {
 }
 
 func New(db *gorm.DB) *server {
-	return &server{db: db}
+	return &server{db: db, UnimplementedServicesServer: &network.UnimplementedServicesServer{}}
 }
 
-func (s *server) CreateService(ctx context.Context, req *network.CreateServiceRequest) (*network.CreateServiceResponse, error) {
+func (s *server) Create(ctx context.Context, req *network.CreateServiceRequest) (*network.CreateServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateService not implemented")
 }
 
-func (s *server) GetService(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
+func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
 	// Convert to ORM model
 	service, err := req.GetService().ToORM(ctx)
 	if err != nil {
@@ -65,7 +65,7 @@ func (s *server) GetService(ctx context.Context, req *network.ReadServiceRequest
 	return res, err
 }
 
-func (s *server) GetServiceMany(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
+func (s *server) List(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
 	// Convert to ORM model
 	service, err := req.GetService().ToORM(ctx)
 	if err != nil {
@@ -88,10 +88,10 @@ func (s *server) GetServiceMany(ctx context.Context, req *network.ReadServiceReq
 	return res, err
 }
 
-func (s *server) UpsertService(ctx context.Context, req *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {
+func (s *server) Upsert(ctx context.Context, req *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertService not implemented")
 }
 
-func (s *server) DeleteService(ctx context.Context, req *network.DeleteServiceRequest) (*network.DeleteServiceResponse, error) {
+func (s *server) Delete(ctx context.Context, req *network.DeleteServiceRequest) (*network.DeleteServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteService not implemented")
 }

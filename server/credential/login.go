@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
+	"github.com/maxlandon/aims/proto/rpc/credentials"
 )
 
 type loginServer struct {
@@ -37,22 +37,22 @@ func NewLoginServer(db *gorm.DB) *loginServer {
 	return &loginServer{db: db}
 }
 
-func (loginServer) CreateLogin(context.Context, *credentials.CreateLoginRequest) (*credentials.CreateLoginResponse, error) {
+func (loginServer) Create(context.Context, *credentials.CreateLoginRequest) (*credentials.CreateLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLogin not implemented")
 }
 
-func (loginServer) GetLogin(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
+func (loginServer) Read(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLogin not implemented")
 }
 
-func (loginServer) GetLoginMany(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
+func (loginServer) List(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLoginMany not implemented")
 }
 
-func (loginServer) UpsertLogin(context.Context, *credentials.UpsertLoginRequest) (*credentials.UpsertLoginResponse, error) {
+func (loginServer) Upsert(context.Context, *credentials.UpsertLoginRequest) (*credentials.UpsertLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertLogin not implemented")
 }
 
-func (loginServer) DeleteLogin(context.Context, *credentials.DeleteLoginRequest) (*credentials.DeleteLoginResponse, error) {
+func (loginServer) Delete(context.Context, *credentials.DeleteLoginRequest) (*credentials.DeleteLoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteLogin not implemented")
 }

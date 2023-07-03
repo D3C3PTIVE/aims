@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
+	"github.com/maxlandon/aims/proto/credential"
+	"github.com/maxlandon/aims/proto/rpc/credentials"
 )
 
 type server struct {
@@ -38,11 +38,11 @@ func New(db *gorm.DB) *server {
 	return &server{db: db}
 }
 
-func (s *server) CreateCredential(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
+func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateCredential not implemented")
 }
 
-func (s *server) GetCredential(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
+func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
 	// Convert to ORM model
 	cred, err := req.GetCredential().ToORM(ctx)
 	if err != nil {
@@ -65,7 +65,7 @@ func (s *server) GetCredential(ctx context.Context, req *credentials.ReadCredent
 	return res, err
 }
 
-func (s *server) GetCredentialMany(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
+func (s *server) List(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
 	// Convert to ORM model
 	cred, err := req.GetCredential().ToORM(ctx)
 	if err != nil {
@@ -88,10 +88,10 @@ func (s *server) GetCredentialMany(ctx context.Context, req *credentials.ReadCre
 	return res, err
 }
 
-func (s *server) UpsertCredential(context.Context, *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
+func (s *server) Upsert(context.Context, *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertCredential not implemented")
 }
 
-func (s *server) DeleteCredential(context.Context, *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
+func (s *server) Delete(context.Context, *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteCredential not implemented")
 }

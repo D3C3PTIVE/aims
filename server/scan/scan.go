@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/scans"
+	"github.com/maxlandon/aims/proto/rpc/scans"
 )
 
 type server struct {
@@ -36,22 +36,22 @@ func New(db *gorm.DB) *server {
 	return &server{}
 }
 
-func (server) CreateScan(context.Context, *scans.CreateScanRequest) (*scans.CreateScanResponse, error) {
+func (server) Create(context.Context, *scans.CreateScanRequest) (*scans.CreateScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateScan not implemented")
 }
 
-func (server) GetScan(context.Context, *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
+func (server) Read(context.Context, *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetScan not implemented")
 }
 
-func (server) GetScanMany(context.Context, *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
+func (server) List(context.Context, *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetScanMany not implemented")
 }
 
-func (server) UpsertScan(context.Context, *scans.UpsertScanRequest) (*scans.UpsertScanResponse, error) {
+func (server) Upsert(context.Context, *scans.UpsertScanRequest) (*scans.UpsertScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertScan not implemented")
 }
 
-func (server) DeleteScan(context.Context, *scans.DeleteScanRequest) (*scans.DeleteScanResponse, error) {
+func (server) Delete(context.Context, *scans.DeleteScanRequest) (*scans.DeleteScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteScan not implemented")
 }

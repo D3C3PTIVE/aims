@@ -25,7 +25,9 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
+	"github.com/maxlandon/aims/proto/host"
+	"github.com/maxlandon/aims/proto/network"
+	"github.com/maxlandon/aims/proto/rpc/hosts"
 )
 
 type server struct {
@@ -34,25 +36,160 @@ type server struct {
 }
 
 func New(db *gorm.DB) *server {
-	return &server{db: db}
+	return &server{db: db, UnimplementedHostsServer: &hosts.UnimplementedHostsServer{}}
 }
 
-func (server) CreateHost(context.Context, *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
+func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
+	var hostsORM []host.HostORM
+
+	for _, h := range req.GetHosts() {
+		horm, _ := h.ToORM(ctx)
+		hostsORM = append(hostsORM, horm)
+	}
+
+	err := s.db.Create(&hostsORM).Error
+
+	var hostsPB []*host.Host
+	for _, horm := range hostsORM {
+		hpb, _ := horm.ToPB(ctx)
+		hostsPB = append(hostsPB, &hpb)
+	}
+
+	// Response
+	res := &hosts.CreateHostResponse{Hosts: hostsPB}
+
+	return res, err
+}
+
+func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
+	// Convert to ORM model
+	h, err := req.GetHost().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Preload everything
+	db := s.db.Where(h).
+		Preload("Addresses").
+		Preload("HostScripts").
+		Preload("OS").
+		Preload("Status").
+		Preload("Hostnames").
+		Preload("Ports").
+		Preload("ExtraPorts").
+		Preload("Uptime").
+		Preload("Users").
+		Preload("Trace").
+		Preload("Trace.Hops")
+
+	// Query
+	hs := []*host.HostORM{}
+	err = db.First(&hs).Error
+	for _, h := range hs {
+		err = db.Model(&h).Association("Addresses").Find(h.Addresses)
+		err = db.Model(&h).Association("OS").Find(h.OS)
+	}
+
+	var addresses []*network.AddressORM
+	err = db.Find(&addresses).Error
+
+	hostspb := []*host.Host{}
+	for _, host := range hs {
+		pb, _ := host.ToPB(ctx)
+		hostspb = append(hostspb, &pb)
+	}
+
+	// Response
+	res := &hosts.ReadHostResponse{Hosts: hostspb}
+
+	return res, err
+}
+
+func (s *server) List(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
+	// Convert to ORM model
+	h, err := req.GetHost().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Preload everything
+	// TODO: Somewhat we could pass these strings from the client, much more granular control.
+	db := s.db.Where(h).
+		Preload("Addresses").
+		Preload("HostScripts").
+		Preload("OS").
+		Preload("OS.PortsUsed").
+		Preload("OS.Matches").
+		Preload("OS.Fingerprints").
+		Preload("Status").
+		Preload("Hostnames").
+		Preload("Ports").
+		Preload("ExtraPorts").
+		Preload("Uptime").
+		Preload("Users").
+		Preload("Trace").
+		Preload("Trace.Hops")
+
+	// Query
+	hostsORM := []*host.HostORM{}
+	err = db.Find(&hostsORM).Error
+
+	hostspb := []*host.Host{}
+	for _, host := range hostsORM {
+		pb, _ := host.ToPB(ctx)
+		hostspb = append(hostspb, &pb)
+	}
+
+	// Response
+	res := &hosts.ReadHostResponse{Hosts: hostspb}
+
+	return res, err
+}
+
+func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
+	// Convert to ORM model
+	// h, err := req.GetHost().ToORM(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// // Query
+	// hosts := []*host.HostORM{}
+	// err = s.db.Where(h).First(&hosts).Error
+	//
+	// hostspb := []*h.Host{}
+	// for _, host := range hosts {
+	// 	pb, _ := host.ToPB(ctx)
+	// 	hostspb = append(hostspb, &pb)
+	// }
+	//
+	// // Response
+	// res := &h.ReadHostResponse{Hosts: hostspb}
+	//
+	// return res, err
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
-func (server) GetHost(context.Context, *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetHost not implemented")
-}
-
-func (server) GetHostMany(context.Context, *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetHostMany not implemented")
-}
-
-func (server) UpsertHost(context.Context, *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertHost not implemented")
-}
-
-func (server) DeleteHost(context.Context, *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteHost not implemented")
+func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
+	// Convert to ORM model
+	// h, err := req.GetHost().ToORM(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// // Query
+	// hosts := []*host.HostORM{}
+	// err = s.db.Where(h).First(&hosts).Error
+	//
+	// hostspb := []*h.Host{}
+	// for _, host := range hosts {
+	// 	pb, _ := host.ToPB(ctx)
+	// 	hostspb = append(hostspb, &pb)
+	// }
+	//
+	// // Response
+	// res := &h.ReadHostResponse{Hosts: hostspb}
+	//
+	// return res, err
+	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }

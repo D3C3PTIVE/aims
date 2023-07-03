@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
+	"github.com/maxlandon/aims/proto/rpc/hosts"
 )
 
 type userServer struct {
@@ -34,25 +34,25 @@ type userServer struct {
 }
 
 func NewUsers(db *gorm.DB) *userServer {
-	return &userServer{db: db}
+	return &userServer{db: db, UnimplementedUsersServer: &hosts.UnimplementedUsersServer{}}
 }
 
-func (userServer) CreateUser(context.Context, *hosts.CreateUserRequest) (*hosts.CreateUserResponse, error) {
+func (userServer) Create(context.Context, *hosts.CreateUserRequest) (*hosts.CreateUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
 }
 
-func (userServer) GetUser(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
+func (userServer) Read(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUser not implemented")
 }
 
-func (userServer) GetUserMany(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
+func (userServer) List(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserMany not implemented")
 }
 
-func (userServer) UpsertUser(context.Context, *hosts.UpsertUserRequest) (*hosts.UpsertUserResponse, error) {
+func (userServer) Upsert(context.Context, *hosts.UpsertUserRequest) (*hosts.UpsertUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertUser not implemented")
 }
 
-func (userServer) DeleteUser(context.Context, *hosts.DeleteUserRequest) (*hosts.DeleteUserResponse, error) {
+func (userServer) Delete(context.Context, *hosts.DeleteUserRequest) (*hosts.DeleteUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteUser not implemented")
 }

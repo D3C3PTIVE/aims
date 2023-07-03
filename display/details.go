@@ -21,8 +21,6 @@ package display
 import (
 	"fmt"
 	"strings"
-
-	"github.com/fatih/color"
 )
 
 // Details is almost identical to Table and requires a type parameter for displaying an object with more details.
@@ -31,31 +29,32 @@ import (
 // If the headers are weighted, a newline is left between each group of headers (grouped by weight).
 func Details[T any](value T, fields map[string]func(T) string, opts ...Options) string {
 	var details string
-	var headers []string
-	var weights []int
 
 	// Prepare default weights.
 	options := defaultOpts(opts...)
-	headers = options.headers
-	for _, header := range headers {
-		weights = append(weights, options.weights[header])
+
+	headers := options.headers
+	weights := make([]int, len(headers))
+	for i, header := range headers {
+		weights[i] = options.weights[header]
 	}
 
-	currentWeight := weights[0]
-	var groupHeaders []string
+	grpWeight := weights[0]
+	var grp []string
 
-	for i, head := range headers {
-		// Continue to scan fields for the current weight.
-		weight := weights[i]
-		if weight > currentWeight {
-			group := displayGroup[T](value, groupHeaders, fields)
-			if group != "" {
-				details += group + "\n"
-			}
-			groupHeaders = make([]string, 0)
-		} else {
-			groupHeaders = append(groupHeaders, head)
+	for i, weight := range weights {
+		if weight > grpWeight {
+			grpWeight = i
+			details += displayGroup[T](value, grp, fields)
+			grp = make([]string, 0)
+			continue
 		}
+
+		grp = append(grp, headers[i])
+	}
+
+	if len(grp) > 0 {
+		details += displayGroup[T](value, grp, fields)
 	}
 
 	return strings.TrimSuffix(details, "\n\n")
@@ -68,24 +67,31 @@ func displayGroup[T any](value T, headers []string, fields map[string]func(T) st
 	// Get the padding for headers
 	for _, head := range headers {
 		if len(head) > maxLength {
-			maxLength = len(color.HiBlueString(head))
+			maxLength = len(head)
 		}
 	}
 
 	for _, head := range headers {
 		var val string
 		if fieldFunc, ok := fields[head]; ok {
+			if head == "Purpose" {
+				println("HERE")
+			}
 			val = fieldFunc(value)
 		}
 
+		if head == "Purpose" {
+			fmt.Println(val)
+		}
 		if val == "" {
 			continue
 		}
 
-		headName := fmt.Sprintf("%*s", maxLength+5, color.HiBlueString(head))
-
-		group += fmt.Sprintf("%s : %s\n", headName, val)
+		headName := fmt.Sprintf("%*s", maxLength, head)
+		fieldName := colorDetailFieldName(headName + " ")
+		value := colorDetailFieldValue(val)
+		group += fmt.Sprintf("%s: %s\n", fieldName, value)
 	}
 
-	return group
+	return group + "\n"
 }

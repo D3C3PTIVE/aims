@@ -19,22 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Scans_CreateScan_FullMethodName  = "/scans.Scans/CreateScan"
-	Scans_GetScan_FullMethodName     = "/scans.Scans/GetScan"
-	Scans_GetScanMany_FullMethodName = "/scans.Scans/GetScanMany"
-	Scans_UpsertScan_FullMethodName  = "/scans.Scans/UpsertScan"
-	Scans_DeleteScan_FullMethodName  = "/scans.Scans/DeleteScan"
+	Scans_Create_FullMethodName = "/scans.Scans/Create"
+	Scans_Read_FullMethodName   = "/scans.Scans/Read"
+	Scans_List_FullMethodName   = "/scans.Scans/List"
+	Scans_Upsert_FullMethodName = "/scans.Scans/Upsert"
+	Scans_Delete_FullMethodName = "/scans.Scans/Delete"
 )
 
 // ScansClient is the client API for Scans service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ScansClient interface {
-	CreateScan(ctx context.Context, in *CreateScanRequest, opts ...grpc.CallOption) (*CreateScanResponse, error)
-	GetScan(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error)
-	GetScanMany(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error)
-	UpsertScan(ctx context.Context, in *UpsertScanRequest, opts ...grpc.CallOption) (*UpsertScanResponse, error)
-	DeleteScan(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error)
+	Create(ctx context.Context, in *CreateScanRequest, opts ...grpc.CallOption) (*CreateScanResponse, error)
+	Read(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error)
+	List(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error)
+	Upsert(ctx context.Context, in *UpsertScanRequest, opts ...grpc.CallOption) (*UpsertScanResponse, error)
+	Delete(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error)
 }
 
 type scansClient struct {
@@ -45,45 +45,45 @@ func NewScansClient(cc grpc.ClientConnInterface) ScansClient {
 	return &scansClient{cc}
 }
 
-func (c *scansClient) CreateScan(ctx context.Context, in *CreateScanRequest, opts ...grpc.CallOption) (*CreateScanResponse, error) {
+func (c *scansClient) Create(ctx context.Context, in *CreateScanRequest, opts ...grpc.CallOption) (*CreateScanResponse, error) {
 	out := new(CreateScanResponse)
-	err := c.cc.Invoke(ctx, Scans_CreateScan_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Scans_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *scansClient) GetScan(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error) {
+func (c *scansClient) Read(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error) {
 	out := new(ReadScanResponse)
-	err := c.cc.Invoke(ctx, Scans_GetScan_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Scans_Read_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *scansClient) GetScanMany(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error) {
+func (c *scansClient) List(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error) {
 	out := new(ReadScanResponse)
-	err := c.cc.Invoke(ctx, Scans_GetScanMany_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Scans_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *scansClient) UpsertScan(ctx context.Context, in *UpsertScanRequest, opts ...grpc.CallOption) (*UpsertScanResponse, error) {
+func (c *scansClient) Upsert(ctx context.Context, in *UpsertScanRequest, opts ...grpc.CallOption) (*UpsertScanResponse, error) {
 	out := new(UpsertScanResponse)
-	err := c.cc.Invoke(ctx, Scans_UpsertScan_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Scans_Upsert_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *scansClient) DeleteScan(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error) {
+func (c *scansClient) Delete(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error) {
 	out := new(DeleteScanResponse)
-	err := c.cc.Invoke(ctx, Scans_DeleteScan_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Scans_Delete_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +94,11 @@ func (c *scansClient) DeleteScan(ctx context.Context, in *DeleteScanRequest, opt
 // All implementations must embed UnimplementedScansServer
 // for forward compatibility
 type ScansServer interface {
-	CreateScan(context.Context, *CreateScanRequest) (*CreateScanResponse, error)
-	GetScan(context.Context, *ReadScanRequest) (*ReadScanResponse, error)
-	GetScanMany(context.Context, *ReadScanRequest) (*ReadScanResponse, error)
-	UpsertScan(context.Context, *UpsertScanRequest) (*UpsertScanResponse, error)
-	DeleteScan(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error)
+	Create(context.Context, *CreateScanRequest) (*CreateScanResponse, error)
+	Read(context.Context, *ReadScanRequest) (*ReadScanResponse, error)
+	List(context.Context, *ReadScanRequest) (*ReadScanResponse, error)
+	Upsert(context.Context, *UpsertScanRequest) (*UpsertScanResponse, error)
+	Delete(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error)
 	mustEmbedUnimplementedScansServer()
 }
 
@@ -106,20 +106,20 @@ type ScansServer interface {
 type UnimplementedScansServer struct {
 }
 
-func (UnimplementedScansServer) CreateScan(context.Context, *CreateScanRequest) (*CreateScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateScan not implemented")
+func (UnimplementedScansServer) Create(context.Context, *CreateScanRequest) (*CreateScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedScansServer) GetScan(context.Context, *ReadScanRequest) (*ReadScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetScan not implemented")
+func (UnimplementedScansServer) Read(context.Context, *ReadScanRequest) (*ReadScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
-func (UnimplementedScansServer) GetScanMany(context.Context, *ReadScanRequest) (*ReadScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetScanMany not implemented")
+func (UnimplementedScansServer) List(context.Context, *ReadScanRequest) (*ReadScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedScansServer) UpsertScan(context.Context, *UpsertScanRequest) (*UpsertScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertScan not implemented")
+func (UnimplementedScansServer) Upsert(context.Context, *UpsertScanRequest) (*UpsertScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Upsert not implemented")
 }
-func (UnimplementedScansServer) DeleteScan(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteScan not implemented")
+func (UnimplementedScansServer) Delete(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
 func (UnimplementedScansServer) mustEmbedUnimplementedScansServer() {}
 
@@ -134,92 +134,92 @@ func RegisterScansServer(s grpc.ServiceRegistrar, srv ScansServer) {
 	s.RegisterService(&Scans_ServiceDesc, srv)
 }
 
-func _Scans_CreateScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Scans_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScansServer).CreateScan(ctx, in)
+		return srv.(ScansServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Scans_CreateScan_FullMethodName,
+		FullMethod: Scans_Create_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScansServer).CreateScan(ctx, req.(*CreateScanRequest))
+		return srv.(ScansServer).Create(ctx, req.(*CreateScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Scans_GetScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Scans_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScansServer).GetScan(ctx, in)
+		return srv.(ScansServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Scans_GetScan_FullMethodName,
+		FullMethod: Scans_Read_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScansServer).GetScan(ctx, req.(*ReadScanRequest))
+		return srv.(ScansServer).Read(ctx, req.(*ReadScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Scans_GetScanMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Scans_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScansServer).GetScanMany(ctx, in)
+		return srv.(ScansServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Scans_GetScanMany_FullMethodName,
+		FullMethod: Scans_List_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScansServer).GetScanMany(ctx, req.(*ReadScanRequest))
+		return srv.(ScansServer).List(ctx, req.(*ReadScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Scans_UpsertScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Scans_Upsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpsertScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScansServer).UpsertScan(ctx, in)
+		return srv.(ScansServer).Upsert(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Scans_UpsertScan_FullMethodName,
+		FullMethod: Scans_Upsert_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScansServer).UpsertScan(ctx, req.(*UpsertScanRequest))
+		return srv.(ScansServer).Upsert(ctx, req.(*UpsertScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Scans_DeleteScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Scans_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ScansServer).DeleteScan(ctx, in)
+		return srv.(ScansServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Scans_DeleteScan_FullMethodName,
+		FullMethod: Scans_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ScansServer).DeleteScan(ctx, req.(*DeleteScanRequest))
+		return srv.(ScansServer).Delete(ctx, req.(*DeleteScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -232,24 +232,24 @@ var Scans_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ScansServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateScan",
-			Handler:    _Scans_CreateScan_Handler,
+			MethodName: "Create",
+			Handler:    _Scans_Create_Handler,
 		},
 		{
-			MethodName: "GetScan",
-			Handler:    _Scans_GetScan_Handler,
+			MethodName: "Read",
+			Handler:    _Scans_Read_Handler,
 		},
 		{
-			MethodName: "GetScanMany",
-			Handler:    _Scans_GetScanMany_Handler,
+			MethodName: "List",
+			Handler:    _Scans_List_Handler,
 		},
 		{
-			MethodName: "UpsertScan",
-			Handler:    _Scans_UpsertScan_Handler,
+			MethodName: "Upsert",
+			Handler:    _Scans_Upsert_Handler,
 		},
 		{
-			MethodName: "DeleteScan",
-			Handler:    _Scans_DeleteScan_Handler,
+			MethodName: "Delete",
+			Handler:    _Scans_Delete_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

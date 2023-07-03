@@ -6,11 +6,11 @@ import "host/user.proto";
 
 // Users is a service that allows to interact with all users.
 service Users {
-   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
-   rpc GetUser(ReadUserRequest) returns (ReadUserResponse) {}
-   rpc GetUserMany(ReadUserRequest) returns (ReadUserResponse) {}
-   rpc UpsertUser(UpsertUserRequest) returns (UpsertUserResponse) {}
-   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
+   rpc Create(CreateUserRequest) returns (CreateUserResponse) {}
+   rpc Read(ReadUserRequest) returns (ReadUserResponse) {}
+   rpc List(ReadUserRequest) returns (ReadUserResponse) {}
+   rpc Upsert(UpsertUserRequest) returns (UpsertUserResponse) {}
+   rpc Delete(DeleteUserRequest) returns (DeleteUserResponse) {}
 }
 
 message CreateUserRequest {

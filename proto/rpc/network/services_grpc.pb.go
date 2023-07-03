@@ -19,22 +19,30 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Services_CreateService_FullMethodName  = "/network.Services/CreateService"
-	Services_GetService_FullMethodName     = "/network.Services/GetService"
-	Services_GetServiceMany_FullMethodName = "/network.Services/GetServiceMany"
-	Services_UpsertService_FullMethodName  = "/network.Services/UpsertService"
-	Services_DeleteService_FullMethodName  = "/network.Services/DeleteService"
+	Services_Create_FullMethodName     = "/network.Services/Create"
+	Services_Read_FullMethodName       = "/network.Services/Read"
+	Services_List_FullMethodName       = "/network.Services/List"
+	Services_Upsert_FullMethodName     = "/network.Services/Upsert"
+	Services_Delete_FullMethodName     = "/network.Services/Delete"
+	Services_ReadHost_FullMethodName   = "/network.Services/ReadHost"
+	Services_ListHost_FullMethodName   = "/network.Services/ListHost"
+	Services_UpsertHost_FullMethodName = "/network.Services/UpsertHost"
 )
 
 // ServicesClient is the client API for Services service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServicesClient interface {
-	CreateService(ctx context.Context, in *CreateServiceRequest, opts ...grpc.CallOption) (*CreateServiceResponse, error)
-	GetService(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
-	GetServiceMany(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
-	UpsertService(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error)
-	DeleteService(ctx context.Context, in *DeleteServiceRequest, opts ...grpc.CallOption) (*DeleteServiceResponse, error)
+	// Services alone, without detailed port/host information
+	Create(ctx context.Context, in *CreateServiceRequest, opts ...grpc.CallOption) (*CreateServiceResponse, error)
+	Read(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
+	List(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
+	Upsert(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error)
+	Delete(ctx context.Context, in *DeleteServiceRequest, opts ...grpc.CallOption) (*DeleteServiceResponse, error)
+	// Host services (with extra ports and lower-level stuff)
+	ReadHost(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
+	ListHost(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error)
+	UpsertHost(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error)
 }
 
 type servicesClient struct {
@@ -45,45 +53,72 @@ func NewServicesClient(cc grpc.ClientConnInterface) ServicesClient {
 	return &servicesClient{cc}
 }
 
-func (c *servicesClient) CreateService(ctx context.Context, in *CreateServiceRequest, opts ...grpc.CallOption) (*CreateServiceResponse, error) {
+func (c *servicesClient) Create(ctx context.Context, in *CreateServiceRequest, opts ...grpc.CallOption) (*CreateServiceResponse, error) {
 	out := new(CreateServiceResponse)
-	err := c.cc.Invoke(ctx, Services_CreateService_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Services_Create_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *servicesClient) GetService(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
+func (c *servicesClient) Read(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
 	out := new(ReadServiceResponse)
-	err := c.cc.Invoke(ctx, Services_GetService_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Services_Read_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *servicesClient) GetServiceMany(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
+func (c *servicesClient) List(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
 	out := new(ReadServiceResponse)
-	err := c.cc.Invoke(ctx, Services_GetServiceMany_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Services_List_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *servicesClient) UpsertService(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error) {
+func (c *servicesClient) Upsert(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error) {
 	out := new(UpsertServiceResponse)
-	err := c.cc.Invoke(ctx, Services_UpsertService_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Services_Upsert_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *servicesClient) DeleteService(ctx context.Context, in *DeleteServiceRequest, opts ...grpc.CallOption) (*DeleteServiceResponse, error) {
+func (c *servicesClient) Delete(ctx context.Context, in *DeleteServiceRequest, opts ...grpc.CallOption) (*DeleteServiceResponse, error) {
 	out := new(DeleteServiceResponse)
-	err := c.cc.Invoke(ctx, Services_DeleteService_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, Services_Delete_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *servicesClient) ReadHost(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
+	out := new(ReadServiceResponse)
+	err := c.cc.Invoke(ctx, Services_ReadHost_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *servicesClient) ListHost(ctx context.Context, in *ReadServiceRequest, opts ...grpc.CallOption) (*ReadServiceResponse, error) {
+	out := new(ReadServiceResponse)
+	err := c.cc.Invoke(ctx, Services_ListHost_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *servicesClient) UpsertHost(ctx context.Context, in *UpsertServiceRequest, opts ...grpc.CallOption) (*UpsertServiceResponse, error) {
+	out := new(UpsertServiceResponse)
+	err := c.cc.Invoke(ctx, Services_UpsertHost_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +129,16 @@ func (c *servicesClient) DeleteService(ctx context.Context, in *DeleteServiceReq
 // All implementations must embed UnimplementedServicesServer
 // for forward compatibility
 type ServicesServer interface {
-	CreateService(context.Context, *CreateServiceRequest) (*CreateServiceResponse, error)
-	GetService(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
-	GetServiceMany(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
-	UpsertService(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error)
-	DeleteService(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error)
+	// Services alone, without detailed port/host information
+	Create(context.Context, *CreateServiceRequest) (*CreateServiceResponse, error)
+	Read(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
+	List(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
+	Upsert(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error)
+	Delete(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error)
+	// Host services (with extra ports and lower-level stuff)
+	ReadHost(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
+	ListHost(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error)
+	UpsertHost(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error)
 	mustEmbedUnimplementedServicesServer()
 }
 
@@ -106,20 +146,29 @@ type ServicesServer interface {
 type UnimplementedServicesServer struct {
 }
 
-func (UnimplementedServicesServer) CreateService(context.Context, *CreateServiceRequest) (*CreateServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateService not implemented")
+func (UnimplementedServicesServer) Create(context.Context, *CreateServiceRequest) (*CreateServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Create not implemented")
 }
-func (UnimplementedServicesServer) GetService(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetService not implemented")
+func (UnimplementedServicesServer) Read(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
-func (UnimplementedServicesServer) GetServiceMany(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServiceMany not implemented")
+func (UnimplementedServicesServer) List(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedServicesServer) UpsertService(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertService not implemented")
+func (UnimplementedServicesServer) Upsert(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Upsert not implemented")
 }
-func (UnimplementedServicesServer) DeleteService(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteService not implemented")
+func (UnimplementedServicesServer) Delete(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedServicesServer) ReadHost(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadHost not implemented")
+}
+func (UnimplementedServicesServer) ListHost(context.Context, *ReadServiceRequest) (*ReadServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListHost not implemented")
+}
+func (UnimplementedServicesServer) UpsertHost(context.Context, *UpsertServiceRequest) (*UpsertServiceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertHost not implemented")
 }
 func (UnimplementedServicesServer) mustEmbedUnimplementedServicesServer() {}
 
@@ -134,92 +183,146 @@ func RegisterServicesServer(s grpc.ServiceRegistrar, srv ServicesServer) {
 	s.RegisterService(&Services_ServiceDesc, srv)
 }
 
-func _Services_CreateService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Services_Create_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServicesServer).CreateService(ctx, in)
+		return srv.(ServicesServer).Create(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Services_CreateService_FullMethodName,
+		FullMethod: Services_Create_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServicesServer).CreateService(ctx, req.(*CreateServiceRequest))
+		return srv.(ServicesServer).Create(ctx, req.(*CreateServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Services_GetService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Services_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServicesServer).GetService(ctx, in)
+		return srv.(ServicesServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Services_GetService_FullMethodName,
+		FullMethod: Services_Read_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServicesServer).GetService(ctx, req.(*ReadServiceRequest))
+		return srv.(ServicesServer).Read(ctx, req.(*ReadServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Services_GetServiceMany_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Services_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServicesServer).GetServiceMany(ctx, in)
+		return srv.(ServicesServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Services_GetServiceMany_FullMethodName,
+		FullMethod: Services_List_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServicesServer).GetServiceMany(ctx, req.(*ReadServiceRequest))
+		return srv.(ServicesServer).List(ctx, req.(*ReadServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Services_UpsertService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Services_Upsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpsertServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServicesServer).UpsertService(ctx, in)
+		return srv.(ServicesServer).Upsert(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Services_UpsertService_FullMethodName,
+		FullMethod: Services_Upsert_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServicesServer).UpsertService(ctx, req.(*UpsertServiceRequest))
+		return srv.(ServicesServer).Upsert(ctx, req.(*UpsertServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Services_DeleteService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Services_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteServiceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServicesServer).DeleteService(ctx, in)
+		return srv.(ServicesServer).Delete(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Services_DeleteService_FullMethodName,
+		FullMethod: Services_Delete_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServicesServer).DeleteService(ctx, req.(*DeleteServiceRequest))
+		return srv.(ServicesServer).Delete(ctx, req.(*DeleteServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Services_ReadHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadServiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).ReadHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Services_ReadHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).ReadHost(ctx, req.(*ReadServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Services_ListHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadServiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).ListHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Services_ListHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).ListHost(ctx, req.(*ReadServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Services_UpsertHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertServiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).UpsertHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Services_UpsertHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).UpsertHost(ctx, req.(*UpsertServiceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -232,24 +335,36 @@ var Services_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServicesServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CreateService",
-			Handler:    _Services_CreateService_Handler,
+			MethodName: "Create",
+			Handler:    _Services_Create_Handler,
 		},
 		{
-			MethodName: "GetService",
-			Handler:    _Services_GetService_Handler,
+			MethodName: "Read",
+			Handler:    _Services_Read_Handler,
 		},
 		{
-			MethodName: "GetServiceMany",
-			Handler:    _Services_GetServiceMany_Handler,
+			MethodName: "List",
+			Handler:    _Services_List_Handler,
 		},
 		{
-			MethodName: "UpsertService",
-			Handler:    _Services_UpsertService_Handler,
+			MethodName: "Upsert",
+			Handler:    _Services_Upsert_Handler,
 		},
 		{
-			MethodName: "DeleteService",
-			Handler:    _Services_DeleteService_Handler,
+			MethodName: "Delete",
+			Handler:    _Services_Delete_Handler,
+		},
+		{
+			MethodName: "ReadHost",
+			Handler:    _Services_ReadHost_Handler,
+		},
+		{
+			MethodName: "ListHost",
+			Handler:    _Services_ListHost_Handler,
+		},
+		{
+			MethodName: "UpsertHost",
+			Handler:    _Services_UpsertHost_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

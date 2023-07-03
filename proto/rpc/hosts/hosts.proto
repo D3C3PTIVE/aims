@@ -6,11 +6,11 @@ import "host/host.proto";
 
 // Hosts is a service that allows to interact with all hosts.
 service Hosts {
-   rpc CreateHost(CreateHostRequest) returns (CreateHostResponse) {}
-   rpc GetHost(ReadHostRequest) returns (ReadHostResponse) {}
-   rpc GetHostMany(ReadHostRequest) returns (ReadHostResponse) {}
-   rpc UpsertHost(UpsertHostRequest) returns (UpsertHostResponse) {}
-   rpc DeleteHost(DeleteHostRequest) returns (DeleteHostResponse) {}
+   rpc Create(CreateHostRequest) returns (CreateHostResponse) {}
+   rpc Read(ReadHostRequest) returns (ReadHostResponse) {}
+   rpc List(ReadHostRequest) returns (ReadHostResponse) {}
+   rpc Upsert(UpsertHostRequest) returns (UpsertHostResponse) {}
+   rpc Delete(DeleteHostRequest) returns (DeleteHostResponse) {}
 }
 
 message CreateHostRequest {

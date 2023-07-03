@@ -6,11 +6,11 @@ import "scan/scan.proto";
 
 // Scans is a service that allows to interact with all AIMS scans.
 service Scans {
-   rpc CreateScan(CreateScanRequest) returns (CreateScanResponse) {}
-   rpc GetScan(ReadScanRequest) returns (ReadScanResponse) {}
-   rpc GetScanMany(ReadScanRequest) returns (ReadScanResponse) {}
-   rpc UpsertScan(UpsertScanRequest) returns (UpsertScanResponse) {}
-   rpc DeleteScan(DeleteScanRequest) returns (DeleteScanResponse) {}
+   rpc Create(CreateScanRequest) returns (CreateScanResponse) {}
+   rpc Read(ReadScanRequest) returns (ReadScanResponse) {}
+   rpc List(ReadScanRequest) returns (ReadScanResponse) {}
+   rpc Upsert(UpsertScanRequest) returns (UpsertScanResponse) {}
+   rpc Delete(DeleteScanRequest) returns (DeleteScanResponse) {}
 }
 
 message CreateScanRequest {

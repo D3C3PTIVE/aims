@@ -3,14 +3,21 @@ syntax = "proto3";
 package network;
 
 import "network/service.proto";
+import "host/host.proto";
 
 // Repository is a service that allows to interact with all hosts.
 service Services {
-   rpc CreateService(CreateServiceRequest) returns (CreateServiceResponse) {}
-   rpc GetService(ReadServiceRequest) returns (ReadServiceResponse) {}
-   rpc GetServiceMany(ReadServiceRequest) returns (ReadServiceResponse) {}
-   rpc UpsertService(UpsertServiceRequest) returns (UpsertServiceResponse) {}
-   rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse) {}
+   // Services alone, without detailed port/host information
+   rpc Create(CreateServiceRequest) returns (CreateServiceResponse) {}
+   rpc Read(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc List(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc Upsert(UpsertServiceRequest) returns (UpsertServiceResponse) {}
+   rpc Delete(DeleteServiceRequest) returns (DeleteServiceResponse) {}
+
+   // Host services (with extra ports and lower-level stuff)
+   rpc ReadHost(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc ListHost(ReadServiceRequest) returns (ReadServiceResponse) {}
+   rpc UpsertHost(UpsertServiceRequest) returns (UpsertServiceResponse) {}
 }
 
 message CreateServiceRequest {
@@ -23,18 +30,22 @@ message CreateServiceResponse {
 
 message ReadServiceRequest{
     network.Service Service = 1;
+    host.Host Host = 2;
 }
 
 message ReadServiceResponse{
     repeated network.Service Services = 1;
+    repeated host.Host Host = 2;
 }
 
 message ReadServiceManyRequest{
     network.Service Service = 1;
+    host.Host Host = 2;
 }
 
 message ReadServiceManyResponse{
     repeated network.Service Services = 1;
+    repeated host.Host Host = 2;
 }
 
 message UpsertServiceRequest{
@@ -52,4 +63,3 @@ message DeleteServiceRequest{
 message DeleteServiceResponse{
     repeated network.Service Services = 1;
 }
-
