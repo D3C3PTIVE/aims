@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	"github.com/maxlandon/aims/proto/credential"
 )
 
 // ReplayableHash - A credential.PasswordHash password hash that

@@ -42,15 +42,15 @@ func init() {
 }
 
 const (
-	// Table
+	// Table.
 	ColorIDYellow = "\033"
 	ColorIDRed    = "\033"
 	ColorIDOrange = "\033"
 
-	// Details
+	// Details.
 	detailsSection = "\033"
 
-	// All
+	// All.
 	ColorHintsDim = "\033"
 )
 

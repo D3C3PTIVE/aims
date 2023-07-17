@@ -1,12 +1,11 @@
 package db
 
 import (
-	"gorm.io/gorm"
-
 	"github.com/maxlandon/aims/proto/credential"
 	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/network"
 	"github.com/maxlandon/aims/proto/scan"
+	"gorm.io/gorm"
 )
 
 /*

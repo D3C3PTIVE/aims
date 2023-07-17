@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	"github.com/maxlandon/aims/proto/credential"
 )
 
 // Private - Base type for all private credentials. A private credential is any credential

@@ -18,7 +18,7 @@ package credential
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "github.com/maxlandon/aims/proto/gen/go/credential"
+import "github.com/maxlandon/aims/proto/credential"
 
 // Origin - The origin of a credential.Core, with any information related
 // to the Origin.Type, which might manual, imports, services, crackers, etc.

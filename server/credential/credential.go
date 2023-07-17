@@ -21,12 +21,11 @@ package credential
 import (
 	"context"
 
+	"github.com/maxlandon/aims/proto/credential"
+	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-
-	"github.com/maxlandon/aims/proto/credential"
-	"github.com/maxlandon/aims/proto/rpc/credentials"
 )
 
 type server struct {

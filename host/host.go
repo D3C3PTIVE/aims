@@ -106,7 +106,7 @@ func Completions() []display.Options {
 	return headers
 }
 
-// Fields maps field names to their value generators
+// Fields maps field names to their value generators.
 var Fields = map[string]func(h *host.Host) string{
 	// Table
 	"ID": func(h *host.Host) string {

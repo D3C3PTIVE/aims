@@ -75,7 +75,6 @@ func displayGroup[T any](value T, headers []string, fields map[string]func(T) st
 		var val string
 		if fieldFunc, ok := fields[head]; ok {
 			if head == "Purpose" {
-				println("HERE")
 			}
 			val = fieldFunc(value)
 		}

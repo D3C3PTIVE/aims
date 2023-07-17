@@ -29,7 +29,7 @@ import (
 	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/md4"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	"github.com/maxlandon/aims/proto/credential"
 )
 
 // NTLMHash - A credential.Private password hash that can be credential.ReplayableHash replayed

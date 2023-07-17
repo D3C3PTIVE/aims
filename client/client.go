@@ -19,18 +19,18 @@ package client
 */
 
 import (
-	"google.golang.org/grpc"
-
 	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/network"
 	"github.com/maxlandon/aims/proto/rpc/scans"
+	"google.golang.org/grpc"
 )
 
 // Client connects to an AIMS database through a gRPC connection.
 // The client can be passed around to use the different services
 // offered by the AIMS server backend.
 type Client struct {
+	// Core
 	conn *grpc.ClientConn
 
 	// Services
@@ -40,11 +40,30 @@ type Client struct {
 	Creds    credentials.CredentialsClient
 	Logins   credentials.LoginsClient
 	Scans    scans.ScansClient
+
+	// Interface
+	// App    *console.Console
+	// printf func(format string, args ...any) (int, error)
+	// isCLI  bool
 }
 
-// New initializes an AIMS client RPC interface.
-func New() (c *Client, err error) {
+func New() (c *Client) {
+	c = &Client{}
+
 	return
+}
+
+func (c *Client) Init(conn *grpc.ClientConn) error {
+	c.conn = conn
+
+	c.Hosts = hosts.NewHostsClient(conn)
+	c.Users = hosts.NewUsersClient(conn)
+	c.Services = network.NewServicesClient(conn)
+	c.Creds = credentials.NewCredentialsClient(conn)
+	c.Logins = credentials.NewLoginsClient(conn)
+	c.Scans = scans.NewScansClient(conn)
+
+	return nil
 }
 
 // New initializes an AIMS client RPC interface with a given gRPC client connection
@@ -65,34 +84,4 @@ func NewFrom(conn *grpc.ClientConn) (c *Client, err error) {
 	}
 
 	return
-}
-
-// Hosts returns the service to interact with database hosts.
-func Hosts(c *Client) hosts.HostsClient {
-	return c.Hosts
-}
-
-// Users returns the service to interact with database users.
-func Users(c *Client) hosts.UsersClient {
-	return c.Users
-}
-
-// Services returns the service to interact with database services.
-func Services(c *Client) network.ServicesClient {
-	return c.Services
-}
-
-// Credentials returns the service to interact with database credentials.
-func Credentials(c *Client) credentials.CredentialsClient {
-	return c.Creds
-}
-
-// Logins returns the service to interact with database logins.
-func Logins(c *Client) credentials.LoginsClient {
-	return c.Logins
-}
-
-// Scans returns the service to interact with database scans.
-func Scans(c *Client) scans.ScansClient {
-	return c.Scans
 }

@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/aims/host"
 	"github.com/maxlandon/aims/network"
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	"github.com/maxlandon/aims/proto/credential"
 )
 
 // Login - The use of a credential.Core against a service.
