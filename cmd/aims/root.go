@@ -28,11 +28,6 @@ import (
 )
 
 func main() {
-	aimsCmd := &cobra.Command{
-		Use:   "aims",
-		Short: "Manage and consume a database for objects for offensive security",
-	}
-
 	// AIMS RPC client, access to database/server.
 	// No working connection yet, handled by teamclient.
 	aimsClient := client.New()
@@ -41,7 +36,7 @@ func main() {
 	teamserver, teamclient := newTeam(aimsClient)
 
 	// Generate and bind all AIM objects' subcommand/trees.
-	lib.AllCommands(aimsCmd, aimsClient)
+	lib.BindCommandsTo(aimsCmd, aimsClient)
 
 	// Pre-commands should connect the teamclient to the server.
 	aimsCmd.PersistentPreRunE = func(_ *cobra.Command, _ []string) error {
@@ -60,4 +55,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+var aimsCmd = &cobra.Command{
+	Use:   "aims",
+	Short: "Manage and consume a database for objects for offensive security",
 }

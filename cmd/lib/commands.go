@@ -27,8 +27,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// AllCommands binds all aims commands as subcommands of a parent.
-func AllCommands(rootCmd *cobra.Command, con *client.Client) {
+// BindCommandsTo binds all aims commands as subcommands of a parent.
+func BindCommandsTo(rootCmd *cobra.Command, con *client.Client) {
 	bind("database", rootCmd, con,
 		hosts.Commands,
 		credentials.Commands,
