@@ -11,24 +11,35 @@ service Hosts {
    // General
    rpc Create(CreateHostRequest) returns (CreateHostResponse) {}
    rpc Read(ReadHostRequest) returns (ReadHostResponse) {}
-   rpc List(ReadHostRequest) returns (ReadHostResponse) {}
    rpc Upsert(UpsertHostRequest) returns (UpsertHostResponse) {}
    rpc Delete(DeleteHostRequest) returns (DeleteHostResponse) {}
+}
 
-   // Specific and useful queries
-   rpc FilesUpsert(UpsertFilesRequest) returns (UpsertFilesResponse) {}
-   rpc FilesRead(ReadFilesRequest) returns (ReadFilesResponse) {}
-   rpc FilesList(ReadFilesRequest) returns (ReadFilesResponse) {}
+message HostFilters {
+    int64 MaxResults = 1;
 
-   rpc ProcessesUpsert(UpsertProcessesRequest) returns (UpsertProcessesResponse) {}
-   rpc ProcessesRead(ReadProcessesRequest) returns (ReadProcessesResponse) {}
-   rpc ProcessesList(ReadProcessesRequest) returns (ReadProcessesResponse) {}
+    bool Users = 10;
+
+    // Files: if true and read, loads host files.
+    //        if true and write, overwrites any matching file paths.
+    bool Files = 20;
+
+    // Processes: if true and read, loads host processes.
+    //            if true and write, overwrites any matching process IDs.
+    bool Processes = 30;
+
+    bool Ports = 40;
+    bool Trace = 41;
+
+    bool Scripts = 70;
+    bool OSFingerprints = 71;
 }
 
 // General
 
 message CreateHostRequest {
-    repeated host.Host Hosts = 1;
+    HostFilters Filters = 1;
+    repeated host.Host Hosts = 2;
 }
 
 message CreateHostResponse {
@@ -36,23 +47,17 @@ message CreateHostResponse {
 }
 
 message ReadHostRequest{
-    host.Host Host = 1;
+    HostFilters Filters = 1;
+    host.Host Host = 2;
 }
 
 message ReadHostResponse{
     repeated host.Host Hosts = 1;
 }
 
-message ReadHostManyRequest{
-    host.Host Host = 1;
-}
-
-message ReadHostManyResponse{
-    repeated host.Host Hosts = 1;
-}
-
 message UpsertHostRequest{
-    repeated host.Host Hosts = 1;
+    HostFilters Filters = 1;
+    repeated host.Host Hosts = 2;
 }
 
 message UpsertHostResponse{
@@ -67,36 +72,11 @@ message DeleteHostResponse{
     repeated host.Host Hosts = 1;
 }
 
-// Files
-message UpsertFilesRequest{
-    repeated host.File Files = 1;
-}
+// message ReadHostManyRequest{
+//     host.Host Host = 1;
+// }
+//
+// message ReadHostManyResponse{
+//     repeated host.Host Hosts = 1;
+// }
 
-message UpsertFilesResponse{
-    repeated host.File Files = 1;
-}
-
-message ReadFilesRequest{
-    repeated host.File Files = 1;
-}
-
-message ReadFilesResponse{
-    repeated host.File Files = 1;
-}
-
-// Processes
-message UpsertProcessesRequest{
-    repeated host.Process Processes = 1;
-}
-
-message UpsertProcessesResponse{
-    repeated host.Process Processes = 1;
-}
-
-message ReadProcessesRequest{
-    repeated host.Process Processes = 1;
-}
-
-message ReadProcessesResponse{
-    repeated host.Process Processes = 1;
-}

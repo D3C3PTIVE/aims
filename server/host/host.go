@@ -22,7 +22,6 @@ import (
 	"context"
 
 	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/network"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -62,41 +61,29 @@ func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hos
 }
 
 func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
+	filts := getFilters(req.GetFilters())
+
 	// Convert to ORM model
-	h, err := req.GetHost().ToORM(ctx)
+	hst, err := req.GetHost().ToORM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Preload everything
-	db := s.db.Where(h).
-		Preload("Addresses").
-		Preload("HostScripts").
-		Preload("OS").
-		Preload("Status").
-		Preload("Hostnames").
-		Preload("Ports").
-		Preload("Ports.Service").
-		Preload("ExtraPorts").
-		Preload("Uptime").
-		Preload("Users").
-		Preload("Trace").
-		Preload("Trace.Hops").Preload(clause.Associations)
+	dbHosts := []*host.HostORM{}
+
+	// Preloads
+	database := hostPreloads(s.db.Where(hst), req.GetFilters())
 
 	// Query
-	hs := []*host.HostORM{}
-	err = db.First(&hs).Error
-	// for _, h := range hs {
-	// err = db.Model(&h).Association("Addresses").Find(h.Addresses)
-	// err = db.Model(&h).Association("OS").Find(h.OS)
-	// err = db.Model(&h).Preload("Port.Service").Association("Ports").Find(h.Ports)
-	// }
-
-	var addresses []*network.AddressORM
-	err = db.Find(&addresses).Error
+	if filts.MaxResults == 1 {
+		database = database.First(&dbHosts)
+	} else {
+		database = database.Find(&dbHosts)
+	}
 
 	hostspb := []*host.Host{}
-	for _, host := range hs {
+
+	for _, host := range dbHosts {
 		pb, _ := host.ToPB(ctx)
 		hostspb = append(hostspb, &pb)
 	}
@@ -104,51 +91,7 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	// Response
 	res := &hosts.ReadHostResponse{Hosts: hostspb}
 
-	return res, err
-}
-
-func (s *server) List(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	// Convert to ORM model
-	h, err := req.GetHost().ToORM(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Preload everything
-	// TODO: Somewhat we could pass these strings from the client, much more granular control.
-	db := s.db.Where(h).
-		Preload("Addresses").
-		Preload("HostScripts").
-		Preload("OS").
-		Preload("OS.PortsUsed").
-		Preload("OS.Matches").
-		Preload("OS.Fingerprints").
-		Preload("Status").
-		Preload("Hostnames").
-		Preload("Ports").
-		Preload("Ports.Service").
-		Preload("Ports.State").
-		Preload("Ports.Scripts").
-		Preload("ExtraPorts").
-		Preload("Uptime").
-		Preload("Users").
-		Preload("Trace").
-		Preload("Trace.Hops")
-
-	// Query
-	hostsORM := []*host.HostORM{}
-	err = db.Find(&hostsORM).Error
-
-	hostspb := []*host.Host{}
-	for _, host := range hostsORM {
-		pb, _ := host.ToPB(ctx)
-		hostspb = append(hostspb, &pb)
-	}
-
-	// Response
-	res := &hosts.ReadHostResponse{Hosts: hostspb}
-
-	return res, err
+	return res, database.Error
 }
 
 func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
@@ -197,4 +140,58 @@ func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hos
 	//
 	// return res, err
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
+}
+
+func getFilters(filts *hosts.HostFilters) *hosts.HostFilters {
+	if filts != nil {
+		return filts
+	}
+
+	return &hosts.HostFilters{}
+}
+
+func hostPreloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
+	if filters == nil {
+		filters = &hosts.HostFilters{}
+	}
+
+	filts := map[string]bool{
+		// Base, unconditional preloads for all hosts
+		"OS":              true,
+		"OS.PortsUsed":    true,
+		"OS.Matches":      true,
+		"OS.Fingerprints": true,
+
+		"Status":    true,
+		"Hostnames": true,
+		"Uptime":    true,
+
+		// Filtered
+		"Users":            filters.Users,
+		"FileSystem":       filters.Files,
+		"FileSystem.Files": filters.Files,
+		"Processes":        filters.Processes,
+
+		"Ports":         filters.Ports,
+		"Ports.Service": filters.Ports,
+		"Ports.State":   filters.Ports,
+		"Ports.Scripts": filters.Ports,
+		"ExtraPorts":    filters.Ports,
+
+		"Trace":       filters.Trace,
+		"Trace.Hops":  filters.Trace,
+		"HostScripts": filters.Scripts,
+	}
+
+	preloaded := database.Preload(clause.Associations)
+
+	for name, load := range filts {
+		if !load {
+			continue
+		}
+
+		preloaded = preloaded.Preload(name)
+	}
+
+	return preloaded
 }

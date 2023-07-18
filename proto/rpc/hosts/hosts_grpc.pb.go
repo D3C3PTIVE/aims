@@ -19,17 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Hosts_Create_FullMethodName          = "/hosts.Hosts/Create"
-	Hosts_Read_FullMethodName            = "/hosts.Hosts/Read"
-	Hosts_List_FullMethodName            = "/hosts.Hosts/List"
-	Hosts_Upsert_FullMethodName          = "/hosts.Hosts/Upsert"
-	Hosts_Delete_FullMethodName          = "/hosts.Hosts/Delete"
-	Hosts_FilesUpsert_FullMethodName     = "/hosts.Hosts/FilesUpsert"
-	Hosts_FilesRead_FullMethodName       = "/hosts.Hosts/FilesRead"
-	Hosts_FilesList_FullMethodName       = "/hosts.Hosts/FilesList"
-	Hosts_ProcessesUpsert_FullMethodName = "/hosts.Hosts/ProcessesUpsert"
-	Hosts_ProcessesRead_FullMethodName   = "/hosts.Hosts/ProcessesRead"
-	Hosts_ProcessesList_FullMethodName   = "/hosts.Hosts/ProcessesList"
+	Hosts_Create_FullMethodName = "/hosts.Hosts/Create"
+	Hosts_Read_FullMethodName   = "/hosts.Hosts/Read"
+	Hosts_Upsert_FullMethodName = "/hosts.Hosts/Upsert"
+	Hosts_Delete_FullMethodName = "/hosts.Hosts/Delete"
 )
 
 // HostsClient is the client API for Hosts service.
@@ -39,16 +32,8 @@ type HostsClient interface {
 	// General
 	Create(ctx context.Context, in *CreateHostRequest, opts ...grpc.CallOption) (*CreateHostResponse, error)
 	Read(ctx context.Context, in *ReadHostRequest, opts ...grpc.CallOption) (*ReadHostResponse, error)
-	List(ctx context.Context, in *ReadHostRequest, opts ...grpc.CallOption) (*ReadHostResponse, error)
 	Upsert(ctx context.Context, in *UpsertHostRequest, opts ...grpc.CallOption) (*UpsertHostResponse, error)
 	Delete(ctx context.Context, in *DeleteHostRequest, opts ...grpc.CallOption) (*DeleteHostResponse, error)
-	// Specific and useful queries
-	FilesUpsert(ctx context.Context, in *UpsertFilesRequest, opts ...grpc.CallOption) (*UpsertFilesResponse, error)
-	FilesRead(ctx context.Context, in *ReadFilesRequest, opts ...grpc.CallOption) (*ReadFilesResponse, error)
-	FilesList(ctx context.Context, in *ReadFilesRequest, opts ...grpc.CallOption) (*ReadFilesResponse, error)
-	ProcessesUpsert(ctx context.Context, in *UpsertProcessesRequest, opts ...grpc.CallOption) (*UpsertProcessesResponse, error)
-	ProcessesRead(ctx context.Context, in *ReadProcessesRequest, opts ...grpc.CallOption) (*ReadProcessesResponse, error)
-	ProcessesList(ctx context.Context, in *ReadProcessesRequest, opts ...grpc.CallOption) (*ReadProcessesResponse, error)
 }
 
 type hostsClient struct {
@@ -77,15 +62,6 @@ func (c *hostsClient) Read(ctx context.Context, in *ReadHostRequest, opts ...grp
 	return out, nil
 }
 
-func (c *hostsClient) List(ctx context.Context, in *ReadHostRequest, opts ...grpc.CallOption) (*ReadHostResponse, error) {
-	out := new(ReadHostResponse)
-	err := c.cc.Invoke(ctx, Hosts_List_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *hostsClient) Upsert(ctx context.Context, in *UpsertHostRequest, opts ...grpc.CallOption) (*UpsertHostResponse, error) {
 	out := new(UpsertHostResponse)
 	err := c.cc.Invoke(ctx, Hosts_Upsert_FullMethodName, in, out, opts...)
@@ -104,60 +80,6 @@ func (c *hostsClient) Delete(ctx context.Context, in *DeleteHostRequest, opts ..
 	return out, nil
 }
 
-func (c *hostsClient) FilesUpsert(ctx context.Context, in *UpsertFilesRequest, opts ...grpc.CallOption) (*UpsertFilesResponse, error) {
-	out := new(UpsertFilesResponse)
-	err := c.cc.Invoke(ctx, Hosts_FilesUpsert_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *hostsClient) FilesRead(ctx context.Context, in *ReadFilesRequest, opts ...grpc.CallOption) (*ReadFilesResponse, error) {
-	out := new(ReadFilesResponse)
-	err := c.cc.Invoke(ctx, Hosts_FilesRead_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *hostsClient) FilesList(ctx context.Context, in *ReadFilesRequest, opts ...grpc.CallOption) (*ReadFilesResponse, error) {
-	out := new(ReadFilesResponse)
-	err := c.cc.Invoke(ctx, Hosts_FilesList_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *hostsClient) ProcessesUpsert(ctx context.Context, in *UpsertProcessesRequest, opts ...grpc.CallOption) (*UpsertProcessesResponse, error) {
-	out := new(UpsertProcessesResponse)
-	err := c.cc.Invoke(ctx, Hosts_ProcessesUpsert_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *hostsClient) ProcessesRead(ctx context.Context, in *ReadProcessesRequest, opts ...grpc.CallOption) (*ReadProcessesResponse, error) {
-	out := new(ReadProcessesResponse)
-	err := c.cc.Invoke(ctx, Hosts_ProcessesRead_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *hostsClient) ProcessesList(ctx context.Context, in *ReadProcessesRequest, opts ...grpc.CallOption) (*ReadProcessesResponse, error) {
-	out := new(ReadProcessesResponse)
-	err := c.cc.Invoke(ctx, Hosts_ProcessesList_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // HostsServer is the server API for Hosts service.
 // All implementations must embed UnimplementedHostsServer
 // for forward compatibility
@@ -165,16 +87,8 @@ type HostsServer interface {
 	// General
 	Create(context.Context, *CreateHostRequest) (*CreateHostResponse, error)
 	Read(context.Context, *ReadHostRequest) (*ReadHostResponse, error)
-	List(context.Context, *ReadHostRequest) (*ReadHostResponse, error)
 	Upsert(context.Context, *UpsertHostRequest) (*UpsertHostResponse, error)
 	Delete(context.Context, *DeleteHostRequest) (*DeleteHostResponse, error)
-	// Specific and useful queries
-	FilesUpsert(context.Context, *UpsertFilesRequest) (*UpsertFilesResponse, error)
-	FilesRead(context.Context, *ReadFilesRequest) (*ReadFilesResponse, error)
-	FilesList(context.Context, *ReadFilesRequest) (*ReadFilesResponse, error)
-	ProcessesUpsert(context.Context, *UpsertProcessesRequest) (*UpsertProcessesResponse, error)
-	ProcessesRead(context.Context, *ReadProcessesRequest) (*ReadProcessesResponse, error)
-	ProcessesList(context.Context, *ReadProcessesRequest) (*ReadProcessesResponse, error)
 	mustEmbedUnimplementedHostsServer()
 }
 
@@ -188,32 +102,11 @@ func (UnimplementedHostsServer) Create(context.Context, *CreateHostRequest) (*Cr
 func (UnimplementedHostsServer) Read(context.Context, *ReadHostRequest) (*ReadHostResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
-func (UnimplementedHostsServer) List(context.Context, *ReadHostRequest) (*ReadHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
-}
 func (UnimplementedHostsServer) Upsert(context.Context, *UpsertHostRequest) (*UpsertHostResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Upsert not implemented")
 }
 func (UnimplementedHostsServer) Delete(context.Context, *DeleteHostRequest) (*DeleteHostResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
-}
-func (UnimplementedHostsServer) FilesUpsert(context.Context, *UpsertFilesRequest) (*UpsertFilesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FilesUpsert not implemented")
-}
-func (UnimplementedHostsServer) FilesRead(context.Context, *ReadFilesRequest) (*ReadFilesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FilesRead not implemented")
-}
-func (UnimplementedHostsServer) FilesList(context.Context, *ReadFilesRequest) (*ReadFilesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FilesList not implemented")
-}
-func (UnimplementedHostsServer) ProcessesUpsert(context.Context, *UpsertProcessesRequest) (*UpsertProcessesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ProcessesUpsert not implemented")
-}
-func (UnimplementedHostsServer) ProcessesRead(context.Context, *ReadProcessesRequest) (*ReadProcessesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ProcessesRead not implemented")
-}
-func (UnimplementedHostsServer) ProcessesList(context.Context, *ReadProcessesRequest) (*ReadProcessesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ProcessesList not implemented")
 }
 func (UnimplementedHostsServer) mustEmbedUnimplementedHostsServer() {}
 
@@ -264,24 +157,6 @@ func _Hosts_Read_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Hosts_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadHostRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).List(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_List_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).List(ctx, req.(*ReadHostRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Hosts_Upsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UpsertHostRequest)
 	if err := dec(in); err != nil {
@@ -318,114 +193,6 @@ func _Hosts_Delete_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Hosts_FilesUpsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertFilesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).FilesUpsert(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_FilesUpsert_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).FilesUpsert(ctx, req.(*UpsertFilesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Hosts_FilesRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadFilesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).FilesRead(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_FilesRead_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).FilesRead(ctx, req.(*ReadFilesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Hosts_FilesList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadFilesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).FilesList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_FilesList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).FilesList(ctx, req.(*ReadFilesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Hosts_ProcessesUpsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpsertProcessesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).ProcessesUpsert(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_ProcessesUpsert_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).ProcessesUpsert(ctx, req.(*UpsertProcessesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Hosts_ProcessesRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadProcessesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).ProcessesRead(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_ProcessesRead_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).ProcessesRead(ctx, req.(*ReadProcessesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Hosts_ProcessesList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadProcessesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HostsServer).ProcessesList(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Hosts_ProcessesList_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HostsServer).ProcessesList(ctx, req.(*ReadProcessesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Hosts_ServiceDesc is the grpc.ServiceDesc for Hosts service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -442,40 +209,12 @@ var Hosts_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Hosts_Read_Handler,
 		},
 		{
-			MethodName: "List",
-			Handler:    _Hosts_List_Handler,
-		},
-		{
 			MethodName: "Upsert",
 			Handler:    _Hosts_Upsert_Handler,
 		},
 		{
 			MethodName: "Delete",
 			Handler:    _Hosts_Delete_Handler,
-		},
-		{
-			MethodName: "FilesUpsert",
-			Handler:    _Hosts_FilesUpsert_Handler,
-		},
-		{
-			MethodName: "FilesRead",
-			Handler:    _Hosts_FilesRead_Handler,
-		},
-		{
-			MethodName: "FilesList",
-			Handler:    _Hosts_FilesList_Handler,
-		},
-		{
-			MethodName: "ProcessesUpsert",
-			Handler:    _Hosts_ProcessesUpsert_Handler,
-		},
-		{
-			MethodName: "ProcessesRead",
-			Handler:    _Hosts_ProcessesRead_Handler,
-		},
-		{
-			MethodName: "ProcessesList",
-			Handler:    _Hosts_ProcessesList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

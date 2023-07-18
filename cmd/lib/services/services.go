@@ -50,7 +50,7 @@ func Commands(con *client.Client) *cobra.Command {
 			// 	Service: &pb.Service{},
 			// 	Host:    &host.Host{},
 			// })
-			res, err := con.Hosts.List(command.Context(), &hosts.ReadHostRequest{
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
 			})
 			if err = aims.CheckError(err); err != nil {
@@ -92,7 +92,7 @@ func Commands(con *client.Client) *cobra.Command {
 			options := network.Details()
 
 			// Request
-			res, err := con.Hosts.List(cmd.Context(), &hosts.ReadHostRequest{
+			res, err := con.Hosts.Read(cmd.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
 			})
 			err = aims.CheckError(err)
@@ -127,7 +127,7 @@ func Commands(con *client.Client) *cobra.Command {
 func CompleteByID(client *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		// Request
-		res, err := client.Hosts.List(context.Background(), &hosts.ReadHostRequest{
+		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
 		})
 		if err = aims.CheckError(err); err != nil {

@@ -50,7 +50,7 @@ func (c *hostClient) Read(host *host.Host) *host.Host {
 	return nil
 }
 
-// ReadByID returns a host by its ID (optionally shortened), or nil if found in database.
+// ReadByID returns a host by its ID (optionally shortened), or nil if not found in database.
 func (c *hostClient) ReadByID(id string) *host.Host {
 	return nil
 }
