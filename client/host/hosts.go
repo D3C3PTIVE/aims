@@ -1,4 +1,4 @@
-package client
+package host
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
