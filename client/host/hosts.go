@@ -28,6 +28,7 @@ import (
 
 type hostClient struct {
 	*client.Client
+	h *host.Host
 }
 
 func Hosts(c *client.Client) hostClient {
@@ -72,4 +73,14 @@ func (c *hostClient) Delete(host ...*host.Host) {
 
 // Delete one or more hosts in database.
 func (c *hostClient) DeleteByID(id string) {
+}
+
+func (c hostClient) WithHost(h *host.Host) hostClient {
+	c.h = h
+	return c
+}
+
+func (c hostClient) WithHostID(id string) hostClient {
+	c.h = &host.Host{Id: id}
+	return c
 }
