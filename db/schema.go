@@ -1,6 +1,7 @@
 package db
 
 import (
+	"github.com/maxlandon/aims/proto/c2"
 	"github.com/maxlandon/aims/proto/credential"
 	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/network"
@@ -55,11 +56,18 @@ func Migrate(db *gorm.DB) error {
 		host.UserORM{},
 		host.GroupORM{},
 		host.HostORM{},
+		host.FileSystemORM{},
+		host.FileORM{},
 
 		// Credentials
 		credential.CoreORM{},
 
 		// Scans
 		scan.RunORM{},
+
+		// C2
+		c2.TaskORM{},
+		c2.ChannelORM{},
+		c2.AgentORM{},
 	)
 }

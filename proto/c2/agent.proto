@@ -10,7 +10,10 @@ import "options/gorm.proto";
 import "host/host.proto";
 import "host/user.proto";
 import "host/process.proto";
+import "c2/channel.proto";
 
+// Agent represents a C2 agent/implant program, irrespective
+// of the communication channels and behavior it makes use of.
 message Agent {
   option (gorm.opts).ormable = true;
   // @gotags: display:"ID" readonly:"true" strict:"yes"
@@ -27,6 +30,7 @@ message Agent {
   string Tool = 12;
   bool Burned = 13;
   bool IsDead = 14;
+  string Arch = 15;
 
   // System
   string Locale = 30;
@@ -37,17 +41,13 @@ message Agent {
   // Communications
   int64 FirstContact = 50;
   int64 LastCheckin = 51;
-
-  string UUID = 70;
-  string Transport = 71;
-  string RemoteAddress = 72;
-  string ProxyURL = 73;
-  int64 PeerID = 74;
+  repeated Channel Channels = 52;
 
   // Others
   repeated Task Tasks = 90;
   int64 TasksCount = 91;
   int64 TasksCountCompleted = 92;
+  string WorkingDirectory = 93;
 }
 
 // Task represents a task to run on a target host, irrespective of
@@ -67,16 +67,7 @@ message Task {
 
   // string AgentID = 10;
   string State = 10;
-  bytes Request = 11;
-  bytes Response = 12;
+  string Request = 11; // bytes
+  string Response = 12; // bytes
   string Description = 13;
 }
-
-// message Beacon {
-  // string ProxyURL = 20;
-  // int64 ReconnectInterval = 21;
-  // int64 Interval = 22;
-  // int64 Jitter = 23;
-  // int64 NextCheckin = 25;
-// }
-

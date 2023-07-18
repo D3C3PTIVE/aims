@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package c2;
+
+// DB 
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// Channel represents an active C2 communication channel between 
+// an Agent and an arbitrary counterpart (a server, a pivot agent, etc).
+// This channel might not be active in the sense that communication is
+// established, and might be simply "available" to an agent without it
+// running and using it already.
+message Channel {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // Base
+  string AgentID = 10;
+  string PeerID = 11;
+  int32 Order = 12;
+  bool Running = 13;
+  string RemoteAddress = 14;
+  string ProxyURL = 15;
+  // Malleable Profile = 13;
+  // Also add a simpler field for querying URI/remotes.
+
+  int64 ReconnectInterval = 21;
+  int64 Interval = 22;
+  int64 Jitter = 23;
+
+  // Live
+  int32 Attempts = 30;
+  int32 Failures = 31;
+  int64 NextCheckin = 32;
+  // string LocalAddress = 8; // Filled by the Connection type
+  // string RemoteAddress = 9; // Filled by the Connection type
+}
