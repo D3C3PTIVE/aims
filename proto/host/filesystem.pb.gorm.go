@@ -125,7 +125,11 @@ type FileORM struct {
 	Data         string
 	FileSystemId *string
 	Id           string `gorm:"type:uuid;primary_key"`
+	IsDir        bool
+	ModTime      int64
+	Mode         string
 	Name         string
+	Size         int64
 	UpdatedAt    *time.Time
 }
 
@@ -154,6 +158,10 @@ func (m *File) ToORM(ctx context.Context) (FileORM, error) {
 		to.UpdatedAt = &t
 	}
 	to.Name = m.Name
+	to.IsDir = m.IsDir
+	to.Size = m.Size
+	to.ModTime = m.ModTime
+	to.Mode = m.Mode
 	to.Data = m.Data
 	if posthook, ok := interface{}(m).(FileWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
@@ -179,6 +187,10 @@ func (m *FileORM) ToPB(ctx context.Context) (File, error) {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
 	to.Name = m.Name
+	to.IsDir = m.IsDir
+	to.Size = m.Size
+	to.ModTime = m.ModTime
+	to.Mode = m.Mode
 	to.Data = m.Data
 	if posthook, ok := interface{}(m).(FileWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
@@ -952,6 +964,22 @@ func DefaultApplyFieldMaskFile(ctx context.Context, patchee *File, patcher *File
 		}
 		if f == prefix+"Name" {
 			patchee.Name = patcher.Name
+			continue
+		}
+		if f == prefix+"IsDir" {
+			patchee.IsDir = patcher.IsDir
+			continue
+		}
+		if f == prefix+"Size" {
+			patchee.Size = patcher.Size
+			continue
+		}
+		if f == prefix+"ModTime" {
+			patchee.ModTime = patcher.ModTime
+			continue
+		}
+		if f == prefix+"Mode" {
+			patchee.Mode = patcher.Mode
 			continue
 		}
 		if f == prefix+"Data" {

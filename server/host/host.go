@@ -167,10 +167,10 @@ func hostPreloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
 		"Uptime":    true,
 
 		// Filtered
-		"Users":            filters.Users,
-		"FileSystem":       filters.Files,
-		"FileSystem.Files": filters.Files,
-		"Processes":        filters.Processes,
+		"Users":     filters.Users,
+		"FS":        filters.Files,
+		"FS.Files":  filters.Files,
+		"Processes": filters.Processes,
 
 		"Ports":         filters.Ports,
 		"Ports.Service": filters.Ports,

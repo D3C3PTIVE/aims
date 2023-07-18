@@ -35,5 +35,11 @@ message File {
   google.protobuf.Timestamp UpdatedAt = 5;
 
   string Name = 10;
-  string Data = 11; // bytes
+  bool IsDir = 11;
+  int64 Size = 12;
+  int64 ModTime = 13;
+  string Mode = 14;
+
+  string Data = 20; // bytes
 }
+

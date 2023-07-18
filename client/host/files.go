@@ -20,27 +20,36 @@ package host
 
 import "github.com/maxlandon/aims/proto/host"
 
+// ReadDir returns files contained inside one ore directory paths.
 func (c *hostClient) ReadDir(hostID string, paths ...string) []*host.File {
 	return nil
 }
 
+// ReadFile returns the file for the provided path, if its exists.
 func (c *hostClient) ReadFile(name string) *host.File {
 	return nil
 }
 
-func (c *hostClient) UpsertFiles(hostID string, files ...string) {
+// UpsertFiles creates or overwrites a list of file paths in the database.
+// This will only update/create them with their pathname.
+func (c *hostClient) UpsertFilePaths(hostID string, files ...string) {
 }
 
-func (c *hostClient) UpsertFilesData(hostID string, files ...*host.File) {
+// UpsertFilesData is like UpsertFilePaths but creating/overwriting files
+// with more complete metadata and content.
+func (c *hostClient) UpsertFiles(hostID string, files ...*host.File) {
 }
 
+// ListProcesses returns the list of processes for the given host.
 func (c *hostClient) ListProcesses(hostID string) []*host.Process {
 	return nil
 }
 
-func (c *hostClient) ReadProcess(name string) *host.Process {
+// ReadProcess returns a single process by its ID (PID used in host).
+func (c *hostClient) ReadProcess(id string) *host.Process {
 	return nil
 }
 
+// UpsertProcesses creates or updates a list processes on the given host.
 func (c *hostClient) UpsertProcesses(hostID string, processes ...*host.Process) {
 }
