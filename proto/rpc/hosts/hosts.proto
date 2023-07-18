@@ -3,15 +3,29 @@ syntax = "proto3";
 package hosts;
 
 import "host/host.proto";
+import "host/process.proto";
+import "host/filesystem.proto";
 
 // Hosts is a service that allows to interact with all hosts.
 service Hosts {
+   // General
    rpc Create(CreateHostRequest) returns (CreateHostResponse) {}
    rpc Read(ReadHostRequest) returns (ReadHostResponse) {}
    rpc List(ReadHostRequest) returns (ReadHostResponse) {}
    rpc Upsert(UpsertHostRequest) returns (UpsertHostResponse) {}
    rpc Delete(DeleteHostRequest) returns (DeleteHostResponse) {}
+
+   // Specific and useful queries
+   rpc FilesUpsert(UpsertFilesRequest) returns (UpsertFilesResponse) {}
+   rpc FilesRead(ReadFilesRequest) returns (ReadFilesResponse) {}
+   rpc FilesList(ReadFilesRequest) returns (ReadFilesResponse) {}
+
+   rpc ProcessesUpsert(UpsertProcessesRequest) returns (UpsertProcessesResponse) {}
+   rpc ProcessesRead(ReadProcessesRequest) returns (ReadProcessesResponse) {}
+   rpc ProcessesList(ReadProcessesRequest) returns (ReadProcessesResponse) {}
 }
+
+// General
 
 message CreateHostRequest {
     repeated host.Host Hosts = 1;
@@ -51,4 +65,38 @@ message DeleteHostRequest{
 
 message DeleteHostResponse{
     repeated host.Host Hosts = 1;
+}
+
+// Files
+message UpsertFilesRequest{
+    repeated host.File Files = 1;
+}
+
+message UpsertFilesResponse{
+    repeated host.File Files = 1;
+}
+
+message ReadFilesRequest{
+    repeated host.File Files = 1;
+}
+
+message ReadFilesResponse{
+    repeated host.File Files = 1;
+}
+
+// Processes
+message UpsertProcessesRequest{
+    repeated host.Process Processes = 1;
+}
+
+message UpsertProcessesResponse{
+    repeated host.Process Processes = 1;
+}
+
+message ReadProcessesRequest{
+    repeated host.Process Processes = 1;
+}
+
+message ReadProcessesResponse{
+    repeated host.Process Processes = 1;
 }
