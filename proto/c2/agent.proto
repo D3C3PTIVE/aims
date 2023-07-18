@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package c2;
+
+// DB 
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// Common
+import "host/host.proto";
+import "host/user.proto";
+import "host/process.proto";
+
+message Agent {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // Core
+  host.Host Host = 9 [(gorm.field).belongs_to = {}];
+  string Name = 10;
+  string Runtime = 11;
+  string Tool = 12;
+  bool Burned = 13;
+  bool IsDead = 14;
+
+  // System
+  string Locale = 30;
+  string Filename = 31; // Argv[0]
+  host.User User = 32 [(gorm.field).belongs_to = {}];
+  host.Process Process = 34 [(gorm.field).belongs_to = {}];
+
+  // Communications
+  int64 FirstContact = 50;
+  int64 LastCheckin = 51;
+
+  string UUID = 70;
+  string Transport = 71;
+  string RemoteAddress = 72;
+  string ProxyURL = 73;
+  int64 PeerID = 74;
+
+  // Others
+  repeated Task Tasks = 90;
+  int64 TasksCount = 91;
+  int64 TasksCountCompleted = 92;
+}
+
+// Task represents a task to run on a target host, irrespective of
+// C2 channel/types through which it's sent and its results received.
+message Task {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+  // @gotags: display:"Sent at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp SentAt = 6;
+  // @gotags: display:"Completed at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CompletedAt = 7;
+
+  // string AgentID = 10;
+  string State = 10;
+  bytes Request = 11;
+  bytes Response = 12;
+  string Description = 13;
+}
+
+// message Beacon {
+  // string ProxyURL = 20;
+  // int64 ReconnectInterval = 21;
+  // int64 Interval = 22;
+  // int64 Jitter = 23;
+  // int64 NextCheckin = 25;
+// }
+
