@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package host;
+
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// Common
+import "host/user.proto";
+
+// Process - A basic process data type
+message Process {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // @gotags: display:"PID" 
+  int32 Pid = 10;
+  // @gotags: display:"PPID" 
+  int32 Ppid = 11;
+  // @gotags: display:"Executable" 
+  string Executable = 12;
+  // @gotags: display:"Owner" 
+  User Owner = 13;
+  // @gotags: display:"Arch" 
+  string Architecture = 14;
+  // @gotags: display:"CmdLine" 
+  repeated string CmdLine = 16;
+}

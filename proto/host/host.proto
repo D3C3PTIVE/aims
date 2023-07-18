@@ -8,6 +8,7 @@ import "options/gorm.proto";
 
 // Common
 import "host/os.proto";
+import "host/process.proto";
 import "host/port.proto";
 import "host/user.proto";
 import "network/network.proto";
@@ -54,9 +55,13 @@ message Host {
   // @gotags: display:"Virtual Host" 
   string VirtualHost = 21;
 
+  // @gotags: display:"Users" 
   repeated User Users = 22;
+  // @gotags: display:"Processes" 
+  repeated Process Processes = 23;
+
   // @gotags: xml:"address" 
-  repeated network.Address Addresses = 23 [(gorm.field).many_to_many = {}];
+  repeated network.Address Addresses = 24 [(gorm.field).many_to_many = {}];
 
   // Nmap ---------------------------------------
   // @gotags: xml:"os"
