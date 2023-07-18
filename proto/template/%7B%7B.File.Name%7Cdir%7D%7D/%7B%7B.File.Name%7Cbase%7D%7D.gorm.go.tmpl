@@ -1,6 +1,6 @@
 package {{.File.Name | dir | base }}
 
-{{ if and (not (.File.Name|contains "families")) (not (.File.Name|contains "rpc")) (not (.File.Name|contains "gorm")) (not (.File.Name|contains "types")) (not (.File.Name|contains "google")) }}
+{{ if and (not (.File.Name|contains "families")) (not (.File.Name|contains "rpc")) (not (.File.Name|contains "gorm")) (not (.File.Name|contains "types")) (not (.File.Name|contains "google")) (not (.File.Name|contains "process"))}}
 
 import (
 	"github.com/gofrs/uuid"

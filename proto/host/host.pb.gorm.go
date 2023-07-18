@@ -23,7 +23,9 @@ type HostORM struct {
 	Distance        *network.DistanceORM `gorm:"foreignkey:DistanceId;association_foreignkey:Id"`
 	DistanceId      *string
 	EndTime         int64
-	ExtraPorts      []*ExtraPortORM          `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	ExtraPorts      []*ExtraPortORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	FS              *FileSystemORM  `gorm:"foreignkey:FileSystemId;association_foreignkey:Id"`
+	FileSystemId    *string
 	HostScripts     []*nmap.ScriptORM        `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:ScriptId"`
 	Hostnames       []*HostnameORM           `gorm:"foreignkey:HostId;association_foreignkey:Id"`
 	ICMPResponse    *network.ICMPResponseORM `gorm:"foreignkey:ICMPResponseId;association_foreignkey:Id"`
@@ -119,6 +121,13 @@ func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 		} else {
 			to.Processes = append(to.Processes, nil)
 		}
+	}
+	if m.FS != nil {
+		tempFS, err := m.FS.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.FS = &tempFS
 	}
 	for _, v := range m.Addresses {
 		if v != nil {
@@ -315,6 +324,13 @@ func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 		} else {
 			to.Processes = append(to.Processes, nil)
 		}
+	}
+	if m.FS != nil {
+		tempFS, err := m.FS.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.FS = &tempFS
 	}
 	for _, v := range m.Addresses {
 		if v != nil {
@@ -1068,6 +1084,7 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 	var err error
 	var updatedCreatedAt bool
 	var updatedUpdatedAt bool
+	var updatedFS bool
 	var updatedOS bool
 	var updatedStatus bool
 	var updatedDistance bool
@@ -1183,6 +1200,27 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 		}
 		if f == prefix+"Processes" {
 			patchee.Processes = patcher.Processes
+			continue
+		}
+		if !updatedFS && strings.HasPrefix(f, prefix+"FS.") {
+			updatedFS = true
+			if patcher.FS == nil {
+				patchee.FS = nil
+				continue
+			}
+			if patchee.FS == nil {
+				patchee.FS = &FileSystem{}
+			}
+			if o, err := DefaultApplyFieldMaskFileSystem(ctx, patchee.FS, patcher.FS, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"FS.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.FS = o
+			}
+			continue
+		}
+		if f == prefix+"FS" {
+			updatedFS = true
+			patchee.FS = patcher.FS
 			continue
 		}
 		if f == prefix+"Addresses" {

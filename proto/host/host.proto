@@ -11,6 +11,7 @@ import "host/os.proto";
 import "host/process.proto";
 import "host/port.proto";
 import "host/user.proto";
+import "host/filesystem.proto";
 import "network/network.proto";
 import "network/packet.proto";
 
@@ -59,9 +60,11 @@ message Host {
   repeated User Users = 22;
   // @gotags: display:"Processes" 
   repeated Process Processes = 23;
+  // @gotags: display:"Filesystem" 
+  FileSystem FS = 24 [(gorm.field).belongs_to = {}];;
 
   // @gotags: xml:"address" 
-  repeated network.Address Addresses = 24 [(gorm.field).many_to_many = {}];
+  repeated network.Address Addresses = 25 [(gorm.field).many_to_many = {}];
 
   // Nmap ---------------------------------------
   // @gotags: xml:"os"

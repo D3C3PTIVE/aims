@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package host;
+
+// DB 
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// FileSystem is a basic representation/storage for a given filesystem.
+// Its first goal is to store a list of files/paths, and optionally their
+// data. A filesystem can belong to a host.Host, but this is not mandatory.
+message FileSystem {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  string HostID = 10;
+
+  repeated File Files = 20;
+}
+
+// File - A basic file data type
+message File {
+  option (gorm.opts).ormable = true;
+
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  string Name = 10;
+  string Data = 11; // bytes
+}
