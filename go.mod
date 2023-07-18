@@ -12,6 +12,7 @@ require (
 	github.com/maxlandon/gondor v0.0.0-20211107181652-b501c4771abd
 	github.com/reeflective/team v0.0.0-20230716132631-f6b25f90c23b
 	github.com/rsteube/carapace v0.39.1
+	github.com/rsteube/carapace-bin v0.25.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/crypto v0.8.0
@@ -52,6 +53,7 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/tetratelabs/wazero v1.2.1 // indirect
+	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
 	golang.org/x/sys v0.9.0 // indirect
 	golang.org/x/text v0.9.0 // indirect

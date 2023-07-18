@@ -58,6 +58,7 @@ func main() {
 }
 
 var aimsCmd = &cobra.Command{
-	Use:   "aims",
-	Short: "Manage and consume a database for objects for offensive security",
+	Use:          "aims",
+	Short:        "Manage and consume a database for objects for offensive security",
+	SilenceUsage: true,
 }

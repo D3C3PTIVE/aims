@@ -34,12 +34,12 @@ type Address network.Address
 // General Functions
 //
 
-// ToORM - Get the SQL object for the Host
+// ToORM - Get the SQL object for the Host.
 func (a *Address) ToORM(ctx context.Context) (network.AddressORM, error) {
 	return (*network.Address)(a).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Host
+// ToPB - Get the Protobuf object for the Host.
 func (a *Address) ToPB() *network.Address {
 	return (*network.Address)(a)
 }

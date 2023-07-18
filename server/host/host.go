@@ -21,13 +21,13 @@ package host
 import (
 	"context"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"gorm.io/gorm"
-
 	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/network"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type server struct {
@@ -76,19 +76,21 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 		Preload("Status").
 		Preload("Hostnames").
 		Preload("Ports").
+		Preload("Ports.Service").
 		Preload("ExtraPorts").
 		Preload("Uptime").
 		Preload("Users").
 		Preload("Trace").
-		Preload("Trace.Hops")
+		Preload("Trace.Hops").Preload(clause.Associations)
 
 	// Query
 	hs := []*host.HostORM{}
 	err = db.First(&hs).Error
-	for _, h := range hs {
-		err = db.Model(&h).Association("Addresses").Find(h.Addresses)
-		err = db.Model(&h).Association("OS").Find(h.OS)
-	}
+	// for _, h := range hs {
+	// err = db.Model(&h).Association("Addresses").Find(h.Addresses)
+	// err = db.Model(&h).Association("OS").Find(h.OS)
+	// err = db.Model(&h).Preload("Port.Service").Association("Ports").Find(h.Ports)
+	// }
 
 	var addresses []*network.AddressORM
 	err = db.Find(&addresses).Error
@@ -124,6 +126,9 @@ func (s *server) List(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 		Preload("Status").
 		Preload("Hostnames").
 		Preload("Ports").
+		Preload("Ports.Service").
+		Preload("Ports.State").
+		Preload("Ports.Scripts").
 		Preload("ExtraPorts").
 		Preload("Uptime").
 		Preload("Users").
