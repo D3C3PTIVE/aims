@@ -18,7 +18,9 @@ package host
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "github.com/maxlandon/aims/proto/host"
+import (
+	"github.com/maxlandon/aims/proto/host"
+)
 
 // ReadDir returns files contained inside one ore directory paths.
 func (c *hostClient) ReadDir(hostID string, paths ...string) []*host.File {

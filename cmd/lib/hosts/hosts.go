@@ -142,6 +142,10 @@ func Commands(client *client.Client) *cobra.Command {
 // CompleteByID returns hosts completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		if msg, err := client.ConnectComplete(); err != nil {
+			return msg
+		}
+
 		// Request
 		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
@@ -163,6 +167,10 @@ func CompleteByID(client *client.Client) carapace.Action {
 // or if not found for some hosts, their corresponding addresses.
 func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		if msg, err := client.ConnectComplete(); err != nil {
+			return msg
+		}
+
 		// Request
 		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
