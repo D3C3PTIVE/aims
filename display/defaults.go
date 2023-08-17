@@ -26,9 +26,10 @@ import (
 	"github.com/jedib0t/go-pretty/v6/text"
 )
 
-// Those variables are very important to realine low-level code: all virtual terminal
-// escape sequences should always be sent and read through the raw terminal file, even
-// if people start using io.MultiWriters and os.Pipes involving basic IO.
+// Those variables are very important to realine low-level code: all virtual
+// terminal escape sequences should always be sent and read through the raw
+// terminal file, even if people start using io.MultiWriters and os.Pipes
+// involving basic IO.
 var (
 	stdoutTerm *os.File
 	stdinTerm  *os.File
