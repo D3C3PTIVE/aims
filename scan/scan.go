@@ -48,6 +48,11 @@ func NewRun(scanner string, args ...string) *Run {
 	}
 }
 
+// ToPB - Get the Protobuf object for the Result.
+func (r *Run) ToPB() *scan.Run {
+	return (*scan.Run)(r)
+}
+
 // Functionality
 //
 // Return a concurrent spinner/progress bar / interface for progress

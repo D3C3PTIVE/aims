@@ -28,18 +28,18 @@ import (
 
 	"github.com/maxlandon/aims/client"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/maxlandon/aims/proto/rpc/scans"
+	pb "github.com/maxlandon/aims/proto/scan"
 	"github.com/maxlandon/aims/scan/nmap"
 )
 
 // Commands returns all scan commands.
 func Commands(con *client.Client) *cobra.Command {
 	scanCmd := &cobra.Command{
-		Use:     "scan",
+        Use: "scan",
 		Short:   "Manage running and database scans",
 		GroupID: "database",
 	}
-
 	importCmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import (running or finished) scans data from one or more files",
@@ -63,15 +63,18 @@ func Commands(con *client.Client) *cobra.Command {
 				// monitoring the scan file.
 
 				// Register all objects to database, with adjustements.
-				_, err = con.Hosts.Create(command.Context(), &hosts.CreateHostRequest{
-					Hosts: genericScan.Hosts,
+				_, err = con.Scans.Create(command.Context(), &scans.CreateScanRequest{
+					Scans: []*pb.Run{genericScan.ToPB()},
 				})
+
+				// _, err = con.Hosts.Create(command.Context(), &hosts.CreateHostRequest{
+				// 	Hosts: genericScan.Hosts,
+				// })
 				err = aims.CheckError(err)
 				if err != nil {
 					fmt.Printf("Error: %s\n", err)
 					return nil
 				}
-
 			}
 
 			return nil

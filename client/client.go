@@ -73,6 +73,8 @@ func New(opts ...grpc.DialOption) (con *Client, err error) {
 	return con, err
 }
 
+
+// Init registers all gRPC clients to the existing teamclient connection.
 func (c *Client) Init() error {
 	if c.dialer.Conn == nil {
 		return errors.New("No grpc client connection")

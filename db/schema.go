@@ -6,6 +6,7 @@ import (
 	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/network"
 	"github.com/maxlandon/aims/proto/scan"
+	"github.com/maxlandon/aims/proto/scan/nmap"
 	"gorm.io/gorm"
 )
 
@@ -64,6 +65,20 @@ func Migrate(db *gorm.DB) error {
 
 		// Scans
 		scan.RunORM{},
+		scan.InfoORM{},
+		scan.DebuggingORM{},
+		scan.VerboseORM{},
+		scan.FinishedORM{},
+		scan.StatsORM{},
+		scan.HostStatsORM{},
+		scan.TargetORM{},
+		scan.ScanTaskORM{},
+		scan.TaskProgressORM{},
+
+		nmap.ScriptORM{},
+		nmap.SmurfORM{},
+		nmap.TableORM{},
+		nmap.ElementORM{},
 
 		// C2
 		c2.TaskORM{},

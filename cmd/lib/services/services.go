@@ -138,6 +138,9 @@ func CompleteByID(client *client.Client) carapace.Action {
 		// Request
 		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
+            Filters: &hosts.HostFilters{
+                Ports: true,
+            },
 		})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)

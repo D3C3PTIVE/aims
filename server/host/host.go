@@ -36,10 +36,14 @@ type server struct {
 	*hosts.UnimplementedHostsServer
 }
 
+
+// New returns a new database host server, from a given db.
 func New(db *gorm.DB) *server {
 	return &server{db: db, UnimplementedHostsServer: &hosts.UnimplementedHostsServer{}}
 }
 
+
+// Create creates one or more new hosts in the database.
 func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
 	var hostsORM []pb.HostORM
 
@@ -68,6 +72,7 @@ func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hos
 	return res, err
 }
 
+// Read reads one or more hosts from the database, with optional filters and elements to preload.
 func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
 	filts := getFilters(req.GetFilters())
 
@@ -101,6 +106,7 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 
 	return res, database.Error
 }
+
 
 func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
 	// Convert to ORM model
@@ -150,6 +156,7 @@ func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hos
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
+// Preloads loads a given database with preload hosts association clauses before querying.
 func Preloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
 	if filters == nil {
 		filters = &hosts.HostFilters{}

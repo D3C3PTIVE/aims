@@ -39,10 +39,12 @@ type server struct {
 	*scans.UnimplementedScansServer
 }
 
+// New returns a new database scan server, from a given db.
 func New(db *gorm.DB) *server {
 	return &server{db: db, UnimplementedScansServer: &scans.UnimplementedScansServer{}}
 }
 
+// Create creates one or more new scan runs in the database.
 func (s *server) Create(ctx context.Context, req *scans.CreateScanRequest) (*scans.CreateScanResponse, error) {
 	var hostsORM []pb.RunORM
 
@@ -79,6 +81,7 @@ func (s *server) Create(ctx context.Context, req *scans.CreateScanRequest) (*sca
 	return res, err
 }
 
+// Read reads one or more scans from the database, with optional filters and elements to preload.
 func (s *server) Read(ctx context.Context, req *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
 	filts := getFilters(req.GetFilters())
 
@@ -145,7 +148,6 @@ func FilterIdenticalScan(raw []pb.RunORM, dbHosts []*pb.RunORM) (filtered []pb.R
 		// Check IDs: if non-nil and identical, done checking.
 
 		// Concurrently check all hosts for an identical trace.
-		done.Add(1)
 		go func() {
 		}()
 
@@ -168,6 +170,7 @@ func allScansIdentical(all []*pb.RunORM) (yes bool, matches int) {
 	return false, 0
 }
 
+// Preloads loads a given database with preload scan association clauses before querying.
 func Preloads(database *gorm.DB, filters *scans.RunFilters) *gorm.DB {
 	if filters == nil {
 		filters = &scans.RunFilters{}

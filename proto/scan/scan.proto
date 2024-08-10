@@ -61,11 +61,11 @@ message Run {
   // @gotags: xml:"target" 
   repeated Target Targets = 24 [(gorm.field).many_to_many = {}];
   // @gotags: xml:"taskbegin" 
-  repeated Task Begin = 25 [(gorm.field).many_to_many = {}];
+  repeated ScanTask Begin = 25 [(gorm.field).many_to_many = {}];
   // @gotags: xml:"taskprogress" 
   repeated TaskProgress Progress = 26 [(gorm.field).many_to_many = {}];
   // @gotags: xml:"taskend" 
-  repeated Task End = 27 [(gorm.field).many_to_many = {}];
+  repeated ScanTask End = 27 [(gorm.field).many_to_many = {}];
 
   repeated string NmapErrors = 28;
   string RawXML = 30;
@@ -118,8 +118,8 @@ message Debugging {
   int32 Level = 10;
 }
 
-// Task - Information about a task
-message Task {
+// ScanTask - Information about a task
+message ScanTask {
   option (gorm.opts).ormable = true;
   string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
