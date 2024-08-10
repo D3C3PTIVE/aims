@@ -52,6 +52,9 @@ func Commands(con *client.Client) *cobra.Command {
 			// })
 			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+				},
 			})
 			if err = aims.CheckError(err); err != nil {
 				return err
@@ -94,6 +97,9 @@ func Commands(con *client.Client) *cobra.Command {
 			// Request
 			res, err := con.Hosts.Read(cmd.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+				},
 			})
 			err = aims.CheckError(err)
 			if err != nil {

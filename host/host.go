@@ -151,6 +151,9 @@ var Fields = map[string]func(h *host.Host) string{
 	"Arch": getProbableCPU,
 	"MAC":  func(h *host.Host) string { return h.MAC },
 	"Purpose": func(h *host.Host) string {
+		if h.OS == nil {
+			return ""
+		}
 		// Look at OS matches for various types.
 		// Don't include them all, just 2/3 more recurring ones.
 		if h.Purpose != "" {
@@ -161,7 +164,6 @@ var Fields = map[string]func(h *host.Host) string{
 
 		for _, m := range h.OS.Matches {
 			for _, c := range m.Classes {
-				println(c.Type)
 				if c.Type != "" {
 					times[c.Type]++
 				}
@@ -199,7 +201,7 @@ var Fields = map[string]func(h *host.Host) string{
 }
 
 func osMatched(h *host.Host) (osName, osFamily string) {
-	if len(h.OS.Matches) == 0 {
+	if h.OS == nil || len(h.OS.Matches) == 0 {
 		return
 	}
 

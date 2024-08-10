@@ -21,14 +21,15 @@ package main
 import (
 	"log"
 
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/cmd/lib"
-	"github.com/maxlandon/aims/db"
-	"github.com/maxlandon/aims/server/transport"
 	"github.com/reeflective/team/server"
 	"github.com/reeflective/team/server/commands"
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
+
+	"github.com/maxlandon/aims/client"
+	"github.com/maxlandon/aims/cmd/lib"
+	"github.com/maxlandon/aims/db"
+	"github.com/maxlandon/aims/server/transport"
 )
 
 func main() {
@@ -139,16 +140,16 @@ func preRunServer(teamserver *server.Server, con *client.Client) func() error {
 		// c2.StartPersistentJobs(serverConfig)
 
 		// Let our in-memory teamclient be served.
-        if err := teamserver.Serve(con.Teamclient); err != nil {
-            return err
-        }
+		if err := teamserver.Serve(con.Teamclient); err != nil {
+			return err
+		}
 
 		// Ensure the server has what it needs.
-        aimsDB := teamserver.Database()
+		aimsDB := teamserver.Database()
 		if err := db.Migrate(aimsDB); err != nil {
 			return err
 		}
 
-        return nil
+		return nil
 	}
 }

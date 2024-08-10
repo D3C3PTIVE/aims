@@ -19,14 +19,15 @@ package server
 */
 
 import (
+	"google.golang.org/grpc"
+	"gorm.io/gorm"
+
 	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/network"
 	"github.com/maxlandon/aims/server/credential"
 	"github.com/maxlandon/aims/server/host"
 	networkServer "github.com/maxlandon/aims/server/network"
-	"google.golang.org/grpc"
-	"gorm.io/gorm"
 )
 
 // Options is used to setup the AIMS database service with specific things,

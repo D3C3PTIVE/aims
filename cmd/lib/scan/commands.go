@@ -22,13 +22,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rsteube/carapace"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
 	"github.com/maxlandon/aims/client"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/scan/nmap"
-	"github.com/rsteube/carapace"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 // Commands returns all scan commands.
@@ -62,11 +63,11 @@ func Commands(con *client.Client) *cobra.Command {
 					Hosts: genericScan.Hosts,
 				})
 				err = aims.CheckError(err)
-
 				if err != nil {
-					// con.PrintErrorf("Error: %s\n", err)
+					fmt.Printf("Error: %s\n", err)
 					return nil
 				}
+
 			}
 
 			return nil

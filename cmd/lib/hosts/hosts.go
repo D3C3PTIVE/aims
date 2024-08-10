@@ -49,6 +49,9 @@ func Commands(client *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			res, err := client.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Trace: true,
+				},
 			})
 			err = aims.CheckError(err)
 			if err != nil {
@@ -114,6 +117,10 @@ func Commands(client *client.Client) *cobra.Command {
 			// Request
 			res, err := client.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+					Trace: true,
+				},
 			})
 			err = aims.CheckError(err)
 
