@@ -25,9 +25,11 @@ import (
 	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/network"
+	"github.com/maxlandon/aims/proto/rpc/scans"
 	"github.com/maxlandon/aims/server/credential"
 	"github.com/maxlandon/aims/server/host"
 	networkServer "github.com/maxlandon/aims/server/network"
+	"github.com/maxlandon/aims/server/scan"
 )
 
 // Options is used to setup the AIMS database service with specific things,
@@ -62,4 +64,5 @@ func New(conn *grpc.Server, opts ...Options) {
 	network.RegisterServicesServer(conn, networkServer.New(options.db))
 	credentials.RegisterCredentialsServer(conn, credential.New(options.db))
 	credentials.RegisterLoginsServer(conn, credential.NewLoginServer(options.db))
+    scans.RegisterScansServer(conn, scan.New(options.db))
 }

@@ -21,12 +21,13 @@ package network
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/host"
-	pb "github.com/maxlandon/aims/proto/network"
-	"github.com/maxlandon/aims/proto/rpc/network"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+
+	"github.com/maxlandon/aims/proto/host"
+	pb "github.com/maxlandon/aims/proto/network"
+	"github.com/maxlandon/aims/proto/rpc/network"
 )
 
 type server struct {
