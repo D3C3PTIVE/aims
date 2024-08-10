@@ -42,7 +42,7 @@ func Commands(con *client.Client) *cobra.Command {
 
 	importCmd := &cobra.Command{
 		Use:   "import",
-		Short: "Import scan data from one or more files",
+		Short: "Import (running or finished) scans data from one or more files",
 		RunE: func(command *cobra.Command, args []string) error {
 			// For each file,
 			for _, arg := range args {
@@ -57,6 +57,10 @@ func Commands(con *client.Client) *cobra.Command {
 					fmt.Printf("Error parsing Nmap scan XML file: %s", err)
 					return nil
 				}
+
+				// Determine if scan is running: if yes, watch the file for changes
+				// and monitor the input. Notify the user on the command that we are
+				// monitoring the scan file.
 
 				// Register all objects to database, with adjustements.
 				_, err = con.Hosts.Create(command.Context(), &hosts.CreateHostRequest{
