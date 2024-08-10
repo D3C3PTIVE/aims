@@ -24,15 +24,16 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rsteube/carapace"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
 	"github.com/maxlandon/aims/client"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
 	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/host"
 	pb "github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
-	"github.com/rsteube/carapace"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 // Commands returns a command tree to manage and display hosts.
@@ -66,7 +67,7 @@ func Commands(client *client.Client) *cobra.Command {
 
 			// Generate the table of hosts.
 			// TODO: Print to command stdout.
-			table := display.Table(res.GetHosts(), host.Fields, host.Headers()...)
+			table := display.Table(res.GetHosts(), host.DisplayFields, host.DisplayHeaders()...)
 			fmt.Println(table.Render())
 
 			return nil
@@ -108,7 +109,7 @@ func Commands(client *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			traceroute, _ := command.Flags().GetBool("traceroute")
 
-			options := host.Details()
+			options := host.DisplayDetails()
 
 			if traceroute {
 				options = append(options, display.WithHeader("Route", 3))
@@ -127,7 +128,7 @@ func Commands(client *client.Client) *cobra.Command {
 			// Display
 			for _, h := range res.GetHosts() {
 				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, host.Fields, options...))
+					fmt.Println(display.Details(h, host.DisplayFields, options...))
 				}
 			}
 
@@ -164,7 +165,7 @@ func CompleteByID(client *client.Client) carapace.Action {
 		options := host.Completions()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
-		results := display.Completions(res.Hosts, host.Fields, options...)
+		results := display.Completions(res.Hosts, host.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})
@@ -190,7 +191,7 @@ func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
 		options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))
 		options = append(options, display.WithSplitCandidate(","))
 
-		results := display.Completions(res.Hosts, host.Fields, options...)
+		results := display.Completions(res.Hosts, host.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})

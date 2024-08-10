@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 	"github.com/maxlandon/aims/display"
@@ -37,15 +38,15 @@ type Host host.Host
 // [ Display Functions ] --------------------------------------------------
 //
 
-// TableHeaders returns all weighted table headers for a table of hosts.
-func Headers() (headers []display.Options) {
+// DisplayHeaders returns all weighted table headers for a table of hosts.
+func DisplayHeaders() (headers []display.Options) {
 	add := func(n string, w int) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
 
 	add("ID", 1)
 	add("Hostnames", 1)
-	add("OS Name", 1)
+		add("OS Name", 1)
 	add("OS Family", 1)
 	add("Addresses", 1)
 
@@ -60,7 +61,7 @@ func Headers() (headers []display.Options) {
 }
 
 // DetailHeaders returns the headers for a detailed host view.
-func Details() []display.Options {
+func DisplayDetails() []display.Options {
 	var headers []display.Options
 	add := func(n string, w int) {
 		headers = append(headers, display.WithHeader(n, w))
@@ -107,7 +108,7 @@ func Completions() []display.Options {
 }
 
 // Fields maps field names to their value generators.
-var Fields = map[string]func(h *host.Host) string{
+var DisplayFields = map[string]func(h *host.Host) string{
 	// Table
 	"ID": func(h *host.Host) string {
 		if h.Status.State == "up" {
@@ -164,6 +165,7 @@ var Fields = map[string]func(h *host.Host) string{
 
 		for _, m := range h.OS.Matches {
 			for _, c := range m.Classes {
+				println(c.Type)
 				if c.Type != "" {
 					times[c.Type]++
 				}
@@ -198,6 +200,59 @@ var Fields = map[string]func(h *host.Host) string{
 
 		return strings.TrimSuffix(routes, "\n")
 	},
+}
+
+// FilterIdentical returns a list of hosts from which have been removed all hosts that are
+// already in the database, with a very high degree of certitude. This avoids redundance when
+// manipulating new hosts.
+func FilterIdenticalHost(raw []host.HostORM, dbHosts []*host.HostORM) (filtered []host.HostORM) {
+	// For each host to add:
+	for _, newHost := range raw {
+		done := new(sync.WaitGroup)
+
+		allMatches := []*host.HostORM{}
+
+		// Check IDs: if non-nil and identical, done checking.
+
+		// Concurrently check all hosts for an identical trace.
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, hasIdenticalTrace(newHost, dbHosts))
+		}()
+
+		// Concurrently check all hosts for identical user/hostnames
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, hasIdenticalHostnames(newHost, dbHosts))
+			allMatches = append(allMatches, hasIdenticalUsers(newHost, dbHosts))
+		}()
+
+		// Concurrently check all hosts ports
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, hasIdenticalPorts(newHost, dbHosts))
+		}()
+
+		// Concurrently check all hosts IPs
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, hasIdenticalAddresses(newHost, dbHosts))
+		}()
+
+		// For now we wait for all queries to finish, but ideally,
+		// some filters have more weight than others, but might be
+		// longer to check, so when one shows that hosts are identical,
+		// all other comparison routines should break.
+		done.Wait()
+
+		// If identical, add it to the valid, filtered hosts
+		if identical, _ := allHostsIdentical(allMatches); identical {
+			filtered = append(filtered, newHost)
+		}
+
+	}
+
+	return
 }
 
 func osMatched(h *host.Host) (osName, osFamily string) {
@@ -279,4 +334,28 @@ func getProbableCPU(h *host.Host) string {
 	}
 
 	return color.HiBlackString("[%d] ", most) + cpuArch
+}
+
+func hasIdenticalTrace(h host.HostORM, all []*host.HostORM) (found *host.HostORM) {
+	return nil
+}
+
+func hasIdenticalHostnames(h host.HostORM, all []*host.HostORM) (found *host.HostORM) {
+	return nil
+}
+
+func hasIdenticalUsers(h host.HostORM, all []*host.HostORM) (found *host.HostORM) {
+	return nil
+}
+
+func hasIdenticalPorts(h host.HostORM, all []*host.HostORM) (found *host.HostORM) {
+	return nil
+}
+
+func hasIdenticalAddresses(h host.HostORM, all []*host.HostORM) (found *host.HostORM) {
+	return nil
+}
+
+func allHostsIdentical(all []*host.HostORM) (yes bool, matches int) {
+	return false, 0
 }

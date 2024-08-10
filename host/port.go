@@ -20,6 +20,7 @@ package host
 
 import (
 	"context"
+	"sync"
 
 	"github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/gondor/maltego"
@@ -47,4 +48,69 @@ func (p *Port) ToPB() *host.Port {
 // AsEntity - Returns the Port as a valid Maltego Entity.
 func (p *Port) AsEntity() maltego.Entity {
 	return maltego.Entity{}
+}
+
+// FilterIdenticalPort returns a list of portsfrom which have been removed all ports that are
+// already in the database, with a very high degree of certitude. This avoids redundance when
+// manipulating new ports/services.
+func FilterIdenticalPort(raw []host.PortORM, dbHosts []*host.PortORM) (filtered []host.PortORM) {
+	for _, newHost := range raw {
+		done := new(sync.WaitGroup)
+
+		allMatches := []*host.PortORM{}
+
+		// Check IDs: if non-nil and identical, done checking.
+
+		// Concurrently check all hosts for an identical trace.
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, portHasIdenticalNumber(newHost, dbHosts))
+		}()
+
+		// Concurrently check all hosts for identical user/hostnames
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, portHasIdenticalReasons(newHost, dbHosts))
+			allMatches = append(allMatches, portHasIdenticalScripts(newHost, dbHosts))
+		}()
+
+		// Concurrently check all hosts ports
+		done.Add(1)
+		go func() {
+			allMatches = append(allMatches, portHasIdenticalServices(newHost, dbHosts))
+		}()
+
+		// For now we wait for all queries to finish, but ideally,
+		// some filters have more weight than others, but might be
+		// longer to check, so when one shows that hosts are identical,
+		// all other comparison routines should break.
+		done.Wait()
+
+		// If identical, add it to the valid, filtered hosts
+		if identical, _ := allPortsIdentical(allMatches); identical {
+			filtered = append(filtered, newHost)
+		}
+
+	}
+	return
+}
+
+func portHasIdenticalServices(p host.PortORM, all []*host.PortORM) (found *host.PortORM) {
+	return nil
+}
+
+func portHasIdenticalNumber(p host.PortORM, all []*host.PortORM) (found *host.PortORM) {
+	return nil
+}
+
+func portHasIdenticalScripts(p host.PortORM, all []*host.PortORM) (found *host.PortORM) {
+	return nil
+}
+
+func portHasIdenticalReasons(p host.PortORM, all []*host.PortORM) (found *host.PortORM) {
+	return nil
+}
+
+func allPortsIdentical(all []*host.PortORM) (yes bool, matches int) {
+	return false, 0
 }

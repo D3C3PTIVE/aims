@@ -21,12 +21,14 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/maxlandon/aims/host"
+	pb "github.com/maxlandon/aims/proto/host"
+	"github.com/maxlandon/aims/proto/rpc/hosts"
 )
 
 type server struct {
@@ -39,16 +41,22 @@ func New(db *gorm.DB) *server {
 }
 
 func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
-	var hostsORM []host.HostORM
+	var hostsORM []pb.HostORM
 
 	for _, h := range req.GetHosts() {
 		horm, _ := h.ToORM(ctx)
 		hostsORM = append(hostsORM, horm)
 	}
 
-	err := s.db.Create(&hostsORM).Error
+	// Filter hosts to add according to AIMS criteria first.
+	dbHosts := []*pb.HostORM{}
+	database := Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: true})
+	database.Find(&dbHosts)
+	filtered := host.FilterIdenticalHost(hostsORM, dbHosts)
 
-	var hostsPB []*host.Host
+	err := s.db.Create(&filtered).Error
+
+	var hostsPB []*pb.Host
 	for _, horm := range hostsORM {
 		hpb, _ := horm.ToPB(ctx)
 		hostsPB = append(hostsPB, &hpb)
@@ -69,10 +77,10 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 		return nil, err
 	}
 
-	dbHosts := []*host.HostORM{}
+	dbHosts := []*pb.HostORM{}
 
 	// Preloads
-	database := hostPreloads(s.db.Where(hst), req.GetFilters())
+	database := Preloads(s.db.Where(hst), req.GetFilters())
 
 	// Query
 	if filts.MaxResults == 1 {
@@ -81,7 +89,7 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 		database = database.Find(&dbHosts)
 	}
 
-	hostspb := []*host.Host{}
+	hostspb := []*pb.Host{}
 
 	for _, host := range dbHosts {
 		pb, _ := host.ToPB(ctx)
@@ -142,15 +150,7 @@ func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hos
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
-func getFilters(filts *hosts.HostFilters) *hosts.HostFilters {
-	if filts != nil {
-		return filts
-	}
-
-	return &hosts.HostFilters{}
-}
-
-func hostPreloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
+func Preloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
 	if filters == nil {
 		filters = &hosts.HostFilters{}
 	}
@@ -194,4 +194,12 @@ func hostPreloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
 	}
 
 	return preloaded
+}
+
+func getFilters(filts *hosts.HostFilters) *hosts.HostFilters {
+	if filts != nil {
+		return filts
+	}
+
+	return &hosts.HostFilters{}
 }
