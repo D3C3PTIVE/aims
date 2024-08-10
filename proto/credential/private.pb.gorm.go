@@ -3,11 +3,11 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -16,7 +16,7 @@ type PrivateORM struct {
 	CoreId    *string
 	CreatedAt *time.Time
 	Data      string
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	JTRFormat string
 	Type      int32
 	UpdatedAt *time.Time
@@ -118,7 +118,7 @@ func DefaultCreatePrivate(ctx context.Context, in *Private, db *gorm.DB) (*Priva
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PrivateORMWithAfterCreate_); ok {
@@ -152,9 +152,6 @@ func DefaultReadPrivate(ctx context.Context, in *Private, db *gorm.DB) (*Private
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &PrivateORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PrivateORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -276,7 +273,7 @@ func DefaultStrictUpdatePrivate(ctx context.Context, in *Private, db *gorm.DB) (
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PrivateORMWithAfterStrictUpdateSave); ok {
@@ -466,10 +463,6 @@ func DefaultListPrivate(ctx context.Context, db *gorm.DB) ([]*Private, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &PrivateORM{}, &Private{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PrivateORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

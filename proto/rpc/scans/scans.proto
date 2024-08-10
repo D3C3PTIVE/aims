@@ -3,6 +3,7 @@ syntax = "proto3";
 package scans;
 
 import "scan/scan.proto";
+import "host/host.proto";
 
 // Scans is a service that allows to interact with all AIMS scans.
 service Scans {
@@ -13,8 +14,14 @@ service Scans {
    rpc Delete(DeleteScanRequest) returns (DeleteScanResponse) {}
 }
 
+message RunFilters {
+    int64 MaxResults = 1;
+    bool Hosts = 2;
+    bool Ports = 3;
+}
 message CreateScanRequest {
-    repeated scan.Run Scans = 1;
+    RunFilters Filters = 1;
+    repeated scan.Run Scans = 2;
 }
 
 message CreateScanResponse {
@@ -22,7 +29,8 @@ message CreateScanResponse {
 }
 
 message ReadScanRequest{
-    scan.Run Scan = 1;
+    RunFilters Filters = 1;
+    scan.Run Scan = 2;
 }
 
 message ReadScanResponse{
@@ -30,7 +38,8 @@ message ReadScanResponse{
 }
 
 message ReadScanManyRequest{
-    scan.Run Scan = 1;
+    RunFilters Filters = 1;
+    scan.Run Scan = 2;
 }
 
 message ReadScanManyResponse{

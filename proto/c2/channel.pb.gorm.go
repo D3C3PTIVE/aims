@@ -3,11 +3,11 @@ package c2
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -18,7 +18,7 @@ type ChannelORM struct {
 	Attempts          int32
 	CreatedAt         *time.Time
 	Failures          int32
-	Id                string `gorm:"type:uuid;primary_key"`
+	Id                string `gorm:"type:uuid;primaryKey"`
 	Interval          int64
 	Jitter            int64
 	NextCheckin       int64
@@ -145,7 +145,7 @@ func DefaultCreateChannel(ctx context.Context, in *Channel, db *gorm.DB) (*Chann
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ChannelORMWithAfterCreate_); ok {
@@ -179,9 +179,6 @@ func DefaultReadChannel(ctx context.Context, in *Channel, db *gorm.DB) (*Channel
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &ChannelORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ChannelORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -303,7 +300,7 @@ func DefaultStrictUpdateChannel(ctx context.Context, in *Channel, db *gorm.DB) (
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ChannelORMWithAfterStrictUpdateSave); ok {
@@ -529,10 +526,6 @@ func DefaultListChannel(ctx context.Context, db *gorm.DB) ([]*Channel, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &ChannelORM{}, &Channel{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ChannelORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

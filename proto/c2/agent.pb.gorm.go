@@ -3,12 +3,12 @@ package c2
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	host "github.com/maxlandon/aims/proto/host"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -16,26 +16,26 @@ import (
 type AgentORM struct {
 	Arch                string
 	Burned              bool
-	Channels            []*ChannelORM `gorm:"foreignkey:AgentId;association_foreignkey:Id"`
+	Channels            []*ChannelORM `gorm:"foreignKey:AgentId;references:Id"`
 	CreatedAt           *time.Time
 	Filename            string
 	FirstContact        int64
-	Host                *host.HostORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	Host                *host.HostORM `gorm:"foreignKey:HostId;references:Id"`
 	HostId              *string
-	Id                  string `gorm:"type:uuid;primary_key"`
+	Id                  string `gorm:"type:uuid;primaryKey"`
 	IsDead              bool
 	LastCheckin         int64
 	Locale              string
 	Name                string
-	Process             *host.ProcessORM `gorm:"foreignkey:ProcessId;association_foreignkey:Id"`
+	Process             *host.ProcessORM `gorm:"foreignKey:ProcessId;references:Id"`
 	ProcessId           *string
 	Runtime             string
-	Tasks               []*TaskORM `gorm:"foreignkey:AgentId;association_foreignkey:Id"`
+	Tasks               []*TaskORM `gorm:"foreignKey:AgentId;references:Id"`
 	TasksCount          int64
 	TasksCountCompleted int64
 	Tool                string
 	UpdatedAt           *time.Time
-	User                *host.UserORM `gorm:"foreignkey:UserId;association_foreignkey:Id"`
+	User                *host.UserORM `gorm:"foreignKey:UserId;references:Id"`
 	UserId              *string
 	WorkingDirectory    string
 }
@@ -233,7 +233,7 @@ type TaskORM struct {
 	CompletedAt *time.Time
 	CreatedAt   *time.Time
 	Description string
-	Id          string `gorm:"type:uuid;primary_key"`
+	Id          string `gorm:"type:uuid;primaryKey"`
 	Request     string
 	Response    string
 	SentAt      *time.Time
@@ -353,7 +353,7 @@ func DefaultCreateAgent(ctx context.Context, in *Agent, db *gorm.DB) (*Agent, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AgentORMWithAfterCreate_); ok {
@@ -387,9 +387,6 @@ func DefaultReadAgent(ctx context.Context, in *Agent, db *gorm.DB) (*Agent, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &AgentORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AgentORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -529,7 +526,7 @@ func DefaultStrictUpdateAgent(ctx context.Context, in *Agent, db *gorm.DB) (*Age
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AgentORMWithAfterStrictUpdateSave); ok {
@@ -834,10 +831,6 @@ func DefaultListAgent(ctx context.Context, db *gorm.DB) ([]*Agent, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &AgentORM{}, &Agent{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(AgentORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -889,7 +882,7 @@ func DefaultCreateTask(ctx context.Context, in *Task, db *gorm.DB) (*Task, error
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithAfterCreate_); ok {
@@ -923,9 +916,6 @@ func DefaultReadTask(ctx context.Context, in *Task, db *gorm.DB) (*Task, error) 
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TaskORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1047,7 +1037,7 @@ func DefaultStrictUpdateTask(ctx context.Context, in *Task, db *gorm.DB) (*Task,
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithAfterStrictUpdateSave); ok {
@@ -1289,10 +1279,6 @@ func DefaultListTask(ctx context.Context, db *gorm.DB) ([]*Task, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TaskORM{}, &Task{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

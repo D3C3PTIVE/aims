@@ -3,12 +3,12 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	network "github.com/maxlandon/aims/proto/network"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -18,8 +18,8 @@ type OriginORM struct {
 	Cracker   string
 	CreatedAt *time.Time
 	Filename  string
-	Id        string              `gorm:"type:uuid;primary_key"`
-	Service   *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
+	Id        string              `gorm:"type:uuid;primaryKey"`
+	Service   *network.ServiceORM `gorm:"foreignKey:ServiceId;references:Id"`
 	ServiceId *string
 	SessionId string
 	Type      int32
@@ -138,7 +138,7 @@ func DefaultCreateOrigin(ctx context.Context, in *Origin, db *gorm.DB) (*Origin,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(OriginORMWithAfterCreate_); ok {
@@ -172,9 +172,6 @@ func DefaultReadOrigin(ctx context.Context, in *Origin, db *gorm.DB) (*Origin, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &OriginORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(OriginORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -296,7 +293,7 @@ func DefaultStrictUpdateOrigin(ctx context.Context, in *Origin, db *gorm.DB) (*O
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(OriginORMWithAfterStrictUpdateSave); ok {
@@ -512,10 +509,6 @@ func DefaultListOrigin(ctx context.Context, db *gorm.DB) ([]*Origin, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &OriginORM{}, &Origin{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(OriginORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

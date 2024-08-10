@@ -3,75 +3,74 @@ package host
 import (
 	context "context"
 	fmt "fmt"
-	strings "strings"
-	time "time"
-
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	network "github.com/maxlandon/aims/proto/network"
 	nmap "github.com/maxlandon/aims/proto/scan/nmap"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
+	strings "strings"
+	time "time"
 )
 
 type HostORM struct {
-	Addresses       []*network.AddressORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_addresses;jointable_foreignkey:HostId;association_jointable_foreignkey:AddressId"`
+	Addresses       []*network.AddressORM `gorm:"foreignKey:Id;references:Id;many2many:host_addresses;joinForeignKey:HostId;joinReferences:AddressId"`
 	Arch            string
 	Comm            string
 	Comment         string
 	CreatedAt       *time.Time
-	Distance        *network.DistanceORM `gorm:"foreignkey:DistanceId;association_foreignkey:Id"`
+	Distance        *network.DistanceORM `gorm:"foreignKey:DistanceId;references:Id"`
 	DistanceId      *string
 	EndTime         int64
-	ExtraPorts      []*ExtraPortORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
-	FS              *FileSystemORM  `gorm:"foreignkey:FileSystemId;association_foreignkey:Id"`
+	ExtraPorts      []*ExtraPortORM `gorm:"foreignKey:HostId;references:Id"`
+	FS              *FileSystemORM  `gorm:"foreignKey:FileSystemId;references:Id"`
 	FileSystemId    *string
-	HostScripts     []*nmap.ScriptORM        `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_scripts;jointable_foreignkey:HostId;association_jointable_foreignkey:ScriptId"`
-	Hostnames       []*HostnameORM           `gorm:"foreignkey:HostId;association_foreignkey:Id"`
-	ICMPResponse    *network.ICMPResponseORM `gorm:"foreignkey:ICMPResponseId;association_foreignkey:Id"`
+	HostScripts     []*nmap.ScriptORM        `gorm:"foreignKey:Id;references:Id;many2many:host_scripts;joinForeignKey:HostId;joinReferences:ScriptId"`
+	Hostnames       []*HostnameORM           `gorm:"foreignKey:HostId;references:Id"`
+	ICMPResponse    *network.ICMPResponseORM `gorm:"foreignKey:ICMPResponseId;references:Id"`
 	ICMPResponseId  *string
-	IPIDSequence    *network.IPIDSequenceORM `gorm:"foreignkey:IPIDSequenceId;association_foreignkey:Id"`
+	IPIDSequence    *network.IPIDSequenceORM `gorm:"foreignKey:IPIDSequenceId;references:Id"`
 	IPIDSequenceId  *string
-	Id              string `gorm:"type:uuid;primary_key"`
+	Id              string `gorm:"type:uuid;primaryKey"`
 	Info            string
 	MAC             string
-	OS              *OSORM `gorm:"foreignkey:OSId;association_foreignkey:Id"`
+	OS              *OSORM `gorm:"foreignKey:OSId;references:Id"`
 	OSFamily        string
 	OSFlavor        string
 	OSId            *string
 	OSLang          string
 	OSName          string
 	OSSp            string
-	Ports           []*PortORM    `gorm:"foreignkey:HostId;association_foreignkey:Id"`
-	Processes       []*ProcessORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	Ports           []*PortORM    `gorm:"foreignKey:HostId;references:Id"`
+	Processes       []*ProcessORM `gorm:"foreignKey:HostId;references:Id"`
 	Purpose         string
 	Scope           string
-	Smurfs          []*nmap.SmurfORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:host_smurves;jointable_foreignkey:HostId;association_jointable_foreignkey:SmurfId"`
+	Smurfs          []*nmap.SmurfORM `gorm:"foreignKey:Id;references:Id;many2many:host_smurves;joinForeignKey:HostId;joinReferences:SmurfId"`
 	StartTime       int64
-	Status          *StatusORM              `gorm:"foreignkey:HostId;association_foreignkey:Id"`
-	TCPSequence     *network.TCPSequenceORM `gorm:"foreignkey:TCPSequenceId;association_foreignkey:Id"`
+	Status          *StatusORM              `gorm:"foreignKey:HostId;references:Id"`
+	TCPSequence     *network.TCPSequenceORM `gorm:"foreignKey:TCPSequenceId;references:Id"`
 	TCPSequenceId   *string
-	TCPTSSequence   *network.TCPTSSequenceORM `gorm:"foreignkey:TCPTSSequenceId;association_foreignkey:Id"`
+	TCPTSSequence   *network.TCPTSSequenceORM `gorm:"foreignKey:TCPTSSequenceId;references:Id"`
 	TCPTSSequenceId *string
-	Testing         *network.TimesORM `gorm:"foreignkey:TimesId;association_foreignkey:Id"`
+	Testing         *network.TimesORM `gorm:"foreignKey:TimesId;references:Id"`
 	TimesId         *string
-	Trace           *network.TraceORM `gorm:"foreignkey:TraceId;association_foreignkey:Id"`
+	Trace           *network.TraceORM `gorm:"foreignKey:TraceId;references:Id"`
 	TraceId         *string
 	UpdatedAt       *time.Time
-	Uptime          *UptimeORM `gorm:"foreignkey:UptimeId;association_foreignkey:Id"`
+	Uptime          *UptimeORM `gorm:"foreignKey:UptimeId;references:Id"`
 	UptimeId        *string
-	Users           []*UserORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	Users           []*UserORM `gorm:"foreignKey:HostId;references:Id"`
 	VirtualHost     string
 }
 
-// TableName overrides the default tablename generated by GORM.
+// TableName overrides the default tablename generated by GORM
 func (HostORM) TableName() string {
 	return "hosts"
 }
 
 // ToORM runs the BeforeToORM hook if present, converts the fields of this
-// object to ORM format, runs the AfterToORM hook, then returns the ORM object.
+// object to ORM format, runs the AfterToORM hook, then returns the ORM object
 func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 	to := HostORM{}
 	var err error
@@ -276,7 +275,7 @@ func (m *Host) ToORM(ctx context.Context) (HostORM, error) {
 }
 
 // ToPB runs the BeforeToPB hook if present, converts the fields of this
-// object to PB format, runs the AfterToPB hook, then returns the PB object.
+// object to PB format, runs the AfterToPB hook, then returns the PB object
 func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 	to := Host{}
 	var err error
@@ -481,22 +480,22 @@ func (m *HostORM) ToPB(ctx context.Context) (Host, error) {
 // The following are interfaces you can implement for special behavior during ORM/PB conversions
 // of type Host the arg will be the target, the caller the one being converted from
 
-// HostBeforeToORM called before default ToORM code.
+// HostBeforeToORM called before default ToORM code
 type HostWithBeforeToORM interface {
 	BeforeToORM(context.Context, *HostORM) error
 }
 
-// HostAfterToORM called after default ToORM code.
+// HostAfterToORM called after default ToORM code
 type HostWithAfterToORM interface {
 	AfterToORM(context.Context, *HostORM) error
 }
 
-// HostBeforeToPB called before default ToPB code.
+// HostBeforeToPB called before default ToPB code
 type HostWithBeforeToPB interface {
 	BeforeToPB(context.Context, *Host) error
 }
 
-// HostAfterToPB called after default ToPB code.
+// HostAfterToPB called after default ToPB code
 type HostWithAfterToPB interface {
 	AfterToPB(context.Context, *Host) error
 }
@@ -504,19 +503,19 @@ type HostWithAfterToPB interface {
 type HostnameORM struct {
 	CreatedAt *time.Time
 	HostId    *string
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Name      string
 	Type      string
 	UpdatedAt *time.Time
 }
 
-// TableName overrides the default tablename generated by GORM.
+// TableName overrides the default tablename generated by GORM
 func (HostnameORM) TableName() string {
 	return "hostnames"
 }
 
 // ToORM runs the BeforeToORM hook if present, converts the fields of this
-// object to ORM format, runs the AfterToORM hook, then returns the ORM object.
+// object to ORM format, runs the AfterToORM hook, then returns the ORM object
 func (m *Hostname) ToORM(ctx context.Context) (HostnameORM, error) {
 	to := HostnameORM{}
 	var err error
@@ -543,7 +542,7 @@ func (m *Hostname) ToORM(ctx context.Context) (HostnameORM, error) {
 }
 
 // ToPB runs the BeforeToPB hook if present, converts the fields of this
-// object to PB format, runs the AfterToPB hook, then returns the PB object.
+// object to PB format, runs the AfterToPB hook, then returns the PB object
 func (m *HostnameORM) ToPB(ctx context.Context) (Hostname, error) {
 	to := Hostname{}
 	var err error
@@ -570,39 +569,39 @@ func (m *HostnameORM) ToPB(ctx context.Context) (Hostname, error) {
 // The following are interfaces you can implement for special behavior during ORM/PB conversions
 // of type Hostname the arg will be the target, the caller the one being converted from
 
-// HostnameBeforeToORM called before default ToORM code.
+// HostnameBeforeToORM called before default ToORM code
 type HostnameWithBeforeToORM interface {
 	BeforeToORM(context.Context, *HostnameORM) error
 }
 
-// HostnameAfterToORM called after default ToORM code.
+// HostnameAfterToORM called after default ToORM code
 type HostnameWithAfterToORM interface {
 	AfterToORM(context.Context, *HostnameORM) error
 }
 
-// HostnameBeforeToPB called before default ToPB code.
+// HostnameBeforeToPB called before default ToPB code
 type HostnameWithBeforeToPB interface {
 	BeforeToPB(context.Context, *Hostname) error
 }
 
-// HostnameAfterToPB called after default ToPB code.
+// HostnameAfterToPB called after default ToPB code
 type HostnameWithAfterToPB interface {
 	AfterToPB(context.Context, *Hostname) error
 }
 
 type UptimeORM struct {
-	Id       string `gorm:"type:uuid;primary_key"`
+	Id       string `gorm:"type:uuid;primaryKey"`
 	LastBoot string
 	Seconds  int32
 }
 
-// TableName overrides the default tablename generated by GORM.
+// TableName overrides the default tablename generated by GORM
 func (UptimeORM) TableName() string {
 	return "uptimes"
 }
 
 // ToORM runs the BeforeToORM hook if present, converts the fields of this
-// object to ORM format, runs the AfterToORM hook, then returns the ORM object.
+// object to ORM format, runs the AfterToORM hook, then returns the ORM object
 func (m *Uptime) ToORM(ctx context.Context) (UptimeORM, error) {
 	to := UptimeORM{}
 	var err error
@@ -621,7 +620,7 @@ func (m *Uptime) ToORM(ctx context.Context) (UptimeORM, error) {
 }
 
 // ToPB runs the BeforeToPB hook if present, converts the fields of this
-// object to PB format, runs the AfterToPB hook, then returns the PB object.
+// object to PB format, runs the AfterToPB hook, then returns the PB object
 func (m *UptimeORM) ToPB(ctx context.Context) (Uptime, error) {
 	to := Uptime{}
 	var err error
@@ -642,41 +641,41 @@ func (m *UptimeORM) ToPB(ctx context.Context) (Uptime, error) {
 // The following are interfaces you can implement for special behavior during ORM/PB conversions
 // of type Uptime the arg will be the target, the caller the one being converted from
 
-// UptimeBeforeToORM called before default ToORM code.
+// UptimeBeforeToORM called before default ToORM code
 type UptimeWithBeforeToORM interface {
 	BeforeToORM(context.Context, *UptimeORM) error
 }
 
-// UptimeAfterToORM called after default ToORM code.
+// UptimeAfterToORM called after default ToORM code
 type UptimeWithAfterToORM interface {
 	AfterToORM(context.Context, *UptimeORM) error
 }
 
-// UptimeBeforeToPB called before default ToPB code.
+// UptimeBeforeToPB called before default ToPB code
 type UptimeWithBeforeToPB interface {
 	BeforeToPB(context.Context, *Uptime) error
 }
 
-// UptimeAfterToPB called after default ToPB code.
+// UptimeAfterToPB called after default ToPB code
 type UptimeWithAfterToPB interface {
 	AfterToPB(context.Context, *Uptime) error
 }
 
 type StatusORM struct {
 	HostId    *string
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Reason    string
 	ReasonTTL string
 	State     string
 }
 
-// TableName overrides the default tablename generated by GORM.
+// TableName overrides the default tablename generated by GORM
 func (StatusORM) TableName() string {
 	return "statuses"
 }
 
 // ToORM runs the BeforeToORM hook if present, converts the fields of this
-// object to ORM format, runs the AfterToORM hook, then returns the ORM object.
+// object to ORM format, runs the AfterToORM hook, then returns the ORM object
 func (m *Status) ToORM(ctx context.Context) (StatusORM, error) {
 	to := StatusORM{}
 	var err error
@@ -696,7 +695,7 @@ func (m *Status) ToORM(ctx context.Context) (StatusORM, error) {
 }
 
 // ToPB runs the BeforeToPB hook if present, converts the fields of this
-// object to PB format, runs the AfterToPB hook, then returns the PB object.
+// object to PB format, runs the AfterToPB hook, then returns the PB object
 func (m *StatusORM) ToPB(ctx context.Context) (Status, error) {
 	to := Status{}
 	var err error
@@ -718,27 +717,27 @@ func (m *StatusORM) ToPB(ctx context.Context) (Status, error) {
 // The following are interfaces you can implement for special behavior during ORM/PB conversions
 // of type Status the arg will be the target, the caller the one being converted from
 
-// StatusBeforeToORM called before default ToORM code.
+// StatusBeforeToORM called before default ToORM code
 type StatusWithBeforeToORM interface {
 	BeforeToORM(context.Context, *StatusORM) error
 }
 
-// StatusAfterToORM called after default ToORM code.
+// StatusAfterToORM called after default ToORM code
 type StatusWithAfterToORM interface {
 	AfterToORM(context.Context, *StatusORM) error
 }
 
-// StatusBeforeToPB called before default ToPB code.
+// StatusBeforeToPB called before default ToPB code
 type StatusWithBeforeToPB interface {
 	BeforeToPB(context.Context, *Status) error
 }
 
-// StatusAfterToPB called after default ToPB code.
+// StatusAfterToPB called after default ToPB code
 type StatusWithAfterToPB interface {
 	AfterToPB(context.Context, *Status) error
 }
 
-// DefaultCreateHost executes a basic gorm create call.
+// DefaultCreateHost executes a basic gorm create call
 func DefaultCreateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -752,7 +751,7 @@ func DefaultCreateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host, error
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostORMWithAfterCreate_); ok {
@@ -786,9 +785,6 @@ func DefaultReadHost(ctx context.Context, in *Host, db *gorm.DB) (*Host, error) 
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &HostORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -889,7 +885,7 @@ type HostORMWithAfterDeleteSet interface {
 	AfterDeleteSet(context.Context, []*Host, *gorm.DB) error
 }
 
-// DefaultStrictUpdateHost clears / replaces / appends first level 1:many children and then executes a gorm update call.
+// DefaultStrictUpdateHost clears / replaces / appends first level 1:many children and then executes a gorm update call
 func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host, error) {
 	if in == nil {
 		return nil, fmt.Errorf("Nil argument to DefaultStrictUpdateHost")
@@ -905,7 +901,7 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 			return nil, err
 		}
 	}
-	if err = db.Model(&ormObj).Association("Addresses").Replace(ormObj.Addresses).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Addresses").Replace(ormObj.Addresses); err != nil {
 		return nil, err
 	}
 	ormObj.Addresses = nil
@@ -918,7 +914,7 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 	if err = db.Where(filterExtraPorts).Delete(ExtraPortORM{}).Error; err != nil {
 		return nil, err
 	}
-	if err = db.Model(&ormObj).Association("HostScripts").Replace(ormObj.HostScripts).Error; err != nil {
+	if err = db.Model(&ormObj).Association("HostScripts").Replace(ormObj.HostScripts); err != nil {
 		return nil, err
 	}
 	ormObj.HostScripts = nil
@@ -949,7 +945,7 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 	if err = db.Where(filterProcesses).Delete(ProcessORM{}).Error; err != nil {
 		return nil, err
 	}
-	if err = db.Model(&ormObj).Association("Smurfs").Replace(ormObj.Smurfs).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Smurfs").Replace(ormObj.Smurfs); err != nil {
 		return nil, err
 	}
 	ormObj.Smurfs = nil
@@ -976,7 +972,7 @@ func DefaultStrictUpdateHost(ctx context.Context, in *Host, db *gorm.DB) (*Host,
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostORMWithAfterStrictUpdateSave); ok {
@@ -1001,7 +997,7 @@ type HostORMWithAfterStrictUpdateSave interface {
 	AfterStrictUpdateSave(context.Context, *gorm.DB) error
 }
 
-// DefaultPatchHost executes a basic gorm update call with patch behavior.
+// DefaultPatchHost executes a basic gorm update call with patch behavior
 func DefaultPatchHost(ctx context.Context, in *Host, updateMask *field_mask.FieldMask, db *gorm.DB) (*Host, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -1056,7 +1052,7 @@ type HostWithAfterPatchSave interface {
 	AfterPatchSave(context.Context, *Host, *field_mask.FieldMask, *gorm.DB) error
 }
 
-// DefaultPatchSetHost executes a bulk gorm update call with patch behavior.
+// DefaultPatchSetHost executes a bulk gorm update call with patch behavior
 func DefaultPatchSetHost(ctx context.Context, objects []*Host, updateMasks []*field_mask.FieldMask, db *gorm.DB) ([]*Host, error) {
 	if len(objects) != len(updateMasks) {
 		return nil, fmt.Errorf(errors.BadRepeatedFieldMaskTpl, len(updateMasks), len(objects))
@@ -1477,7 +1473,7 @@ func DefaultApplyFieldMaskHost(ctx context.Context, patchee *Host, patcher *Host
 	return patchee, nil
 }
 
-// DefaultListHost executes a gorm list call.
+// DefaultListHost executes a gorm list call
 func DefaultListHost(ctx context.Context, db *gorm.DB) ([]*Host, error) {
 	in := Host{}
 	ormObj, err := in.ToORM(ctx)
@@ -1488,10 +1484,6 @@ func DefaultListHost(ctx context.Context, db *gorm.DB) ([]*Host, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &HostORM{}, &Host{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
@@ -1530,7 +1522,7 @@ type HostORMWithAfterListFind interface {
 	AfterListFind(context.Context, *gorm.DB, *[]HostORM) error
 }
 
-// DefaultCreateHostname executes a basic gorm create call.
+// DefaultCreateHostname executes a basic gorm create call
 func DefaultCreateHostname(ctx context.Context, in *Hostname, db *gorm.DB) (*Hostname, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -1544,7 +1536,7 @@ func DefaultCreateHostname(ctx context.Context, in *Hostname, db *gorm.DB) (*Hos
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostnameORMWithAfterCreate_); ok {
@@ -1578,9 +1570,6 @@ func DefaultReadHostname(ctx context.Context, in *Hostname, db *gorm.DB) (*Hostn
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &HostnameORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostnameORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1681,7 +1670,7 @@ type HostnameORMWithAfterDeleteSet interface {
 	AfterDeleteSet(context.Context, []*Hostname, *gorm.DB) error
 }
 
-// DefaultStrictUpdateHostname clears / replaces / appends first level 1:many children and then executes a gorm update call.
+// DefaultStrictUpdateHostname clears / replaces / appends first level 1:many children and then executes a gorm update call
 func DefaultStrictUpdateHostname(ctx context.Context, in *Hostname, db *gorm.DB) (*Hostname, error) {
 	if in == nil {
 		return nil, fmt.Errorf("Nil argument to DefaultStrictUpdateHostname")
@@ -1702,7 +1691,7 @@ func DefaultStrictUpdateHostname(ctx context.Context, in *Hostname, db *gorm.DB)
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostnameORMWithAfterStrictUpdateSave); ok {
@@ -1727,7 +1716,7 @@ type HostnameORMWithAfterStrictUpdateSave interface {
 	AfterStrictUpdateSave(context.Context, *gorm.DB) error
 }
 
-// DefaultPatchHostname executes a basic gorm update call with patch behavior.
+// DefaultPatchHostname executes a basic gorm update call with patch behavior
 func DefaultPatchHostname(ctx context.Context, in *Hostname, updateMask *field_mask.FieldMask, db *gorm.DB) (*Hostname, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -1782,7 +1771,7 @@ type HostnameWithAfterPatchSave interface {
 	AfterPatchSave(context.Context, *Hostname, *field_mask.FieldMask, *gorm.DB) error
 }
 
-// DefaultPatchSetHostname executes a bulk gorm update call with patch behavior.
+// DefaultPatchSetHostname executes a bulk gorm update call with patch behavior
 func DefaultPatchSetHostname(ctx context.Context, objects []*Hostname, updateMasks []*field_mask.FieldMask, db *gorm.DB) ([]*Hostname, error) {
 	if len(objects) != len(updateMasks) {
 		return nil, fmt.Errorf(errors.BadRepeatedFieldMaskTpl, len(updateMasks), len(objects))
@@ -1877,7 +1866,7 @@ func DefaultApplyFieldMaskHostname(ctx context.Context, patchee *Hostname, patch
 	return patchee, nil
 }
 
-// DefaultListHostname executes a gorm list call.
+// DefaultListHostname executes a gorm list call
 func DefaultListHostname(ctx context.Context, db *gorm.DB) ([]*Hostname, error) {
 	in := Hostname{}
 	ormObj, err := in.ToORM(ctx)
@@ -1888,10 +1877,6 @@ func DefaultListHostname(ctx context.Context, db *gorm.DB) ([]*Hostname, error) 
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &HostnameORM{}, &Hostname{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostnameORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
@@ -1930,7 +1915,7 @@ type HostnameORMWithAfterListFind interface {
 	AfterListFind(context.Context, *gorm.DB, *[]HostnameORM) error
 }
 
-// DefaultCreateUptime executes a basic gorm create call.
+// DefaultCreateUptime executes a basic gorm create call
 func DefaultCreateUptime(ctx context.Context, in *Uptime, db *gorm.DB) (*Uptime, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -1944,7 +1929,7 @@ func DefaultCreateUptime(ctx context.Context, in *Uptime, db *gorm.DB) (*Uptime,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(UptimeORMWithAfterCreate_); ok {
@@ -1978,9 +1963,6 @@ func DefaultReadUptime(ctx context.Context, in *Uptime, db *gorm.DB) (*Uptime, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &UptimeORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(UptimeORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2081,7 +2063,7 @@ type UptimeORMWithAfterDeleteSet interface {
 	AfterDeleteSet(context.Context, []*Uptime, *gorm.DB) error
 }
 
-// DefaultStrictUpdateUptime clears / replaces / appends first level 1:many children and then executes a gorm update call.
+// DefaultStrictUpdateUptime clears / replaces / appends first level 1:many children and then executes a gorm update call
 func DefaultStrictUpdateUptime(ctx context.Context, in *Uptime, db *gorm.DB) (*Uptime, error) {
 	if in == nil {
 		return nil, fmt.Errorf("Nil argument to DefaultStrictUpdateUptime")
@@ -2102,7 +2084,7 @@ func DefaultStrictUpdateUptime(ctx context.Context, in *Uptime, db *gorm.DB) (*U
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(UptimeORMWithAfterStrictUpdateSave); ok {
@@ -2127,7 +2109,7 @@ type UptimeORMWithAfterStrictUpdateSave interface {
 	AfterStrictUpdateSave(context.Context, *gorm.DB) error
 }
 
-// DefaultPatchUptime executes a basic gorm update call with patch behavior.
+// DefaultPatchUptime executes a basic gorm update call with patch behavior
 func DefaultPatchUptime(ctx context.Context, in *Uptime, updateMask *field_mask.FieldMask, db *gorm.DB) (*Uptime, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -2182,7 +2164,7 @@ type UptimeWithAfterPatchSave interface {
 	AfterPatchSave(context.Context, *Uptime, *field_mask.FieldMask, *gorm.DB) error
 }
 
-// DefaultPatchSetUptime executes a bulk gorm update call with patch behavior.
+// DefaultPatchSetUptime executes a bulk gorm update call with patch behavior
 func DefaultPatchSetUptime(ctx context.Context, objects []*Uptime, updateMasks []*field_mask.FieldMask, db *gorm.DB) ([]*Uptime, error) {
 	if len(objects) != len(updateMasks) {
 		return nil, fmt.Errorf(errors.BadRepeatedFieldMaskTpl, len(updateMasks), len(objects))
@@ -2229,7 +2211,7 @@ func DefaultApplyFieldMaskUptime(ctx context.Context, patchee *Uptime, patcher *
 	return patchee, nil
 }
 
-// DefaultListUptime executes a gorm list call.
+// DefaultListUptime executes a gorm list call
 func DefaultListUptime(ctx context.Context, db *gorm.DB) ([]*Uptime, error) {
 	in := Uptime{}
 	ormObj, err := in.ToORM(ctx)
@@ -2240,10 +2222,6 @@ func DefaultListUptime(ctx context.Context, db *gorm.DB) ([]*Uptime, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &UptimeORM{}, &Uptime{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(UptimeORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
@@ -2282,7 +2260,7 @@ type UptimeORMWithAfterListFind interface {
 	AfterListFind(context.Context, *gorm.DB, *[]UptimeORM) error
 }
 
-// DefaultCreateStatus executes a basic gorm create call.
+// DefaultCreateStatus executes a basic gorm create call
 func DefaultCreateStatus(ctx context.Context, in *Status, db *gorm.DB) (*Status, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -2296,7 +2274,7 @@ func DefaultCreateStatus(ctx context.Context, in *Status, db *gorm.DB) (*Status,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatusORMWithAfterCreate_); ok {
@@ -2330,9 +2308,6 @@ func DefaultReadStatus(ctx context.Context, in *Status, db *gorm.DB) (*Status, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &StatusORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatusORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2433,7 +2408,7 @@ type StatusORMWithAfterDeleteSet interface {
 	AfterDeleteSet(context.Context, []*Status, *gorm.DB) error
 }
 
-// DefaultStrictUpdateStatus clears / replaces / appends first level 1:many children and then executes a gorm update call.
+// DefaultStrictUpdateStatus clears / replaces / appends first level 1:many children and then executes a gorm update call
 func DefaultStrictUpdateStatus(ctx context.Context, in *Status, db *gorm.DB) (*Status, error) {
 	if in == nil {
 		return nil, fmt.Errorf("Nil argument to DefaultStrictUpdateStatus")
@@ -2454,7 +2429,7 @@ func DefaultStrictUpdateStatus(ctx context.Context, in *Status, db *gorm.DB) (*S
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatusORMWithAfterStrictUpdateSave); ok {
@@ -2479,7 +2454,7 @@ type StatusORMWithAfterStrictUpdateSave interface {
 	AfterStrictUpdateSave(context.Context, *gorm.DB) error
 }
 
-// DefaultPatchStatus executes a basic gorm update call with patch behavior.
+// DefaultPatchStatus executes a basic gorm update call with patch behavior
 func DefaultPatchStatus(ctx context.Context, in *Status, updateMask *field_mask.FieldMask, db *gorm.DB) (*Status, error) {
 	if in == nil {
 		return nil, errors.NilArgumentError
@@ -2534,7 +2509,7 @@ type StatusWithAfterPatchSave interface {
 	AfterPatchSave(context.Context, *Status, *field_mask.FieldMask, *gorm.DB) error
 }
 
-// DefaultPatchSetStatus executes a bulk gorm update call with patch behavior.
+// DefaultPatchSetStatus executes a bulk gorm update call with patch behavior
 func DefaultPatchSetStatus(ctx context.Context, objects []*Status, updateMasks []*field_mask.FieldMask, db *gorm.DB) ([]*Status, error) {
 	if len(objects) != len(updateMasks) {
 		return nil, fmt.Errorf(errors.BadRepeatedFieldMaskTpl, len(updateMasks), len(objects))
@@ -2585,7 +2560,7 @@ func DefaultApplyFieldMaskStatus(ctx context.Context, patchee *Status, patcher *
 	return patchee, nil
 }
 
-// DefaultListStatus executes a gorm list call.
+// DefaultListStatus executes a gorm list call
 func DefaultListStatus(ctx context.Context, db *gorm.DB) ([]*Status, error) {
 	in := Status{}
 	ormObj, err := in.ToORM(ctx)
@@ -2596,10 +2571,6 @@ func DefaultListStatus(ctx context.Context, db *gorm.DB) ([]*Status, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &StatusORM{}, &Status{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatusORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

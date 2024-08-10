@@ -3,11 +3,11 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -17,7 +17,7 @@ type PublicORM struct {
 	CoreId    *string
 	CreatedAt *time.Time
 	Data      string
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Type      int32
 	UpdatedAt *time.Time
 	Username  string
@@ -121,7 +121,7 @@ func DefaultCreatePublic(ctx context.Context, in *Public, db *gorm.DB) (*Public,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PublicORMWithAfterCreate_); ok {
@@ -155,9 +155,6 @@ func DefaultReadPublic(ctx context.Context, in *Public, db *gorm.DB) (*Public, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &PublicORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PublicORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -279,7 +276,7 @@ func DefaultStrictUpdatePublic(ctx context.Context, in *Public, db *gorm.DB) (*P
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PublicORMWithAfterStrictUpdateSave); ok {
@@ -473,10 +470,6 @@ func DefaultListPublic(ctx context.Context, db *gorm.DB) ([]*Public, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &PublicORM{}, &Public{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(PublicORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

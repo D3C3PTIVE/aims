@@ -3,24 +3,24 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	network "github.com/maxlandon/aims/proto/network"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
 
 type LoginORM struct {
 	AccessLevel     string
-	Core            *CoreORM `gorm:"not null;foreignkey:LoginId;association_foreignkey:Id"`
+	Core            *CoreORM `gorm:"not null;foreignKey:LoginId;references:Id"`
 	CreatedAt       *time.Time
 	HostId          string `gorm:"type:uuid;not null"`
-	Id              string `gorm:"type:uuid;primary_key"`
+	Id              string `gorm:"type:uuid;primaryKey"`
 	LastAttemptedAt *time.Time
-	Service         *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
+	Service         *network.ServiceORM `gorm:"foreignKey:ServiceId;references:Id"`
 	ServiceId       *string
 	Status          int32
 	UpdatedAt       *time.Time
@@ -157,7 +157,7 @@ func DefaultCreateLogin(ctx context.Context, in *Login, db *gorm.DB) (*Login, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(LoginORMWithAfterCreate_); ok {
@@ -191,9 +191,6 @@ func DefaultReadLogin(ctx context.Context, in *Login, db *gorm.DB) (*Login, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &LoginORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(LoginORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -324,7 +321,7 @@ func DefaultStrictUpdateLogin(ctx context.Context, in *Login, db *gorm.DB) (*Log
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(LoginORMWithAfterStrictUpdateSave); ok {
@@ -582,10 +579,6 @@ func DefaultListLogin(ctx context.Context, db *gorm.DB) ([]*Login, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &LoginORM{}, &Login{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(LoginORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

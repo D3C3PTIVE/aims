@@ -3,15 +3,14 @@ package network
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
+	gorm "gorm.io/gorm"
 )
 
 type SequenceORM struct {
 	Class  string
-	Id     string `gorm:"type:uuid;primary_key"`
+	Id     string `gorm:"type:uuid;primaryKey"`
 	Values string
 }
 
@@ -83,7 +82,7 @@ type SequenceWithAfterToPB interface {
 
 type TCPSequenceORM struct {
 	Difficulty string
-	Id         string `gorm:"type:uuid;primary_key"`
+	Id         string `gorm:"type:uuid;primaryKey"`
 	Index      int32
 	Values     string
 }
@@ -158,7 +157,7 @@ type TCPSequenceWithAfterToPB interface {
 
 type IPIDSequenceORM struct {
 	Difficulty string
-	Id         string `gorm:"type:uuid;primary_key"`
+	Id         string `gorm:"type:uuid;primaryKey"`
 	Index      int32
 	Values     string
 }
@@ -233,7 +232,7 @@ type IPIDSequenceWithAfterToPB interface {
 
 type TCPTSSequenceORM struct {
 	Difficulty string
-	Id         string `gorm:"type:uuid;primary_key"`
+	Id         string `gorm:"type:uuid;primaryKey"`
 	Index      int32
 	Values     string
 }
@@ -308,7 +307,7 @@ type TCPTSSequenceWithAfterToPB interface {
 
 type ICMPResponseORM struct {
 	Code uint32
-	Id   string `gorm:"type:uuid;primary_key"`
+	Id   string `gorm:"type:uuid;primaryKey"`
 	Type int32
 }
 
@@ -392,7 +391,7 @@ func DefaultCreateSequence(ctx context.Context, in *Sequence, db *gorm.DB) (*Seq
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(SequenceORMWithAfterCreate_); ok {
@@ -426,9 +425,6 @@ func DefaultReadSequence(ctx context.Context, in *Sequence, db *gorm.DB) (*Seque
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &SequenceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(SequenceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -550,7 +546,7 @@ func DefaultStrictUpdateSequence(ctx context.Context, in *Sequence, db *gorm.DB)
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(SequenceORMWithAfterStrictUpdateSave); ok {
@@ -689,10 +685,6 @@ func DefaultListSequence(ctx context.Context, db *gorm.DB) ([]*Sequence, error) 
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &SequenceORM{}, &Sequence{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(SequenceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -744,7 +736,7 @@ func DefaultCreateTCPSequence(ctx context.Context, in *TCPSequence, db *gorm.DB)
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPSequenceORMWithAfterCreate_); ok {
@@ -778,9 +770,6 @@ func DefaultReadTCPSequence(ctx context.Context, in *TCPSequence, db *gorm.DB) (
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TCPSequenceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPSequenceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -902,7 +891,7 @@ func DefaultStrictUpdateTCPSequence(ctx context.Context, in *TCPSequence, db *go
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPSequenceORMWithAfterStrictUpdateSave); ok {
@@ -1045,10 +1034,6 @@ func DefaultListTCPSequence(ctx context.Context, db *gorm.DB) ([]*TCPSequence, e
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TCPSequenceORM{}, &TCPSequence{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TCPSequenceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1100,7 +1085,7 @@ func DefaultCreateIPIDSequence(ctx context.Context, in *IPIDSequence, db *gorm.D
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(IPIDSequenceORMWithAfterCreate_); ok {
@@ -1134,9 +1119,6 @@ func DefaultReadIPIDSequence(ctx context.Context, in *IPIDSequence, db *gorm.DB)
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &IPIDSequenceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(IPIDSequenceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1258,7 +1240,7 @@ func DefaultStrictUpdateIPIDSequence(ctx context.Context, in *IPIDSequence, db *
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(IPIDSequenceORMWithAfterStrictUpdateSave); ok {
@@ -1401,10 +1383,6 @@ func DefaultListIPIDSequence(ctx context.Context, db *gorm.DB) ([]*IPIDSequence,
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &IPIDSequenceORM{}, &IPIDSequence{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(IPIDSequenceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1456,7 +1434,7 @@ func DefaultCreateTCPTSSequence(ctx context.Context, in *TCPTSSequence, db *gorm
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPTSSequenceORMWithAfterCreate_); ok {
@@ -1490,9 +1468,6 @@ func DefaultReadTCPTSSequence(ctx context.Context, in *TCPTSSequence, db *gorm.D
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TCPTSSequenceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPTSSequenceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1614,7 +1589,7 @@ func DefaultStrictUpdateTCPTSSequence(ctx context.Context, in *TCPTSSequence, db
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TCPTSSequenceORMWithAfterStrictUpdateSave); ok {
@@ -1757,10 +1732,6 @@ func DefaultListTCPTSSequence(ctx context.Context, db *gorm.DB) ([]*TCPTSSequenc
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TCPTSSequenceORM{}, &TCPTSSequence{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TCPTSSequenceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1812,7 +1783,7 @@ func DefaultCreateICMPResponse(ctx context.Context, in *ICMPResponse, db *gorm.D
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ICMPResponseORMWithAfterCreate_); ok {
@@ -1846,9 +1817,6 @@ func DefaultReadICMPResponse(ctx context.Context, in *ICMPResponse, db *gorm.DB)
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &ICMPResponseORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ICMPResponseORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1970,7 +1938,7 @@ func DefaultStrictUpdateICMPResponse(ctx context.Context, in *ICMPResponse, db *
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ICMPResponseORMWithAfterStrictUpdateSave); ok {
@@ -2108,10 +2076,6 @@ func DefaultListICMPResponse(ctx context.Context, db *gorm.DB) ([]*ICMPResponse,
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &ICMPResponseORM{}, &ICMPResponse{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ICMPResponseORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

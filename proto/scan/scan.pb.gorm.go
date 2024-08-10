@@ -3,44 +3,44 @@ package scan
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	host "github.com/maxlandon/aims/proto/host"
 	nmap "github.com/maxlandon/aims/proto/scan/nmap"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
 
 type RunORM struct {
 	Args             string
-	Begin            []*TaskORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_begins;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskId"`
+	Begin            []*TaskORM `gorm:"foreignKey:Id;references:Id;many2many:run_begins;joinForeignKey:RunId;joinReferences:TaskId"`
 	CreatedAt        *time.Time
-	Debugging        *DebuggingORM `gorm:"foreignkey:DebuggingId;association_foreignkey:Id"`
+	Debugging        *DebuggingORM `gorm:"foreignKey:DebuggingId;references:Id"`
 	DebuggingId      *string
-	End              []*TaskORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_ends;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskId"`
+	End              []*TaskORM `gorm:"foreignKey:Id;references:Id;many2many:run_ends;joinForeignKey:RunId;joinReferences:TaskId"`
 	HostId           string
-	Hosts            []*host.HostORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_hosts;jointable_foreignkey:RunId;association_jointable_foreignkey:HostId"`
-	Id               string          `gorm:"type:uuid;primary_key"`
-	Info             *InfoORM        `gorm:"foreignkey:InfoId;association_foreignkey:Id"`
+	Hosts            []*host.HostORM `gorm:"foreignKey:Id;references:Id;many2many:run_hosts;joinForeignKey:RunId;joinReferences:HostId"`
+	Id               string          `gorm:"type:uuid;primaryKey"`
+	Info             *InfoORM        `gorm:"foreignKey:InfoId;references:Id"`
 	InfoId           *string
-	PostScripts      []*nmap.ScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_post_scripts;jointable_foreignkey:RunId;association_jointable_foreignkey:ScriptId"`
-	PreScripts       []*nmap.ScriptORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_pre_scripts;jointable_foreignkey:RunId;association_jointable_foreignkey:ScriptId"`
+	PostScripts      []*nmap.ScriptORM `gorm:"foreignKey:Id;references:Id;many2many:run_post_scripts;joinForeignKey:RunId;joinReferences:ScriptId"`
+	PreScripts       []*nmap.ScriptORM `gorm:"foreignKey:Id;references:Id;many2many:run_pre_scripts;joinForeignKey:RunId;joinReferences:ScriptId"`
 	ProfileName      string
-	Progress         []*TaskProgressORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_task_progresses;jointable_foreignkey:RunId;association_jointable_foreignkey:TaskProgressId"`
+	Progress         []*TaskProgressORM `gorm:"foreignKey:Id;references:Id;many2many:run_task_progresses;joinForeignKey:RunId;joinReferences:TaskProgressId"`
 	RawXML           string
-	Results          []*ResultORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_results;jointable_foreignkey:RunId;association_jointable_foreignkey:ResultId"`
+	Results          []*ResultORM `gorm:"foreignKey:Id;references:Id;many2many:run_results;joinForeignKey:RunId;joinReferences:ResultId"`
 	Scanner          string
 	SessionId        string
 	Start            int64
 	StartStr         string
-	Stats            *StatsORM `gorm:"foreignkey:StatsId;association_foreignkey:Id"`
+	Stats            *StatsORM `gorm:"foreignKey:StatsId;references:Id"`
 	StatsId          *string
-	Targets          []*TargetORM `gorm:"foreignkey:Id;association_foreignkey:Id;many2many:run_targets;jointable_foreignkey:RunId;association_jointable_foreignkey:TargetId"`
+	Targets          []*TargetORM `gorm:"foreignKey:Id;references:Id;many2many:run_targets;joinForeignKey:RunId;joinReferences:TargetId"`
 	UpdatedAt        *time.Time
-	Verbose          *VerboseORM `gorm:"foreignkey:VerboseId;association_foreignkey:Id"`
+	Verbose          *VerboseORM `gorm:"foreignKey:VerboseId;references:Id"`
 	VerboseId        *string
 	Version          string
 	XMLOutputVersion string
@@ -377,7 +377,7 @@ type RunWithAfterToPB interface {
 }
 
 type InfoORM struct {
-	Id          string `gorm:"type:uuid;primary_key"`
+	Id          string `gorm:"type:uuid;primaryKey"`
 	NumServices int32
 	Protocol    string
 	ScanFlags   string
@@ -458,7 +458,7 @@ type InfoWithAfterToPB interface {
 }
 
 type VerboseORM struct {
-	Id    string `gorm:"type:uuid;primary_key"`
+	Id    string `gorm:"type:uuid;primaryKey"`
 	Level int32
 }
 
@@ -527,7 +527,7 @@ type VerboseWithAfterToPB interface {
 }
 
 type DebuggingORM struct {
-	Id    string `gorm:"type:uuid;primary_key"`
+	Id    string `gorm:"type:uuid;primaryKey"`
 	Level int32
 }
 
@@ -597,7 +597,7 @@ type DebuggingWithAfterToPB interface {
 
 type TaskORM struct {
 	ExtraInfo string
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Task      string
 	Time      int64
 }
@@ -672,7 +672,7 @@ type TaskWithAfterToPB interface {
 
 type TaskProgressORM struct {
 	Etc       int64
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Percent   float32
 	Remaining int32
 	Task      string
@@ -754,7 +754,7 @@ type TaskProgressWithAfterToPB interface {
 type TargetORM struct {
 	Address       string
 	Domain        string
-	Id            string `gorm:"type:uuid;primary_key"`
+	Id            string `gorm:"type:uuid;primaryKey"`
 	Port          uint32
 	Reason        string
 	Specification string
@@ -839,9 +839,9 @@ type TargetWithAfterToPB interface {
 }
 
 type StatsORM struct {
-	Finished *FinishedORM  `gorm:"foreignkey:StatsId;association_foreignkey:Id"`
-	Hosts    *HostStatsORM `gorm:"foreignkey:StatsId;association_foreignkey:Id"`
-	Id       string        `gorm:"type:uuid;primary_key"`
+	Finished *FinishedORM  `gorm:"foreignKey:StatsId;references:Id"`
+	Hosts    *HostStatsORM `gorm:"foreignKey:StatsId;references:Id"`
+	Id       string        `gorm:"type:uuid;primaryKey"`
 }
 
 // TableName overrides the default tablename generated by GORM
@@ -938,7 +938,7 @@ type FinishedORM struct {
 	Elapsed  float32
 	ErrorMsg string
 	Exit     string
-	Id       string `gorm:"type:uuid;primary_key"`
+	Id       string `gorm:"type:uuid;primaryKey"`
 	StatsId  *string
 	Summary  string
 	Time     int64
@@ -1021,7 +1021,7 @@ type FinishedWithAfterToPB interface {
 
 type HostStatsORM struct {
 	Down    int32
-	Id      string `gorm:"type:uuid;primary_key"`
+	Id      string `gorm:"type:uuid;primaryKey"`
 	StatsId *string
 	Total   int32
 	Up      int32
@@ -1109,7 +1109,7 @@ func DefaultCreateRun(ctx context.Context, in *Run, db *gorm.DB) (*Run, error) {
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RunORMWithAfterCreate_); ok {
@@ -1143,9 +1143,6 @@ func DefaultReadRun(ctx context.Context, in *Run, db *gorm.DB) (*Run, error) {
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &RunORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RunORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1262,35 +1259,35 @@ func DefaultStrictUpdateRun(ctx context.Context, in *Run, db *gorm.DB) (*Run, er
 			return nil, err
 		}
 	}
-	if err = db.Model(&ormObj).Association("Begin").Replace(ormObj.Begin).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Begin").Replace(ormObj.Begin); err != nil {
 		return nil, err
 	}
 	ormObj.Begin = nil
-	if err = db.Model(&ormObj).Association("End").Replace(ormObj.End).Error; err != nil {
+	if err = db.Model(&ormObj).Association("End").Replace(ormObj.End); err != nil {
 		return nil, err
 	}
 	ormObj.End = nil
-	if err = db.Model(&ormObj).Association("Hosts").Replace(ormObj.Hosts).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Hosts").Replace(ormObj.Hosts); err != nil {
 		return nil, err
 	}
 	ormObj.Hosts = nil
-	if err = db.Model(&ormObj).Association("PostScripts").Replace(ormObj.PostScripts).Error; err != nil {
+	if err = db.Model(&ormObj).Association("PostScripts").Replace(ormObj.PostScripts); err != nil {
 		return nil, err
 	}
 	ormObj.PostScripts = nil
-	if err = db.Model(&ormObj).Association("PreScripts").Replace(ormObj.PreScripts).Error; err != nil {
+	if err = db.Model(&ormObj).Association("PreScripts").Replace(ormObj.PreScripts); err != nil {
 		return nil, err
 	}
 	ormObj.PreScripts = nil
-	if err = db.Model(&ormObj).Association("Progress").Replace(ormObj.Progress).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Progress").Replace(ormObj.Progress); err != nil {
 		return nil, err
 	}
 	ormObj.Progress = nil
-	if err = db.Model(&ormObj).Association("Results").Replace(ormObj.Results).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Results").Replace(ormObj.Results); err != nil {
 		return nil, err
 	}
 	ormObj.Results = nil
-	if err = db.Model(&ormObj).Association("Targets").Replace(ormObj.Targets).Error; err != nil {
+	if err = db.Model(&ormObj).Association("Targets").Replace(ormObj.Targets); err != nil {
 		return nil, err
 	}
 	ormObj.Targets = nil
@@ -1299,7 +1296,7 @@ func DefaultStrictUpdateRun(ctx context.Context, in *Run, db *gorm.DB) (*Run, er
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RunORMWithAfterStrictUpdateSave); ok {
@@ -1642,10 +1639,6 @@ func DefaultListRun(ctx context.Context, db *gorm.DB) ([]*Run, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &RunORM{}, &Run{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(RunORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1697,7 +1690,7 @@ func DefaultCreateInfo(ctx context.Context, in *Info, db *gorm.DB) (*Info, error
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(InfoORMWithAfterCreate_); ok {
@@ -1731,9 +1724,6 @@ func DefaultReadInfo(ctx context.Context, in *Info, db *gorm.DB) (*Info, error) 
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &InfoORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(InfoORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1855,7 +1845,7 @@ func DefaultStrictUpdateInfo(ctx context.Context, in *Info, db *gorm.DB) (*Info,
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(InfoORMWithAfterStrictUpdateSave); ok {
@@ -2006,10 +1996,6 @@ func DefaultListInfo(ctx context.Context, db *gorm.DB) ([]*Info, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &InfoORM{}, &Info{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(InfoORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -2061,7 +2047,7 @@ func DefaultCreateVerbose(ctx context.Context, in *Verbose, db *gorm.DB) (*Verbo
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(VerboseORMWithAfterCreate_); ok {
@@ -2095,9 +2081,6 @@ func DefaultReadVerbose(ctx context.Context, in *Verbose, db *gorm.DB) (*Verbose
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &VerboseORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(VerboseORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2219,7 +2202,7 @@ func DefaultStrictUpdateVerbose(ctx context.Context, in *Verbose, db *gorm.DB) (
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(VerboseORMWithAfterStrictUpdateSave); ok {
@@ -2354,10 +2337,6 @@ func DefaultListVerbose(ctx context.Context, db *gorm.DB) ([]*Verbose, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &VerboseORM{}, &Verbose{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(VerboseORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -2409,7 +2388,7 @@ func DefaultCreateDebugging(ctx context.Context, in *Debugging, db *gorm.DB) (*D
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DebuggingORMWithAfterCreate_); ok {
@@ -2443,9 +2422,6 @@ func DefaultReadDebugging(ctx context.Context, in *Debugging, db *gorm.DB) (*Deb
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &DebuggingORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DebuggingORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2567,7 +2543,7 @@ func DefaultStrictUpdateDebugging(ctx context.Context, in *Debugging, db *gorm.D
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DebuggingORMWithAfterStrictUpdateSave); ok {
@@ -2702,10 +2678,6 @@ func DefaultListDebugging(ctx context.Context, db *gorm.DB) ([]*Debugging, error
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &DebuggingORM{}, &Debugging{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(DebuggingORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -2757,7 +2729,7 @@ func DefaultCreateTask(ctx context.Context, in *Task, db *gorm.DB) (*Task, error
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithAfterCreate_); ok {
@@ -2791,9 +2763,6 @@ func DefaultReadTask(ctx context.Context, in *Task, db *gorm.DB) (*Task, error) 
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TaskORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2915,7 +2884,7 @@ func DefaultStrictUpdateTask(ctx context.Context, in *Task, db *gorm.DB) (*Task,
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithAfterStrictUpdateSave); ok {
@@ -3058,10 +3027,6 @@ func DefaultListTask(ctx context.Context, db *gorm.DB) ([]*Task, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TaskORM{}, &Task{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TaskORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -3113,7 +3078,7 @@ func DefaultCreateTaskProgress(ctx context.Context, in *TaskProgress, db *gorm.D
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskProgressORMWithAfterCreate_); ok {
@@ -3147,9 +3112,6 @@ func DefaultReadTaskProgress(ctx context.Context, in *TaskProgress, db *gorm.DB)
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TaskProgressORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskProgressORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -3271,7 +3233,7 @@ func DefaultStrictUpdateTaskProgress(ctx context.Context, in *TaskProgress, db *
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TaskProgressORMWithAfterStrictUpdateSave); ok {
@@ -3422,10 +3384,6 @@ func DefaultListTaskProgress(ctx context.Context, db *gorm.DB) ([]*TaskProgress,
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TaskProgressORM{}, &TaskProgress{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TaskProgressORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -3477,7 +3435,7 @@ func DefaultCreateTarget(ctx context.Context, in *Target, db *gorm.DB) (*Target,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TargetORMWithAfterCreate_); ok {
@@ -3511,9 +3469,6 @@ func DefaultReadTarget(ctx context.Context, in *Target, db *gorm.DB) (*Target, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TargetORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TargetORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -3635,7 +3590,7 @@ func DefaultStrictUpdateTarget(ctx context.Context, in *Target, db *gorm.DB) (*T
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TargetORMWithAfterStrictUpdateSave); ok {
@@ -3794,10 +3749,6 @@ func DefaultListTarget(ctx context.Context, db *gorm.DB) ([]*Target, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TargetORM{}, &Target{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TargetORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -3849,7 +3800,7 @@ func DefaultCreateStats(ctx context.Context, in *Stats, db *gorm.DB) (*Stats, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatsORMWithAfterCreate_); ok {
@@ -3883,9 +3834,6 @@ func DefaultReadStats(ctx context.Context, in *Stats, db *gorm.DB) (*Stats, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &StatsORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatsORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -4025,7 +3973,7 @@ func DefaultStrictUpdateStats(ctx context.Context, in *Stats, db *gorm.DB) (*Sta
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(StatsORMWithAfterStrictUpdateSave); ok {
@@ -4200,10 +4148,6 @@ func DefaultListStats(ctx context.Context, db *gorm.DB) ([]*Stats, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &StatsORM{}, &Stats{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(StatsORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -4255,7 +4199,7 @@ func DefaultCreateFinished(ctx context.Context, in *Finished, db *gorm.DB) (*Fin
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(FinishedORMWithAfterCreate_); ok {
@@ -4289,9 +4233,6 @@ func DefaultReadFinished(ctx context.Context, in *Finished, db *gorm.DB) (*Finis
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &FinishedORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(FinishedORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -4413,7 +4354,7 @@ func DefaultStrictUpdateFinished(ctx context.Context, in *Finished, db *gorm.DB)
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(FinishedORMWithAfterStrictUpdateSave); ok {
@@ -4568,10 +4509,6 @@ func DefaultListFinished(ctx context.Context, db *gorm.DB) ([]*Finished, error) 
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &FinishedORM{}, &Finished{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(FinishedORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -4623,7 +4560,7 @@ func DefaultCreateHostStats(ctx context.Context, in *HostStats, db *gorm.DB) (*H
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostStatsORMWithAfterCreate_); ok {
@@ -4657,9 +4594,6 @@ func DefaultReadHostStats(ctx context.Context, in *HostStats, db *gorm.DB) (*Hos
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &HostStatsORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostStatsORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -4781,7 +4715,7 @@ func DefaultStrictUpdateHostStats(ctx context.Context, in *HostStats, db *gorm.D
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostStatsORMWithAfterStrictUpdateSave); ok {
@@ -4923,10 +4857,6 @@ func DefaultListHostStats(ctx context.Context, db *gorm.DB) ([]*HostStats, error
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &HostStatsORM{}, &HostStats{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HostStatsORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

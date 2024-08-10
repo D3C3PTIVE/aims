@@ -3,18 +3,18 @@ package network
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
 
 type TraceORM struct {
-	Hops     []*HopORM `gorm:"foreignkey:TraceId;association_foreignkey:Id"`
-	Id       string    `gorm:"type:uuid;primary_key"`
+	Hops     []*HopORM `gorm:"foreignKey:TraceId;references:Id"`
+	Id       string    `gorm:"type:uuid;primaryKey"`
 	Port     int32
 	Protocol string
 }
@@ -110,7 +110,7 @@ type TraceWithAfterToPB interface {
 type HopORM struct {
 	Host    string
 	IPAddr  string
-	Id      string `gorm:"type:uuid;primary_key"`
+	Id      string `gorm:"type:uuid;primaryKey"`
 	RTT     string
 	TTL     float32
 	TraceId *string
@@ -187,7 +187,7 @@ type HopWithAfterToPB interface {
 }
 
 type DistanceORM struct {
-	Id    string `gorm:"type:uuid;primary_key"`
+	Id    string `gorm:"type:uuid;primaryKey"`
 	Value int32
 }
 
@@ -256,7 +256,7 @@ type DistanceWithAfterToPB interface {
 }
 
 type TimesORM struct {
-	Id   string `gorm:"type:uuid;primary_key"`
+	Id   string `gorm:"type:uuid;primaryKey"`
 	RTT  string
 	SRTT string
 	To   string
@@ -333,7 +333,7 @@ type TimesWithAfterToPB interface {
 type AddressORM struct {
 	Addr      string
 	CreatedAt *time.Time
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Type      string
 	UpdatedAt *time.Time
 	Vendor    string
@@ -435,7 +435,7 @@ func DefaultCreateTrace(ctx context.Context, in *Trace, db *gorm.DB) (*Trace, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TraceORMWithAfterCreate_); ok {
@@ -469,9 +469,6 @@ func DefaultReadTrace(ctx context.Context, in *Trace, db *gorm.DB) (*Trace, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TraceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TraceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -602,7 +599,7 @@ func DefaultStrictUpdateTrace(ctx context.Context, in *Trace, db *gorm.DB) (*Tra
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TraceORMWithAfterStrictUpdateSave); ok {
@@ -745,10 +742,6 @@ func DefaultListTrace(ctx context.Context, db *gorm.DB) ([]*Trace, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TraceORM{}, &Trace{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TraceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -800,7 +793,7 @@ func DefaultCreateHop(ctx context.Context, in *Hop, db *gorm.DB) (*Hop, error) {
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HopORMWithAfterCreate_); ok {
@@ -834,9 +827,6 @@ func DefaultReadHop(ctx context.Context, in *Hop, db *gorm.DB) (*Hop, error) {
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &HopORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HopORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -958,7 +948,7 @@ func DefaultStrictUpdateHop(ctx context.Context, in *Hop, db *gorm.DB) (*Hop, er
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(HopORMWithAfterStrictUpdateSave); ok {
@@ -1105,10 +1095,6 @@ func DefaultListHop(ctx context.Context, db *gorm.DB) ([]*Hop, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &HopORM{}, &Hop{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(HopORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1160,7 +1146,7 @@ func DefaultCreateDistance(ctx context.Context, in *Distance, db *gorm.DB) (*Dis
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DistanceORMWithAfterCreate_); ok {
@@ -1194,9 +1180,6 @@ func DefaultReadDistance(ctx context.Context, in *Distance, db *gorm.DB) (*Dista
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &DistanceORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DistanceORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1318,7 +1301,7 @@ func DefaultStrictUpdateDistance(ctx context.Context, in *Distance, db *gorm.DB)
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(DistanceORMWithAfterStrictUpdateSave); ok {
@@ -1453,10 +1436,6 @@ func DefaultListDistance(ctx context.Context, db *gorm.DB) ([]*Distance, error) 
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &DistanceORM{}, &Distance{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(DistanceORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1508,7 +1487,7 @@ func DefaultCreateTimes(ctx context.Context, in *Times, db *gorm.DB) (*Times, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TimesORMWithAfterCreate_); ok {
@@ -1542,9 +1521,6 @@ func DefaultReadTimes(ctx context.Context, in *Times, db *gorm.DB) (*Times, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &TimesORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TimesORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -1666,7 +1642,7 @@ func DefaultStrictUpdateTimes(ctx context.Context, in *Times, db *gorm.DB) (*Tim
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(TimesORMWithAfterStrictUpdateSave); ok {
@@ -1809,10 +1785,6 @@ func DefaultListTimes(ctx context.Context, db *gorm.DB) ([]*Times, error) {
 			return nil, err
 		}
 	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &TimesORM{}, &Times{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
-	}
 	if hook, ok := interface{}(&ormObj).(TimesORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
 			return nil, err
@@ -1864,7 +1836,7 @@ func DefaultCreateAddress(ctx context.Context, in *Address, db *gorm.DB) (*Addre
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AddressORMWithAfterCreate_); ok {
@@ -1898,9 +1870,6 @@ func DefaultReadAddress(ctx context.Context, in *Address, db *gorm.DB) (*Address
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &AddressORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AddressORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -2022,7 +1991,7 @@ func DefaultStrictUpdateAddress(ctx context.Context, in *Address, db *gorm.DB) (
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AddressORMWithAfterStrictUpdateSave); ok {
@@ -2212,10 +2181,6 @@ func DefaultListAddress(ctx context.Context, db *gorm.DB) ([]*Address, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &AddressORM{}, &Address{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(AddressORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

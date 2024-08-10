@@ -3,24 +3,25 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
-	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
-	field_mask "google.golang.org/genproto/protobuf/field_mask"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	strings "strings"
 	time "time"
+
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
+	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
+	field_mask "google.golang.org/genproto/protobuf/field_mask"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 )
 
 type CoreORM struct {
 	CreatedAt   *time.Time
-	Id          string `gorm:"type:uuid;primary_key"`
+	Id          string `gorm:"type:uuid;primaryKey"`
 	LoginId     *string
 	LoginsCount int32
-	Origin      *OriginORM  `gorm:"not null;foreignkey:CoreId;association_foreignkey:Id"`
-	Private     *PrivateORM `gorm:"foreignkey:CoreId;association_foreignkey:Id"`
-	Public      *PublicORM  `gorm:"foreignkey:CoreId;association_foreignkey:Id"`
-	Realm       *RealmORM   `gorm:"foreignkey:CoreId;association_foreignkey:Id"`
+	Origin      *OriginORM  `gorm:"not null;foreignKey:CoreId;references:Id"`
+	Private     *PrivateORM `gorm:"foreignKey:CoreId;references:Id"`
+	Public      *PublicORM  `gorm:"foreignKey:CoreId;references:Id"`
+	Realm       *RealmORM   `gorm:"foreignKey:CoreId;references:Id"`
 	UpdatedAt   *time.Time
 }
 
@@ -172,7 +173,7 @@ func DefaultCreateCore(ctx context.Context, in *Core, db *gorm.DB) (*Core, error
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(CoreORMWithAfterCreate_); ok {
@@ -206,9 +207,6 @@ func DefaultReadCore(ctx context.Context, in *Core, db *gorm.DB) (*Core, error) 
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &CoreORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(CoreORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -366,7 +364,7 @@ func DefaultStrictUpdateCore(ctx context.Context, in *Core, db *gorm.DB) (*Core,
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(CoreORMWithAfterStrictUpdateSave); ok {
@@ -636,10 +634,6 @@ func DefaultListCore(ctx context.Context, db *gorm.DB) ([]*Core, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &CoreORM{}, &Core{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(CoreORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

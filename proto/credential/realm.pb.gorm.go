@@ -3,11 +3,11 @@ package credential
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	gorm "gorm.io/gorm"
 	strings "strings"
 	time "time"
 )
@@ -15,7 +15,7 @@ import (
 type RealmORM struct {
 	CoreId    *string
 	CreatedAt *time.Time
-	Id        string `gorm:"type:uuid;primary_key"`
+	Id        string `gorm:"type:uuid;primaryKey"`
 	Key       string
 	UpdatedAt *time.Time
 	Value     string
@@ -115,7 +115,7 @@ func DefaultCreateRealm(ctx context.Context, in *Realm, db *gorm.DB) (*Realm, er
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RealmORMWithAfterCreate_); ok {
@@ -149,9 +149,6 @@ func DefaultReadRealm(ctx context.Context, in *Realm, db *gorm.DB) (*Realm, erro
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &RealmORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RealmORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -273,7 +270,7 @@ func DefaultStrictUpdateRealm(ctx context.Context, in *Realm, db *gorm.DB) (*Rea
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RealmORMWithAfterStrictUpdateSave); ok {
@@ -459,10 +456,6 @@ func DefaultListRealm(ctx context.Context, db *gorm.DB) ([]*Realm, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &RealmORM{}, &Realm{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(RealmORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {

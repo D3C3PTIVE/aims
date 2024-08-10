@@ -71,12 +71,3 @@ message DeleteHostRequest{
 message DeleteHostResponse{
     repeated host.Host Hosts = 1;
 }
-
-// message ReadHostManyRequest{
-//     host.Host Host = 1;
-// }
-//
-// message ReadHostManyResponse{
-//     repeated host.Host Hosts = 1;
-// }
-

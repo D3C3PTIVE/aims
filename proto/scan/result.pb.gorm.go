@@ -3,25 +3,24 @@ package scan
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	gorm "github.com/jinzhu/gorm"
 	host "github.com/maxlandon/aims/proto/host"
 	network "github.com/maxlandon/aims/proto/network"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
+	gorm "gorm.io/gorm"
 	strings "strings"
 )
 
 type ResultORM struct {
-	Address   *network.AddressORM `gorm:"foreignkey:AddressId;association_foreignkey:Id"`
+	Address   *network.AddressORM `gorm:"foreignKey:AddressId;references:Id"`
 	AddressId *string
 	Data      string
-	Host      *host.HostORM `gorm:"foreignkey:HostId;association_foreignkey:Id"`
+	Host      *host.HostORM `gorm:"foreignKey:HostId;references:Id"`
 	HostId    *string
-	Id        string        `gorm:"type:uuid;primary_key"`
-	Port      *host.PortORM `gorm:"foreignkey:PortId;association_foreignkey:Id"`
+	Id        string        `gorm:"type:uuid;primaryKey"`
+	Port      *host.PortORM `gorm:"foreignKey:PortId;references:Id"`
 	PortId    *string
-	Service   *network.ServiceORM `gorm:"foreignkey:ServiceId;association_foreignkey:Id"`
+	Service   *network.ServiceORM `gorm:"foreignKey:ServiceId;references:Id"`
 	ServiceId *string
 }
 
@@ -159,7 +158,7 @@ func DefaultCreateResult(ctx context.Context, in *Result, db *gorm.DB) (*Result,
 			return nil, err
 		}
 	}
-	if err = db.Create(&ormObj).Error; err != nil {
+	if err = db.Omit().Create(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ResultORMWithAfterCreate_); ok {
@@ -193,9 +192,6 @@ func DefaultReadResult(ctx context.Context, in *Result, db *gorm.DB) (*Result, e
 		if db, err = hook.BeforeReadApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	if db, err = gorm1.ApplyFieldSelection(ctx, db, nil, &ResultORM{}); err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ResultORMWithBeforeReadFind); ok {
 		if db, err = hook.BeforeReadFind(ctx, db); err != nil {
@@ -317,7 +313,7 @@ func DefaultStrictUpdateResult(ctx context.Context, in *Result, db *gorm.DB) (*R
 			return nil, err
 		}
 	}
-	if err = db.Save(&ormObj).Error; err != nil {
+	if err = db.Omit().Save(&ormObj).Error; err != nil {
 		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ResultORMWithAfterStrictUpdateSave); ok {
@@ -539,10 +535,6 @@ func DefaultListResult(ctx context.Context, db *gorm.DB) ([]*Result, error) {
 		if db, err = hook.BeforeListApplyQuery(ctx, db); err != nil {
 			return nil, err
 		}
-	}
-	db, err = gorm1.ApplyCollectionOperators(ctx, db, &ResultORM{}, &Result{}, nil, nil, nil, nil)
-	if err != nil {
-		return nil, err
 	}
 	if hook, ok := interface{}(&ormObj).(ResultORMWithBeforeListFind); ok {
 		if db, err = hook.BeforeListFind(ctx, db); err != nil {
