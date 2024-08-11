@@ -23,29 +23,29 @@ func New(db *gorm.DB) *server {
 }
 
 func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.CreateAgentResponse, error) {
-	var hostsORM []pb.AgentORM
+	var agents []pb.AgentORM
 
 	for _, h := range req.GetAgents() {
 		horm, _ := h.ToORM(ctx)
-		hostsORM = append(hostsORM, horm)
+		agents = append(agents, horm)
 	}
 
-	// Filter hosts to add according to AIMS criteria first.
-	dbHosts := []*pb.AgentORM{}
+	// Filter agents to add according to AIMS criteria first.
+	dbAgents := []*pb.AgentORM{}
 	database := Preloads(s.db, &c2.AgentFilters{})
-	database.Find(&dbHosts)
-	filtered := core.FilterIdenticalAgent(hostsORM, dbHosts)
+	database.Find(&dbAgents)
+	filtered := core.FilterIdenticalAgent(agents, dbAgents)
 
 	err := s.db.Create(&filtered).Error
 
-	var hostsPB []*pb.Agent
-	for _, horm := range hostsORM {
+	var agentspb []*pb.Agent
+	for _, horm := range agents {
 		hpb, _ := horm.ToPB(ctx)
-		hostsPB = append(hostsPB, &hpb)
+		agentspb = append(agentspb, &hpb)
 	}
 
 	// Response
-	res := &c2.CreateAgentResponse{Agents: hostsPB}
+	res := &c2.CreateAgentResponse{Agents: agentspb}
 
 	return res, err
 }
@@ -58,18 +58,18 @@ func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	}
 
 	// Query
-	creds := []*pb.AgentORM{}
+	agents := []*pb.AgentORM{}
 	database := Preloads(s.db, &c2.AgentFilters{})
-	err = database.Where(cred).First(&creds).Error
+	err = database.Where(cred).First(&agents).Error
 
-	credspb := []*pb.Agent{}
-	for _, cred := range creds {
+	agentspb := []*pb.Agent{}
+	for _, cred := range agents {
 		credpb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &credpb)
+		agentspb = append(agentspb, &credpb)
 	}
 
 	// Response
-	res := &c2.ReadAgentResponse{Agents: credspb}
+	res := &c2.ReadAgentResponse{Agents: agentspb}
 
 	return res, err
 }
@@ -82,18 +82,18 @@ func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	}
 
 	// Query
-	creds := []*pb.AgentORM{}
+	agents := []*pb.AgentORM{}
 	database := Preloads(s.db, &c2.AgentFilters{})
-	err = database.Where(cred).Find(&creds).Error
+	err = database.Where(cred).Find(&agents).Error
 
-	credspb := []*pb.Agent{}
-	for _, cred := range creds {
+	agentspb := []*pb.Agent{}
+	for _, cred := range agents {
 		pb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &pb)
+		agentspb = append(agentspb, &pb)
 	}
 
 	// Response
-	res := &c2.ReadAgentResponse{Agents: credspb}
+	res := &c2.ReadAgentResponse{Agents: agentspb}
 
 	return res, err
 }
@@ -106,7 +106,7 @@ func (s *server) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.DeleteAgen
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteAgent not implemented")
 }
 
-// Preloads loads a given database with preload hosts association clauses before querying.
+// Preloads loads a given database with preload agent association clauses before querying.
 func Preloads(database *gorm.DB, filters *c2.AgentFilters) *gorm.DB {
 	if filters == nil {
 		filters = &c2.AgentFilters{}

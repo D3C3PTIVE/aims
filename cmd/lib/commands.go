@@ -72,3 +72,5 @@ func bind(group string, menu *cobra.Command, con *client.Client, cmds ...func(co
 		menu.AddCommand(initCommand(con))
 	}
 }
+
+		

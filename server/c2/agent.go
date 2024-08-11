@@ -21,7 +21,29 @@ func NewChannelServer(db *gorm.DB) *channelServer {
 }
 
 func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest) (*c2.CreateChannelResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateChannel not implemented")
+	var channelsORM []pb.ChannelORM
+
+	for _, h := range req.GetChannels() {
+		horm, _ := h.ToORM(ctx)
+		channelsORM = append(channelsORM, horm)
+	}
+
+	// Filter channels to add according to AIMS criteria first.
+	dbChans := []*pb.ChannelORM{}
+	s.db.Find(&dbChans)
+
+	err := s.db.Create(&dbChans).Error
+
+	var chanspb []*pb.Channel
+	for _, horm := range channelsORM {
+		hpb, _ := horm.ToPB(ctx)
+		chanspb = append(chanspb, &hpb)
+	}
+
+	// Response
+	res := &c2.CreateChannelResponse{Channels: chanspb}
+
+	return res, err
 }
 
 func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*c2.ReadChannelResponse, error) {
@@ -32,17 +54,17 @@ func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*
 	}
 
 	// Query
-	creds := []*pb.ChannelORM{}
-	err = s.db.Where(cred).First(&creds).Error
+	chans := []*pb.ChannelORM{}
+	err = s.db.Where(cred).First(&chans).Error
 
-	credspb := []*pb.Channel{}
-	for _, cred := range creds {
+	chanspb := []*pb.Channel{}
+	for _, cred := range chans {
 		pb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &pb)
+		chanspb = append(chanspb, &pb)
 	}
 
 	// Response
-	res := &c2.ReadChannelResponse{Channels: credspb}
+	res := &c2.ReadChannelResponse{Channels: chanspb}
 
 	return res, err
 }
@@ -55,17 +77,17 @@ func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*
 	}
 
 	// Query
-	creds := []*pb.ChannelORM{}
-	err = s.db.Where(cred).Find(&creds).Error
+	chans := []*pb.ChannelORM{}
+	err = s.db.Where(cred).Find(&chans).Error
 
-	credspb := []*pb.Channel{}
-	for _, cred := range creds {
+	chanspb := []*pb.Channel{}
+	for _, cred := range chans {
 		pb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &pb)
+		chanspb = append(chanspb, &pb)
 	}
 
 	// Response
-	res := &c2.ReadChannelResponse{Channels: credspb}
+	res := &c2.ReadChannelResponse{Channels: chanspb}
 
 	return res, err
 }
