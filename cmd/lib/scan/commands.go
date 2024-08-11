@@ -21,6 +21,8 @@ package scan
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
@@ -28,18 +30,51 @@ import (
 
 	"github.com/maxlandon/aims/client"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
+	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/proto/rpc/scans"
 	pb "github.com/maxlandon/aims/proto/scan"
+	"github.com/maxlandon/aims/scan"
 	"github.com/maxlandon/aims/scan/nmap"
 )
 
 // Commands returns all scan commands.
 func Commands(con *client.Client) *cobra.Command {
 	scanCmd := &cobra.Command{
-        Use: "scan",
+		Use:     "scan",
 		Short:   "Manage running and database scans",
 		GroupID: "database",
 	}
+
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "Display hosts (with filters or styles)",
+		RunE: func(command *cobra.Command, args []string) error {
+			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+				Scan: &pb.Run{},
+				Filters: &scans.RunFilters{
+					Hosts: true,
+				},
+			})
+			err = aims.CheckError(err)
+			if err != nil {
+				return err
+			}
+
+				fmt.Printf("No scans in database.\n")
+
+				return nil
+	
+
+			// Generate the table of hosts.
+			table := display.Table(res.GetScans(), scan.DisplayFields, scan.DisplayHeaders()...)
+			fmt.Println(table.Render())
+
+			return nil
+		},
+	}
+
+	scanCmd.AddCommand(listCmd)
+
 	importCmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import (running or finished) scans data from one or more files",
@@ -67,9 +102,6 @@ func Commands(con *client.Client) *cobra.Command {
 					Scans: []*pb.Run{genericScan.ToPB()},
 				})
 
-				// _, err = con.Hosts.Create(command.Context(), &hosts.CreateHostRequest{
-				// 	Hosts: genericScan.Hosts,
-				// })
 				err = aims.CheckError(err)
 				if err != nil {
 					fmt.Printf("Error: %s\n", err)
@@ -90,5 +122,60 @@ func Commands(con *client.Client) *cobra.Command {
 
 	scanCmd.AddCommand(importCmd)
 
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show one ore more scan details",
+		RunE: func(command *cobra.Command, args []string) error {
+			targets, _ := command.Flags().GetBool("targets")
+			tasks, _ := command.Flags().GetBool("tasks")
+
+			options := scan.DisplayDetails()
+
+			if tasks {
+				options = append(options, display.WithHeader("Tasks Details", 3))
+			}
+			if targets {
+                options = append(options, display.WithHeader("Targets Details", 4))
+			}
+
+			// Request
+			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+				Scan: &pb.Run{},
+				Filters: &scans.RunFilters{
+					Hosts: true,
+					Ports: true,
+				},
+			})
+			err = aims.CheckError(err)
+
+			// Display
+			for _, h := range res.GetScans() {
+				if strings.HasPrefix(h.Id, strip(args[0])) {
+					fmt.Println(display.Details(h, scan.DisplayFields, options...))
+				}
+			}
+
+			return nil
+		},
+	}
+
+	scanCmd.AddCommand(showCmd)
+
+	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+		f.BoolP("targets", "T", false, "Show scan targets' details")
+	})
+	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+		f.BoolP("tasks", "t", false, "Show all scan tasks status/details")
+	})
+
 	return scanCmd
+}
+
+const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
+
+var re = regexp.MustCompile(ansi)
+
+// Strip removes all ANSI escaped color sequences in a string.
+func strip(str string) string {
+	return re.ReplaceAllString(str, "")
 }

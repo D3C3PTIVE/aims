@@ -20,6 +20,7 @@ package display
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -31,33 +32,32 @@ import (
 func Details[T any](value T, fields map[string]func(T) string, opts ...Options) string {
 	var details string
 
-	// Prepare default weights.
+	// Prepare default options (e.g., weights, headers).
 	options := defaultOpts(opts...)
 
 	headers := options.headers
-	weights := make([]int, len(headers))
-	for i, header := range headers {
-		weights[i] = options.weights[header]
+	weightsMap := make(map[int][]string)
+
+	// Group headers by their weights.
+	for _, header := range headers {
+		weight := options.weights[header]
+		weightsMap[weight] = append(weightsMap[weight], header)
 	}
 
-	grpWeight := weights[0]
-	var grp []string
+	// Extract and sort the weights in ascending order.
+	var sortedWeights []int
+	for weight := range weightsMap {
+		sortedWeights = append(sortedWeights, weight)
+	}
+	sort.Ints(sortedWeights)
 
-	for i, weight := range weights {
-		if weight > grpWeight {
-			grpWeight = i
-			details += displayGroup[T](value, grp, fields)
-			grp = make([]string, 0)
-			continue
-		}
-
-		grp = append(grp, headers[i])
+	// Process headers in ascending order of their weights.
+	for _, weight := range sortedWeights {
+		grp := weightsMap[weight]
+		details += displayGroup(value, grp, fields)
 	}
 
-	if len(grp) > 0 {
-		details += displayGroup[T](value, grp, fields)
-	}
-
+	// Trim any trailing newlines or extra spaces.
 	return strings.TrimSuffix(details, "\n\n")
 }
 

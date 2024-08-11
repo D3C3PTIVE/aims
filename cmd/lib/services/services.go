@@ -69,7 +69,7 @@ func Commands(con *client.Client) *cobra.Command {
 				ports = append(ports, h.GetPorts()...)
 			}
 
-			table := display.Table(ports, network.Fields, network.Headers()...)
+			table := display.Table(ports, network.DisplayFields, network.Headers()...)
 			fmt.Println(table.Render())
 
 			return nil
@@ -114,7 +114,7 @@ func Commands(con *client.Client) *cobra.Command {
 			// Display
 			for _, h := range ports {
 				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, network.Fields, options...))
+					fmt.Println(display.Details(h, network.DisplayFields, options...))
 				}
 			}
 			return nil
@@ -154,7 +154,7 @@ func CompleteByID(client *client.Client) carapace.Action {
 			ports = append(ports, h.GetPorts()...)
 		}
 
-		results := display.Completions(ports, network.Fields, options...)
+		results := display.Completions(ports, network.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})

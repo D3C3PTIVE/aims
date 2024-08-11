@@ -123,8 +123,8 @@ func Completions() []display.Options {
 	return headers
 }
 
-// Fields maps field names to their value generators.
-var Fields = map[string]func(port *host.Port) string{
+// DisplayFields maps field names to their value generators.
+var DisplayFields = map[string]func(port *host.Port) string{
 	// Table
 	"ID": func(port *host.Port) string {
 		id := display.FormatSmallID(port.Id)

@@ -178,6 +178,16 @@ func Preloads(database *gorm.DB, filters *scans.RunFilters) *gorm.DB {
 
 	filts := map[string]bool{
 		// Base, unconditional preloads for all hosts
+		"Debugging":   true,
+		"PreScripts":  true,
+		"PostScripts": true,
+		"Begin":       true,
+		"Progress":    true,
+		"End":         true,
+
+		"Stats":          true,
+		"Stats.Hosts":    true,
+		"Stats.Finished": true,
 
 		// Filtered
 		"Hosts": filters.Hosts,

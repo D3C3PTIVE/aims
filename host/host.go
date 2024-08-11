@@ -46,7 +46,7 @@ func DisplayHeaders() (headers []display.Options) {
 
 	add("ID", 1)
 	add("Hostnames", 1)
-		add("OS Name", 1)
+    add("OS Name", 1)
 	add("OS Family", 1)
 	add("Addresses", 1)
 
@@ -82,7 +82,6 @@ func DisplayDetails() []display.Options {
 	add("Hostnames", 3)
 	add("Addresses", 3)
 	add("Hops", 3)
-	// add("Route", 3) -- command-line flaag --traceroute
 
 	// Tools
 	add("Comment", 4)

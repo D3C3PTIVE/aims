@@ -19,8 +19,14 @@ package scan
 */
 
 import (
+	"fmt"
+	"net/url"
+	"slices"
 	"strings"
+	"time"
 
+	"github.com/fatih/color"
+	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/proto/scan"
 )
 
@@ -56,9 +62,8 @@ func (r *Run) ToPB() *scan.Run {
 // Functionality
 //
 // Return a concurrent spinner/progress bar / interface for progress
-// Function to update progress
+// unction to update progress
 
-// AddTarget - Add a Target to the Scan. The fields are only checked
 // when they are needed by the service probing stack used by the scan.
 func (r *Run) AddTarget(t *Target) {
 }
@@ -99,3 +104,290 @@ func (r *Run) AddResult(res *Result) (err error) {
 //
 // Zgrab-specific ------------------------------------------------------
 //
+
+// DisplayHeaders returns all weighted table headers for a table of scans.
+func DisplayHeaders() (headers []display.Options) {
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("ID", 1)
+	add("Scanner", 1)
+	add("Name", 1)
+	add("Info", 1)
+	add("Hosts", 1)
+	add("Begin/End", 1)
+	add("Tasks", 1)
+	add("Finished", 1)
+
+	add("Args", 2)
+	add("Targets", 2)
+
+	return headers
+}
+
+// DetailHeaders returns the headers for a detailed scan view.
+func DisplayDetails() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	// Core
+
+	add("Scanner", 1)
+	add("Name", 1)
+	add("Info", 1)
+	add("Hosts", 1)
+	add("Begin/End", 1)
+	add("Finished", 1)
+	add("Tasks", 1)
+	add("Targets", 1)
+	add("Args", 1)
+
+	return headers
+}
+
+func tasksHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+	add("Time", 1)
+	add("Name", 1)
+	add("Info", 1)
+
+	return headers
+}
+
+var tasksFields = map[string]func(h *scan.ScanTask) string{
+	"Time": func(taskEnd *scan.ScanTask) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Name": func(h *scan.ScanTask) string {
+		return h.Task
+	},
+	"Info": func(h *scan.ScanTask) string {
+		return h.ExtraInfo
+	},
+}
+
+func tasksProgressHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("Time", 1)
+	add("Name", 1)
+	add("Percent", 1)
+
+	return headers
+}
+
+var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
+	"Name": func(h *scan.TaskProgress) string {
+		return h.Task
+	},
+	"Time": func(taskEnd *scan.TaskProgress) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Percent": func(taskEnd *scan.TaskProgress) string {
+		return color.HiYellowString(fmt.Sprintf("%v%%", taskEnd.Percent))
+	},
+}
+
+// Fields maps field names to their value generators.
+var DisplayFields = map[string]func(h *scan.Run) string{
+	// Table
+	"ID": func(h *scan.Run) string {
+		if len(h.Begin) > len(h.End) {
+			return color.HiGreenString(display.FormatSmallID(h.Id))
+		}
+		return display.FormatSmallID(h.Id)
+	},
+	"Scanner": func(h *scan.Run) string {
+		return h.Scanner
+	},
+	"Name": func(h *scan.Run) string {
+		return h.ProfileName
+	},
+	"Info": func(h *scan.Run) string {
+		info := h.Info.Protocol + "/" + h.Info.Type
+		return info
+	},
+	"Args": func(h *scan.Run) string {
+		return h.Args
+	},
+	"Begin/End": func(h *scan.Run) string {
+		if h.Stats == nil || h.Stats.Finished == nil {
+			return ""
+		}
+		done := h.Stats.Finished.TimeStr
+		return fmt.Sprintf("%s (%s)",
+			done,
+			time.Duration(int64(h.Stats.Finished.Elapsed)).String())
+	},
+	"Targets": func(h *scan.Run) string {
+		targetsDisplay := new(strings.Builder)
+
+		if h.Info.NumServices > 0 {
+			targetsDisplay.WriteString(fmt.Sprintf("Services (%d)   ", h.Info.NumServices))
+		}
+
+		if len(h.Targets) > 0 {
+			tgtRaw := fmt.Sprintf("Hosts (%d)", len(h.Targets))
+			targetsDisplay.WriteString(tgtRaw)
+		}
+
+		return strings.TrimSpace(targetsDisplay.String())
+	},
+	"Targets Details": func(h *scan.Run) string {
+		targetsDisplay := new(strings.Builder)
+
+		if h.Info.Services != "" {
+			targetsDisplay.WriteString(h.Info.Services)
+		}
+
+		for _, tgt := range h.Targets {
+			tgtRaw := fmt.Sprintf("%s:%d", tgt.Address, tgt.Port)
+			if tgt.Port == 0 {
+				tgtRaw = strings.TrimSuffix(tgtRaw, ":0")
+			}
+			tgtURL, err := url.Parse(tgtRaw)
+			if err != nil {
+				return tgtRaw
+			}
+
+			targetsDisplay.WriteString(fmt.Sprintln(tgtURL.String()))
+		}
+
+		return targetsDisplay.String()
+	},
+	"Finished": func(h *scan.Run) string {
+		return ""
+	},
+	"Hosts": func(h *scan.Run) string {
+		if h.Stats == nil || h.Stats.Hosts == nil {
+			return ""
+		}
+		hosts := fmt.Sprint(h.Stats.Hosts.Total)
+		hosts += color.HiBlackString("-")
+
+		hosts += color.HiGreenString(fmt.Sprint(h.Stats.Hosts.Up))
+		hosts += "/"
+		hosts += color.HiRedString(fmt.Sprint(h.Stats.Hosts.Down))
+
+		return hosts
+	},
+	"Tasks": func(h *scan.Run) string {
+		tasksDisplay := ""
+		if len(h.End) < len(h.Begin) {
+			tasksDisplay += color.HiYellowString("%d", len(h.End))
+		} else {
+			tasksDisplay += fmt.Sprintf("%d", len(h.End))
+		}
+		tasksDisplay += fmt.Sprintf("/%d", len(h.Begin))
+
+		return tasksDisplay
+	},
+	"Tasks Details": func(h *scan.Run) string {
+		return formatTasks(h)
+	},
+}
+
+func formatTasks(h *scan.Run) string {
+	tasksDisplay := ""
+	var done []*scan.ScanTask
+	var running []*scan.TaskProgress
+	var runningRemain []*scan.TaskProgress
+	nonFinished := true
+
+	if len(h.Begin) > 0 {
+		for i := range h.Begin {
+			// Find the corresponding end if any.
+			// Or check the running tasks progress values.
+			if 0 <= i && i <= len(h.End) {
+				taskEnd := h.End[i]
+				done = append(done, taskEnd)
+				nonFinished = false
+				continue
+			}
+
+			nonFinished = false
+		}
+	}
+
+	// Filter out duplicates in remain
+	if len(h.Progress) > 0 && nonFinished {
+		slices.SortFunc(h.Progress, func(a, b *scan.TaskProgress) int {
+			switch {
+			case a.Percent < b.Percent:
+				return -1
+			case a.Percent > b.Percent:
+				return +1
+			default:
+				return 0
+			}
+		})
+		var current *scan.TaskProgress
+		done := false
+
+		for i := len(h.Progress); i > 0; i-- {
+			task := h.Progress[i-1]
+
+			if current == nil {
+				runningRemain = append(runningRemain, task)
+				current = task
+				continue
+			}
+
+			if current.Task == task.Task {
+				continue
+			}
+
+			current = nil
+			done = true
+		}
+
+		if current != nil && done {
+			runningRemain = append(runningRemain, current)
+		}
+	}
+
+	if len(runningRemain) > 0 {
+		slices.SortFunc(runningRemain, func(a, b *scan.TaskProgress) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+		running = append(running, runningRemain...)
+	}
+	if len(running) > 0 {
+		slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Running tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	if len(done) > 0 {
+		slices.SortFunc(done, func(a, b *scan.ScanTask) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+
+		table := display.Table(done, tasksFields, tasksHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Done tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	return tasksDisplay
+}
