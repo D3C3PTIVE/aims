@@ -20,6 +20,7 @@ package lib
 
 import (
 	"github.com/maxlandon/aims/client"
+	"github.com/maxlandon/aims/cmd/lib/c2"
 	"github.com/maxlandon/aims/cmd/lib/credentials"
 	"github.com/maxlandon/aims/cmd/lib/hosts"
 	"github.com/maxlandon/aims/cmd/lib/scan"
@@ -34,6 +35,11 @@ func BindCommandsTo(rootCmd *cobra.Command, con *client.Client) {
 		credentials.Commands,
 		services.Commands,
 		scan.Commands,
+	)
+
+	bind("command & control", rootCmd, con,
+		c2.AgentsCommands,
+		c2.ChannelsCommands,
 	)
 }
 

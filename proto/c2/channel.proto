@@ -29,6 +29,7 @@ message Channel {
   string ProxyURL = 15;
   // Malleable Profile = 13;
   // Also add a simpler field for querying URI/remotes.
+  string RawData = 16
 
   int64 ReconnectInterval = 21;
   int64 Interval = 22;

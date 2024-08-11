@@ -22,10 +22,12 @@ import (
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
+	c2pb "github.com/maxlandon/aims/proto/rpc/c2"
 	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/network"
 	"github.com/maxlandon/aims/proto/rpc/scans"
+	"github.com/maxlandon/aims/server/c2"
 	"github.com/maxlandon/aims/server/credential"
 	"github.com/maxlandon/aims/server/host"
 	networkServer "github.com/maxlandon/aims/server/network"
@@ -59,10 +61,17 @@ func New(conn *grpc.Server, opts ...Options) {
 		options = opt(options)
 	}
 
+	// Targets
 	hosts.RegisterHostsServer(conn, host.New(options.db))
 	hosts.RegisterUsersServer(conn, host.NewUsers(options.db))
 	network.RegisterServicesServer(conn, networkServer.New(options.db))
 	credentials.RegisterCredentialsServer(conn, credential.New(options.db))
 	credentials.RegisterLoginsServer(conn, credential.NewLoginServer(options.db))
-    scans.RegisterScansServer(conn, scan.New(options.db))
+
+	// C2
+	c2pb.RegisterAgentsServer(conn, c2.New(options.db))
+	c2pb.RegisterChannelsServer(conn, c2.NewChannelServer(options.db))
+
+	// Infrastructure & tools
+	scans.RegisterScansServer(conn, scan.New(options.db))
 }

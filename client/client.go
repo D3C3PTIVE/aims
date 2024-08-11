@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/maxlandon/aims/client/transport"
+	"github.com/maxlandon/aims/proto/rpc/c2"
 	"github.com/maxlandon/aims/proto/rpc/credentials"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/network"
@@ -39,10 +40,10 @@ import (
 // offered by the AIMS server backend.
 type Client struct {
 	// Teamclient & remotes
-	Teamclient *client.Client
-	dialer     *transport.TeamClient
-	conn       *grpc.ClientConn
-    connectHooks []func() error
+	Teamclient   *client.Client
+	dialer       *transport.TeamClient
+	conn         *grpc.ClientConn
+	connectHooks []func() error
 
 	// Services
 	Hosts    hosts.HostsClient
@@ -51,6 +52,8 @@ type Client struct {
 	Creds    credentials.CredentialsClient
 	Logins   credentials.LoginsClient
 	Scans    scans.ScansClient
+	Agents   c2.AgentsClient
+	Channels c2.ChannelsClient
 }
 
 func New(opts ...grpc.DialOption) (con *Client, err error) {
@@ -73,7 +76,6 @@ func New(opts ...grpc.DialOption) (con *Client, err error) {
 	return con, err
 }
 
-
 // Init registers all gRPC clients to the existing teamclient connection.
 func (c *Client) Init() error {
 	if c.dialer.Conn == nil {
@@ -88,6 +90,8 @@ func (c *Client) Init() error {
 	c.Creds = credentials.NewCredentialsClient(conn)
 	c.Logins = credentials.NewLoginsClient(conn)
 	c.Scans = scans.NewScansClient(conn)
+	c.Agents = c2.NewAgentsClient(conn)
+	c.Channels = c2.NewChannelsClient(conn)
 
 	return nil
 }
@@ -117,7 +121,7 @@ func (con *Client) Users() (users []team.User, err error) {
 }
 
 func (con *Client) VersionClient() (version team.Version, err error) {
-    return con.Teamclient.VersionClient()
+	return con.Teamclient.VersionClient()
 }
 
 // VersionServer returns the version information of the server to which
@@ -171,9 +175,9 @@ func (con *Client) ConnectRun(cmd *cobra.Command, _ []string) error {
 
 	// Register our AIMS client services, and monitor events.
 	// Also set ourselves up to save our client commands in history.
-    if err := con.Init(); err !=  nil {
-        return err
-    }
+	if err := con.Init(); err != nil {
+		return err
+	}
 
 	// Never enable asciicasts/logs streaming when this
 	// client is used to perform completions. Both of these will tinker
@@ -182,7 +186,7 @@ func (con *Client) ConnectRun(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-    return nil
+	return nil
 }
 
 // ConnectComplete is a special connection mode which should be
@@ -208,9 +212,9 @@ func (con *Client) ConnectComplete() (carapace.Action, error) {
 
 	// Register our AIMS client services, and monitor events.
 	// Also set ourselves up to save our client commands in history.
-    if err := con.Init(); err !=  nil {
-        return carapace.ActionMessage("RPC init error: %s", err), err
-    }
+	if err := con.Init(); err != nil {
+		return carapace.ActionMessage("RPC init error: %s", err), err
+	}
 
 	return carapace.ActionValues(), nil
 }
@@ -254,7 +258,6 @@ func compCommandCalled(cmd *cobra.Command) bool {
 
 	return false
 }
-
 
 func (con *Client) isOffline(cmd *cobra.Command) bool {
 	// Teamclient configuration import does not need network.

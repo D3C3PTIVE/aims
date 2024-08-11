@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package c2; 
+
+import "c2/channel.proto";
+
+// Channels is a service that allows to interact with all c2s.
+service Channels {
+   // General
+   rpc Create(CreateChannelRequest) returns (CreateChannelResponse) {}
+   rpc Read(ReadChannelRequest) returns (ReadChannelResponse) {}
+   rpc Upsert(UpsertChannelRequest) returns (UpsertChannelResponse) {}
+   rpc Delete(DeleteChannelRequest) returns (DeleteChannelResponse) {}
+}
+
+message ChannelFilters {
+    int64 MaxResults = 1;
+}
+
+// General
+
+message CreateChannelRequest {
+    ChannelFilters Filters = 1;
+    repeated c2.Channel Channels = 2;
+}
+
+message CreateChannelResponse {
+    repeated c2.Channel Channels = 1;
+}
+
+message ReadChannelRequest{
+    ChannelFilters Filters = 1;
+    c2.Channel Channel = 2;
+}
+
+message ReadChannelResponse{
+    repeated c2.Channel Channels = 1;
+}
+
+message UpsertChannelRequest{
+    ChannelFilters Filters = 1;
+    repeated c2.Channel Channels = 2;
+}
+
+message UpsertChannelResponse{
+    repeated c2.Channel Channels = 1;
+}
+
+message DeleteChannelRequest{
+    repeated c2.Channel Channels = 1;
+}
+
+message DeleteChannelResponse{
+    repeated c2.Channel Channels = 1;
+}
