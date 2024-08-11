@@ -100,6 +100,7 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 			return nil
 		},
 	}
+
 	scanCmd.AddCommand(showCmd)
 
 	showComps := carapace.Gen(showCmd)
