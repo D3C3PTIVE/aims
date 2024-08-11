@@ -19,11 +19,12 @@ package scan
 */
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -46,12 +47,12 @@ func Commands(con *client.Client) *cobra.Command {
 		GroupID: "database",
 	}
 
-    scanCmd.AddCommand(listCommand(con))
-    scanCmd.AddCommand(showCommand(con))
+	scanCmd.AddCommand(listCommand(con))
+	scanCmd.AddCommand(showCommand(con))
 
-    // Import
-    importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
-    scanCmd.AddCommand(importCmd)
+	// Import
+	importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
+	scanCmd.AddCommand(importCmd)
 
 	aims.Bind(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.BoolP("nmap", "N", false, "Hint (or force) parsing the file(s) as nmap scans (default nmap format used is xml)")
@@ -59,8 +60,8 @@ func Commands(con *client.Client) *cobra.Command {
 
 	carapace.Gen(importCmd).PositionalAnyCompletion(carapace.ActionFiles().Usage("scan files to import"))
 
-    // Export
-    exportCmd := export.ExportCommand(scanCmd, con, exportCommand(con))
+	// Export
+	exportCmd := export.ExportCommand(scanCmd, con, exportCommand(con))
 	scanCmd.AddCommand(exportCmd)
 
 	aims.Bind(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
@@ -87,10 +88,10 @@ func listCommand(con *client.Client) *cobra.Command {
 				return err
 			}
 
-            if len(res.GetScans()) == 0 {
+			if len(res.GetScans()) == 0 {
 				fmt.Printf("No scans in database.\n")
 				return nil
-            }
+			}
 
 			// Generate the table of hosts.
 			table := display.Table(res.GetScans(), scan.DisplayFields, scan.DisplayHeaders()...)
@@ -100,7 +101,7 @@ func listCommand(con *client.Client) *cobra.Command {
 		},
 	}
 
-    return listCmd
+	return listCmd
 }
 
 func showCommand(con *client.Client) *cobra.Command {
@@ -117,7 +118,7 @@ func showCommand(con *client.Client) *cobra.Command {
 				options = append(options, display.WithHeader("Tasks Details", 3))
 			}
 			if targets {
-                options = append(options, display.WithHeader("Targets Details", 4))
+				options = append(options, display.WithHeader("Targets Details", 4))
 			}
 
 			// Request
@@ -148,60 +149,101 @@ func showCommand(con *client.Client) *cobra.Command {
 		f.BoolP("tasks", "t", false, "Show all scan tasks status/details")
 	})
 
-    return showCmd
+	return showCmd
 }
 
-func importCommand(con *client.Client) func(cmd *cobra.Command, args []string) error {
-    
-    importRunE := func(command *cobra.Command, args []string) (err error) {
-        for _, arg := range args {
-            // Handle XML parsing here if asked to it as an Nmap scan.
-			asNmap, _ := command.Flags().GetBool("nmap")
+func importCommand(con *client.Client) func(cmd *cobra.Command, arg string, data []byte) error {
+	importRunE := func(command *cobra.Command, arg string, data []byte) (err error) {
+		scanList, err := importScan(command, arg, data)
+		if err != nil {
+			return err
+		}
 
-            var genericScan *scan.Run
+		// Register all objects to database, with adjustements.
+		res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
+			Scans: scanList,
+		})
 
-            if asNmap {
-                genericScan, err = nmap.FromXML([]byte(arg))
-                if err != nil || genericScan == nil {
-                    fmt.Printf("Error parsing Nmap scan XML file: %s", err)
-                    return nil
-                }
-            } else {
-                genericScan = &scan.Run{}
-            }
+		err = aims.CheckError(err)
+		if err != nil {
+			return err
+		}
 
-            err = proto.UnmarshalText(arg, genericScan.ToPB())
-            err = aims.CheckError(err)
-            if err != nil {
-                return err
-            }
+		if len(scanList) > 0 {
+			fmt.Printf("Saved %d scans in database", len(res.Scans))
+		}
 
-            // Determine if scan is running: if yes, watch the file for changes
-            // and monitor the input. Notify the user on the command that we are
-            // monitoring the scan file.
+		return nil
+	}
 
-            // Register all objects to database, with adjustements.
-            _, err = con.Scans.Create(command.Context(), &scans.CreateScanRequest{
-                Scans: []*pb.Run{genericScan.ToPB()},
-            })
+	return importRunE
+}
 
-            err = aims.CheckError(err)
-            if err != nil {
-                return err
-            }
-        }
+func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, error) {
+	scanList := make([]*pb.Run, 0)
+	// If forced to parse an NMAP XML file.
+	if asNmap, _ := command.Flags().GetBool("nmap"); asNmap {
+		nmapScans, err := importNmap(data, arg)
+		if err != nil {
+			return scanList, fmt.Errorf("Nmap: %s", err.Error())
+		}
+		scanList = append(scanList, nmapScans...)
 
-        return nil
-    }
+	} else {
+		jsonScans, err := export.ImportJSONTest[*pb.Run](data, arg)
+		// jsonScans, err := importJSON(data, arg)
+		if err != nil {
+			return scanList, fmt.Errorf("JSON: %s", err.Error())
+		}
+		scanList = append(scanList, jsonScans...)
+	}
 
-    return importRunE
+	// TODO: Determine if scan is running: if yes, watch the file for changes
+	// and monitor the input. Notify the user on the command that we are
+	// monitoring the scan file.
+	return scanList, nil
+}
+
+func importNmap(data []byte, arg string) (scanList []*pb.Run, err error) {
+	genericScan, err := nmap.FromXML(data)
+	if err != nil || genericScan == nil {
+		return nil, fmt.Errorf("Error parsing Nmap scan XML file: %s", err)
+	}
+
+	scanList = append(scanList, genericScan.ToPB())
+	fmt.Printf("Importing 1 NMAP scan from %s\n", arg)
+
+	return scanList, nil
+}
+
+func importJSON(data []byte, arg string) (scanList []*pb.Run, err error) {
+	// Is it an array?
+	if bytes.HasPrefix(bytes.TrimSpace(data), []byte{'['}) {
+		if err := json.Unmarshal(data, &scanList); err != nil {
+			fmt.Printf("Error unmarshaling as list (in %s): %s", arg, err)
+			return nil, err
+		}
+	} else {
+		genericScan := new(pb.Run) // In case we must unmar
+		if err := json.Unmarshal(data, &genericScan); err != nil {
+			fmt.Printf("Error unmarshaling one object (in %s): %s", arg, err)
+			return nil, err
+		}
+		scanList = append(scanList, genericScan)
+	}
+
+	if len(scanList) > 0 {
+		fmt.Printf("Importing %d scans from %s\n", len(scanList), arg)
+	}
+
+	return scanList, nil
 }
 
 func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
-    // If we have some data, export it according 
-    // to command flag specifications (format, file, etc)
-    exportRunE := func(command *cobra.Command, args []string) (data any) {
-        if len(args) == 0 {
+	// If we have some data, export it according
+	// to command flag specifications (format, file, etc)
+	exportRunE := func(command *cobra.Command, args []string) (data any) {
+		if len(args) == 0 {
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
@@ -213,8 +255,8 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 				return err
 			}
 
-            return res.GetScans()
-        } else {
+			return res.GetScans()
+		} else {
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
@@ -227,24 +269,24 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 				return err
 			}
 
-            scanList := []*pb.Run{}
+			scanList := []*pb.Run{}
 
 			// Display
-            for _, arg := range args {
-			for _, h := range res.GetScans() {
-				if strings.HasPrefix(h.Id, strip(arg)) {
-                    scanList = append(scanList, h)
+			for _, arg := range args {
+				for _, h := range res.GetScans() {
+					if strings.HasPrefix(h.Id, strip(arg)) {
+						scanList = append(scanList, h)
+					}
 				}
+
+				return scanList
 			}
+		}
 
-            return scanList
-        }
-        }
+		return nil
+	}
 
-        return nil
-    }
-
-   return exportRunE
+	return exportRunE
 }
 
 const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
@@ -255,4 +297,3 @@ var re = regexp.MustCompile(ansi)
 func strip(str string) string {
 	return re.ReplaceAllString(str, "")
 }
-

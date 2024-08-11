@@ -26,61 +26,49 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	"reflect"
 
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/maxlandon/aims/client"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
 )
 
 // ImportCommand returns an "import" subcommand to hook into a parent "object" command, to query/write to DB those objects.
-func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cobra.Command, args []string) error) *cobra.Command {
+func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cobra.Command, arg string, data []byte) error) *cobra.Command {
 	importCmd := &cobra.Command{
 		Use:   "import",
 		Short: fmt.Sprintf("Import %s data", parent.Use),
 		// GroupID: parent.GroupID,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data := []string{}
-
-			stdin, _ := cmd.Flags().GetBool("stdin")
-			if stdin {
-				var stdinData []byte
-				stdinData, err := ioutil.ReadAll(os.Stdin)
-				if err == io.EOF {
-					data = append(data, string(stdinData))
-				} else if err != nil {
-					fmt.Printf("Error: %s\n", err)
-					return nil
-				}
-			}
-
-			// 1 - Read data from all command available sources (args, flags, etc)
 			for _, arg := range args {
-				argData, err := os.ReadFile(arg)
+				// Read contents from source file
+				data, err := os.ReadFile(arg)
 				if err != nil {
 					fmt.Printf("File read error: %s\n", err)
 				}
 
-				data = append(data, string(argData))
+				// And unmarshal with any format handler suitable.
+				runE(cmd, arg, data)
 			}
 
-			// Marshal the data to a Protobuf string representation, and pass it
-			// as arguments of the user-provided handler, for it to marshal and
-			// send any objects to the server database.
+			// Handle stdin if required as well
+			stdin, _ := cmd.Flags().GetBool("stdin")
 
-			// Parse the data with the user-provided function.
-			err := runE(cmd, data)
+			if stdin {
+				var stdinData []byte
+				stdinData, err := ioutil.ReadAll(os.Stdin)
+				if err != nil && err != io.EOF {
+					fmt.Printf("Error: %s\n", err)
+					return nil
+				}
 
-			// Halt on errors if required.
-			err = aims.CheckError(err)
-			if err != nil {
-				fmt.Printf("Error: %s\n", err)
-				return nil
+				// And unmarshal with any format handler suitable.
+				runE(cmd, "stdin", stdinData)
 			}
-
 			return nil
 		},
 	}
@@ -108,7 +96,7 @@ func ExportCommand(parent *cobra.Command, con *client.Client, data func(cmd *cob
 			exportData := data(cmd, args)
 
 			// Marshal it according to requirements
-			stringData, err := marshalExportData(cmd, exportData)
+			stringData, err := MarshalExport(cmd, exportData)
 			err = aims.CheckError(err)
 			if err != nil {
 				fmt.Printf("Error: %s\n", err)
@@ -120,65 +108,74 @@ func ExportCommand(parent *cobra.Command, con *client.Client, data func(cmd *cob
 			}
 
 			// Output it to specified destinations.
-			return writeToSources(cmd, stringData)
+			fmt.Fprintln(cmd.OutOrStdout(), string(stringData))
+			return nil
 		},
 	}
 
 	exportCmd.AddGroup(&cobra.Group{ID: "database", Title: "database"})
 
 	aims.Bind(exportCmd.Name(), false, exportCmd, func(f *pflag.FlagSet) {
-		f.StringP("format", "F", "json", "Export to specific serialization format")
 		f.BoolP("xml", "X", false, "Export data in XML format")
-		f.StringP("file", "f", "", "Export data to a file instead of stdout")
+	})
+
+	comps := carapace.Gen(exportCmd)
+
+	comps.FlagCompletion(carapace.ActionMap{
+		"file": carapace.ActionFiles().Usage("File to export %s data (can be created)", parent.Use),
 	})
 
 	return exportCmd
 }
 
-func marshalExportData(cmd *cobra.Command, data any) (s string, err error) {
+// MarshalExport accepts some arbitrary with the command in which this data
+// was created, and marshals it given some command formatting flags.
+func MarshalExport(cmd *cobra.Command, data any) (s []byte, err error) {
 	buf := new(bytes.Buffer)
 
 	// XML
 	if asXml, _ := cmd.Flags().GetBool("xml"); asXml {
 		raw, err := xml.MarshalIndent(data, "", "\t")
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		buf.Write(raw)
 
-		return buf.String(), nil
+		return buf.Bytes(), nil
 	}
 
 	// Default is JSON
 	raw, err := json.MarshalIndent(data, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+
 	buf.Write(raw)
 
-	return buf.String(), nil
+	return buf.Bytes(), nil
 }
 
-func writeToSources(cmd *cobra.Command, data string) error {
-	file, _ := cmd.Flags().GetString("file")
-
-	if len(file) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), data)
-		return nil
+func ImportJSONTest[out protoreflect.ProtoMessage](data []byte, arg string) (list []out, err error) {
+	// Is it an array?
+	if bytes.HasPrefix(bytes.TrimSpace(data), []byte{'['}) {
+		if err := json.Unmarshal(data, &list); err != nil {
+			fmt.Printf("Error unmarshaling as list (in %s): %s", arg, err)
+			return nil, err
+		}
+	} else {
+		genericScan := new(out) // In case we must unmar
+		if err := json.Unmarshal(data, &genericScan); err != nil {
+			fmt.Printf("Error unmarshaling one object (in %s): %s", arg, err)
+			return nil, err
+		}
+		list = append(list, *genericScan)
 	}
+	return
+}
 
-	filePath, err := filepath.Abs(file)
-	if err != nil {
-		filePath = file
-	}
-
-	_, err = os.Stat(filePath)
-	if os.IsNotExist(err) || os.IsExist(err) {
-		f, _ := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		f.WriteString(data)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+func createArray(t reflect.Type, length int) reflect.Value {
+	var arrayType reflect.Type
+	arrayType = reflect.ArrayOf(length, t)
+	return reflect.Zero(arrayType)
 }
