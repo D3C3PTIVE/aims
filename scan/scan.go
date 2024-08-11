@@ -204,6 +204,10 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 		if len(h.Begin) > len(h.End) {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
+		if len(h.End) == 0 && len(h.Progress) > 0 {
+			return color.HiYellowString(display.FormatSmallID(h.Id))
+		}
+
 		return display.FormatSmallID(h.Id)
 	},
 	"Scanner": func(h *scan.Run) string {
@@ -282,12 +286,16 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 	},
 	"Tasks": func(h *scan.Run) string {
 		tasksDisplay := ""
-		if len(h.End) < len(h.Begin) {
+
+		running, done := getTasks(h)
+
+		if len(running) > 0 {
 			tasksDisplay += color.HiYellowString("%d", len(h.End))
 		} else {
-			tasksDisplay += fmt.Sprintf("%d", len(h.End))
+			tasksDisplay += fmt.Sprintf("%d", len(done))
 		}
-		tasksDisplay += fmt.Sprintf("/%d", len(h.Begin))
+
+		tasksDisplay += fmt.Sprintf("/%d", len(done)+len(running))
 
 		return tasksDisplay
 	},
@@ -298,8 +306,25 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 
 func formatTasks(h *scan.Run) string {
 	tasksDisplay := ""
-	var done []*scan.ScanTask
-	var running []*scan.TaskProgress
+	running, done := getTasks(h)
+
+	if len(running) > 0 {
+		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Running tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	if len(done) > 0 {
+
+		table := display.Table(done, tasksFields, tasksHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Done tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	return tasksDisplay
+}
+
+func getTasks(h *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask) {
 	var runningRemain []*scan.TaskProgress
 	nonFinished := true
 
@@ -354,6 +379,14 @@ func formatTasks(h *scan.Run) string {
 			runningRemain = append(runningRemain, current)
 		}
 	}
+	if len(done) > 0 {
+		slices.SortFunc(done, func(a, b *scan.ScanTask) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+	}
 
 	if len(runningRemain) > 0 {
 		slices.SortFunc(runningRemain, func(a, b *scan.TaskProgress) int {
@@ -364,6 +397,7 @@ func formatTasks(h *scan.Run) string {
 		})
 		running = append(running, runningRemain...)
 	}
+
 	if len(running) > 0 {
 		slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
 			aTime := time.Unix(a.Time, 0)
@@ -371,23 +405,6 @@ func formatTasks(h *scan.Run) string {
 
 			return aTime.Compare(bTime)
 		})
-		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
-		table.SetTitle("\n" + color.HiYellowString("Running tasks"))
-		tasksDisplay += table.Render()
 	}
-
-	if len(done) > 0 {
-		slices.SortFunc(done, func(a, b *scan.ScanTask) int {
-			aTime := time.Unix(a.Time, 0)
-			bTime := time.Unix(b.Time, 0)
-
-			return aTime.Compare(bTime)
-		})
-
-		table := display.Table(done, tasksFields, tasksHeaders()...)
-		table.SetTitle("\n" + color.HiYellowString("Done tasks"))
-		tasksDisplay += table.Render()
-	}
-
-	return tasksDisplay
+	return
 }

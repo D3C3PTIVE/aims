@@ -60,10 +60,10 @@ func Commands(con *client.Client) *cobra.Command {
 				return err
 			}
 
+            if len(res.GetScans()) == 0 {
 				fmt.Printf("No scans in database.\n")
-
 				return nil
-	
+            }
 
 			// Generate the table of hosts.
 			table := display.Table(res.GetScans(), scan.DisplayFields, scan.DisplayHeaders()...)
