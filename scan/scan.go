@@ -272,15 +272,27 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 		return ""
 	},
 	"Hosts": func(h *scan.Run) string {
-		if h.Stats == nil || h.Stats.Hosts == nil {
-			return ""
-		}
-		hosts := fmt.Sprint(h.Stats.Hosts.Total)
-		hosts += color.HiBlackString("-")
+		var hosts string
 
-		hosts += color.HiGreenString(fmt.Sprint(h.Stats.Hosts.Up))
+		var hostsUp, hostsDown int32
+
+		if h.Stats != nil && h.Stats.Hosts != nil {
+			hostsUp = h.Stats.Hosts.Up
+			hostsDown = h.Stats.Hosts.Down
+
+		} else {
+			for _, h := range h.Hosts {
+				if h.Status.State == "up" {
+					hostsUp++
+				} else {
+					hostsDown++
+				}
+			}
+		}
+
+		hosts += color.HiGreenString(fmt.Sprint(hostsUp))
 		hosts += "/"
-		hosts += color.HiRedString(fmt.Sprint(h.Stats.Hosts.Down))
+		hosts += color.HiRedString(fmt.Sprint(hostsDown))
 
 		return hosts
 	},
