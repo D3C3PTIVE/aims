@@ -24,14 +24,16 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rsteube/carapace"
+	"github.com/spf13/cobra"
+
 	"github.com/maxlandon/aims/client"
+	"github.com/maxlandon/aims/cmd/lib/export"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
 	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/network"
 	pb "github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
-	"github.com/rsteube/carapace"
-	"github.com/spf13/cobra"
 )
 
 // Commands returns a command tree to manage and display services.
@@ -46,10 +48,6 @@ func Commands(con *client.Client) *cobra.Command {
 		Use:   "list",
 		Short: "Display services (with filters or styles)",
 		RunE: func(command *cobra.Command, args []string) error {
-			// res, err := con.Services.ListHost(command.Context(), &network.ReadServiceRequest{
-			// 	Service: &pb.Service{},
-			// 	Host:    &host.Host{},
-			// })
 			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
 				Filters: &hosts.HostFilters{
@@ -120,11 +118,14 @@ func Commands(con *client.Client) *cobra.Command {
 			return nil
 		},
 	}
+	servicesCmd.AddCommand(showCmd)
 
 	showComps := carapace.Gen(showCmd)
 	showComps.PositionalAnyCompletion(CompleteByID(con))
 
-	servicesCmd.AddCommand(showCmd)
+	// Export
+	exportCmd := export.ExportCommand(servicesCmd, con, exportCommand(con))
+	servicesCmd.AddCommand(exportCmd)
 
 	return servicesCmd
 }
@@ -138,9 +139,9 @@ func CompleteByID(client *client.Client) carapace.Action {
 		// Request
 		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
-            Filters: &hosts.HostFilters{
-                Ports: true,
-            },
+			Filters: &hosts.HostFilters{
+				Ports: true,
+			},
 		})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
@@ -158,6 +159,63 @@ func CompleteByID(client *client.Client) carapace.Action {
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})
+}
+
+func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
+	// If we have some data, export it according
+	// to command flag specifications (format, file, etc)
+	exportRunE := func(command *cobra.Command, args []string) (data any) {
+		if len(args) == 0 {
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+				},
+			})
+			err = aims.CheckError(err)
+			if err != nil {
+				return err
+			}
+
+			servicesList := []*pb.Port{}
+			for _, h := range res.GetHosts() {
+				servicesList = append(servicesList, h.Ports...)
+			}
+
+			return servicesList
+		} else {
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+				},
+			})
+			err = aims.CheckError(err)
+			if err != nil {
+				return err
+			}
+
+			scanList := []*pb.Host{}
+			servicesList := []*pb.Port{}
+
+			// Display
+			for _, arg := range args {
+				for _, h := range res.GetHosts() {
+					if strings.HasPrefix(h.Id, strip(arg)) {
+						scanList = append(scanList, h)
+					}
+				}
+			}
+
+			for _, h := range scanList {
+				servicesList = append(servicesList, h.Ports...)
+			}
+
+			return servicesList
+		}
+	}
+
+	return exportRunE
 }
 
 const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"

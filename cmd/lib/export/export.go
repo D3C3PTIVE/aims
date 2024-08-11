@@ -26,7 +26,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"reflect"
 
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
@@ -52,7 +51,9 @@ func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cob
 				}
 
 				// And unmarshal with any format handler suitable.
-				runE(cmd, arg, data)
+				if err = runE(cmd, arg, data); err != nil {
+					return err
+				}
 			}
 
 			// Handle stdin if required as well
@@ -67,7 +68,9 @@ func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cob
 				}
 
 				// And unmarshal with any format handler suitable.
-				runE(cmd, "stdin", stdinData)
+				if err = runE(cmd, "stdin", stdinData); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -156,7 +159,8 @@ func MarshalExport(cmd *cobra.Command, data any) (s []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-func ImportJSONTest[out protoreflect.ProtoMessage](data []byte, arg string) (list []out, err error) {
+// ImportJSON takes a protobuf message struct and unmarshals data into either this type or a list.
+func ImportJSON[out protoreflect.ProtoMessage](data []byte, arg string) (list []out, err error) {
 	// Is it an array?
 	if bytes.HasPrefix(bytes.TrimSpace(data), []byte{'['}) {
 		if err := json.Unmarshal(data, &list); err != nil {
@@ -172,10 +176,4 @@ func ImportJSONTest[out protoreflect.ProtoMessage](data []byte, arg string) (lis
 		list = append(list, *genericScan)
 	}
 	return
-}
-
-func createArray(t reflect.Type, length int) reflect.Value {
-	var arrayType reflect.Type
-	arrayType = reflect.ArrayOf(length, t)
-	return reflect.Zero(arrayType)
 }

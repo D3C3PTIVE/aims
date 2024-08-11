@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/maxlandon/aims/client"
+	"github.com/maxlandon/aims/cmd/lib/export"
 	aims "github.com/maxlandon/aims/cmd/lib/util"
 	"github.com/maxlandon/aims/display"
 	"github.com/maxlandon/aims/host"
@@ -138,11 +139,14 @@ func Commands(client *client.Client) *cobra.Command {
 	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("traceroute", "T", false, "Print full network routes to host")
 	})
+	hostsCmd.AddCommand(showCmd)
 
 	showComps := carapace.Gen(showCmd)
 	showComps.PositionalAnyCompletion(CompleteByID(client))
 
-	hostsCmd.AddCommand(showCmd)
+	// Export
+	exportCmd := export.ExportCommand(hostsCmd, client, exportCommand(client))
+	hostsCmd.AddCommand(exportCmd)
 
 	return hostsCmd
 }
@@ -195,6 +199,54 @@ func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})
+}
+
+func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
+	// If we have some data, export it according
+	// to command flag specifications (format, file, etc)
+	exportRunE := func(command *cobra.Command, args []string) (data any) {
+		if len(args) == 0 {
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+					Trace: true,
+				},
+			})
+			err = aims.CheckError(err)
+			if err != nil {
+				return err
+			}
+
+			return res.GetHosts()
+		} else {
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
+					Trace: true,
+				},
+			})
+			err = aims.CheckError(err)
+			if err != nil {
+				return err
+			}
+
+			scanList := []*pb.Host{}
+
+			// Display
+			for _, arg := range args {
+				for _, h := range res.GetHosts() {
+					if strings.HasPrefix(h.Id, strip(arg)) {
+						scanList = append(scanList, h)
+					}
+				}
+			}
+			return scanList
+		}
+	}
+
+	return exportRunE
 }
 
 const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"

@@ -19,8 +19,6 @@ package scan
 */
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -63,11 +61,6 @@ func Commands(con *client.Client) *cobra.Command {
 	// Export
 	exportCmd := export.ExportCommand(scanCmd, con, exportCommand(con))
 	scanCmd.AddCommand(exportCmd)
-
-	aims.Bind(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
-		f.BoolP("xml", "X", false, "Output in XML format")
-		f.StringP("file", "f", "", "Output to a file")
-	})
 
 	return scanCmd
 }
@@ -190,7 +183,7 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 		scanList = append(scanList, nmapScans...)
 
 	} else {
-		jsonScans, err := export.ImportJSONTest[*pb.Run](data, arg)
+		jsonScans, err := export.ImportJSON[*pb.Run](data, arg)
 		// jsonScans, err := importJSON(data, arg)
 		if err != nil {
 			return scanList, fmt.Errorf("JSON: %s", err.Error())
@@ -198,7 +191,6 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 		scanList = append(scanList, jsonScans...)
 	}
 
-	// TODO: Determine if scan is running: if yes, watch the file for changes
 	// and monitor the input. Notify the user on the command that we are
 	// monitoring the scan file.
 	return scanList, nil
@@ -212,29 +204,6 @@ func importNmap(data []byte, arg string) (scanList []*pb.Run, err error) {
 
 	scanList = append(scanList, genericScan.ToPB())
 	fmt.Printf("Importing 1 NMAP scan from %s\n", arg)
-
-	return scanList, nil
-}
-
-func importJSON(data []byte, arg string) (scanList []*pb.Run, err error) {
-	// Is it an array?
-	if bytes.HasPrefix(bytes.TrimSpace(data), []byte{'['}) {
-		if err := json.Unmarshal(data, &scanList); err != nil {
-			fmt.Printf("Error unmarshaling as list (in %s): %s", arg, err)
-			return nil, err
-		}
-	} else {
-		genericScan := new(pb.Run) // In case we must unmar
-		if err := json.Unmarshal(data, &genericScan); err != nil {
-			fmt.Printf("Error unmarshaling one object (in %s): %s", arg, err)
-			return nil, err
-		}
-		scanList = append(scanList, genericScan)
-	}
-
-	if len(scanList) > 0 {
-		fmt.Printf("Importing %d scans from %s\n", len(scanList), arg)
-	}
 
 	return scanList, nil
 }
@@ -278,12 +247,9 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 						scanList = append(scanList, h)
 					}
 				}
-
-				return scanList
 			}
+			return scanList
 		}
-
-		return nil
 	}
 
 	return exportRunE
