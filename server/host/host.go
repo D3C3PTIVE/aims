@@ -25,9 +25,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"github.com/maxlandon/aims/host"
+	"github.com/maxlandon/aims/internal/db"
 	pb "github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 )
@@ -40,46 +40,6 @@ type server struct {
 // New returns a new database host server, from a given db.
 func New(db *gorm.DB) *server {
 	return &server{db: db, UnimplementedHostsServer: &hosts.UnimplementedHostsServer{}}
-}
-
-// Create creates one or more new hosts in the database.
-func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
-	var hostsORM []*pb.HostORM
-
-	for _, h := range req.GetHosts() {
-		horm, _ := h.ToORM(ctx)
-		hostsORM = append(hostsORM, &horm)
-	}
-
-	if len(hostsORM) == 0 {
-		return nil, errors.New("No scans were provided")
-	}
-
-	// Filter hosts to add according to AIMS criteria first.
-	dbHosts := []*pb.HostORM{}
-	database := Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: true})
-	database.Find(&dbHosts)
-	filtered := host.FilterNewHosts(hostsORM, dbHosts)
-
-	if len(filtered) == 0 {
-		return nil, errors.New("Hosts already exist in the database, skipping")
-	}
-
-	err := s.db.Create(&filtered).Error
-	if err != nil {
-		return nil, err
-	}
-
-	var hostsPB []*pb.Host
-	for _, horm := range hostsORM {
-		hpb, _ := horm.ToPB(ctx)
-		hostsPB = append(hostsPB, &hpb)
-	}
-
-	// Response
-	res := &hosts.CreateHostResponse{Hosts: hostsPB}
-
-	return res, err
 }
 
 // Read reads one or more hosts from the database, with optional filters and elements to preload.
@@ -95,7 +55,8 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	dbHosts := []*pb.HostORM{}
 
 	// Preloads
-	database := Preloads(s.db.Where(hst), req.GetFilters())
+	hostFilters := WithPreloads(req.GetFilters())
+	database := db.Preload(s.db.Where(hst), hostFilters)
 
 	// Query
 	if filts.MaxResults == 1 {
@@ -115,6 +76,49 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	res := &hosts.ReadHostResponse{Hosts: hostspb}
 
 	return res, database.Error
+}
+
+// Create creates one or more new hosts in the database.
+func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
+	var hostsORM []*pb.HostORM
+
+	for _, h := range req.GetHosts() {
+		horm, _ := h.ToORM(ctx)
+		hostsORM = append(hostsORM, &horm)
+	}
+
+	if len(hostsORM) == 0 {
+		return nil, errors.New("No scans were provided")
+	}
+
+	// Filter hosts to add according to AIMS criteria first.
+	dbHosts := []*pb.HostORM{}
+	hostFilters := WithPreloads(&hosts.HostFilters{
+		Trace: true,
+		Ports: true,
+	})
+	database := db.Preload(s.db, hostFilters)
+	filtered := db.FilterNew(hostsORM, dbHosts, host.AreHostsIdentical)
+
+	if len(filtered) == 0 {
+		return nil, errors.New("Hosts already exist in the database, skipping")
+	}
+
+	err := database.Create(&filtered).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var hostsPB []*pb.Host
+	for _, horm := range hostsORM {
+		hpb, _ := horm.ToPB(ctx)
+		hostsPB = append(hostsPB, &hpb)
+	}
+
+	// Response
+	res := &hosts.CreateHostResponse{Hosts: hostsPB}
+
+	return res, err
 }
 
 func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
@@ -152,7 +156,11 @@ func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hos
 
 	// Filter hosts to add according to AIMS criteria first.
 	dbHosts := []*pb.HostORM{}
-	database := Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: true})
+	hostFilters := WithPreloads(&hosts.HostFilters{
+		Trace: true,
+		Ports: true,
+	})
+	database := db.Preload(s.db, hostFilters)
 	database.Find(&dbHosts)
 
 	// // Query
@@ -172,13 +180,13 @@ func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hos
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
-// Preloads loads a given database with preload hosts association clauses before querying.
-func Preloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
-	if filters == nil {
-		filters = &hosts.HostFilters{}
+// WithPreloads returns a map DB clauses, to dynamically load child struct fields.
+func WithPreloads(from *hosts.HostFilters) (clauses map[string]bool) {
+	if from == nil {
+		return
 	}
 
-	filts := map[string]bool{
+	clauses = map[string]bool{
 		// Base, unconditional preloads for all hosts
 		"OS":              true,
 		"OS.PortsUsed":    true,
@@ -190,33 +198,23 @@ func Preloads(database *gorm.DB, filters *hosts.HostFilters) *gorm.DB {
 		"Uptime":    true,
 
 		// Filtered
-		"Users":     filters.Users,
-		"FS":        filters.Files,
-		"FS.Files":  filters.Files,
-		"Processes": filters.Processes,
+		"Users":     from.Users,
+		"FS":        from.Files,
+		"FS.Files":  from.Files,
+		"Processes": from.Processes,
 
-		"Ports":         filters.Ports,
-		"Ports.Service": filters.Ports,
-		"Ports.State":   filters.Ports,
-		"Ports.Scripts": filters.Ports,
-		"ExtraPorts":    filters.Ports,
+		"Ports":         from.Ports,
+		"Ports.Service": from.Ports,
+		"Ports.State":   from.Ports,
+		"Ports.Scripts": from.Ports,
+		"ExtraPorts":    from.Ports,
 
-		"Trace":       filters.Trace,
-		"Trace.Hops":  filters.Trace,
-		"HostScripts": filters.Scripts,
+		"Trace":       from.Trace,
+		"Trace.Hops":  from.Trace,
+		"HostScripts": from.Scripts,
 	}
 
-	preloaded := database.Preload(clause.Associations)
-
-	for name, load := range filts {
-		if !load {
-			continue
-		}
-
-		preloaded = preloaded.Preload(name)
-	}
-
-	return preloaded
+	return clauses
 }
 
 func getFilters(filts *hosts.HostFilters) *hosts.HostFilters {

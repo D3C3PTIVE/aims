@@ -17,44 +17,25 @@ package scan
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
 import (
 	"fmt"
-	"strings"
 
+	"github.com/maxlandon/aims/internal/util"
 	"github.com/maxlandon/aims/proto/scan"
 	scanpb "github.com/maxlandon/aims/proto/scan"
 	"github.com/maxlandon/aims/proto/scan/nmap"
 )
-
-// FilterNewScans filters out any hosts from the newScans list that are identical to any host in the existingScans list.
-// Returns a filtered list of new hosts that are not identical to any existing host.
-func FilterNewScans(newScans, existingScans []*scanpb.RunORM) []*scanpb.RunORM {
-	var filteredScans []*scanpb.RunORM
-
-	for _, newHost := range newScans {
-		isIdentical := false
-		for _, existingHost := range existingScans {
-			if AreScansIdentical(newHost, existingHost) {
-				isIdentical = true
-				break
-			}
-		}
-
-		// If no identical host was found in the existing hosts, add the new host to the filtered list
-		if !isIdentical {
-			filteredScans = append(filteredScans, newHost)
-		}
-	}
-
-	return filteredScans
-}
 
 // AreScansIdentical compares two scanpb.ScanORM objects to determine if they represent the same host.
 func AreScansIdentical(a, b *scanpb.RunORM) bool {
 	if a == nil || b == nil {
 		return false
 	}
+
+	weightBy := util.WeightedCompare
+	intCmp := util.CompareInts
+	strCmp := util.CompareStrings
+	// compareStringSlices := util.CompareStrings
 
 	// Step 1: Perform unambiguous identification check
 	// if identical, _ := IsHostUnambiguouslyIdentifiable(host1); identical {
@@ -66,27 +47,27 @@ func AreScansIdentical(a, b *scanpb.RunORM) bool {
 	maxScore := 20 * 10 // Example max score (20 fields with a weight of 10 each)
 
 	// Unambiguous fields
-	totalScore += weightedCompare(compareStrings(a.RawXML, b.RawXML), 200)
-	totalScore += weightedCompare(compareScanTasks(a.Begin, b.Begin), 50)
-	totalScore += weightedCompare(compareScanTasks(a.End, b.End), 50)
-	totalScore += weightedCompare(compareTaskProgresses(a.Progress, b.Progress), 50) // List of TaskProgressORM
+	totalScore += weightBy(strCmp(a.RawXML, b.RawXML), 200)
+	totalScore += weightBy(compareScanTasks(a.Begin, b.Begin), 50)
+	totalScore += weightBy(compareScanTasks(a.End, b.End), 50)
+	totalScore += weightBy(compareTaskProgresses(a.Progress, b.Progress), 50) // List of TaskProgressORM
 
 	// Strong fields
-	totalScore += weightedCompare(compareInts(a.Start, b.Start), 20)
-	totalScore += weightedCompare(compareStrings(a.StartStr, b.StartStr), 20)
-	totalScore += weightedCompare(compareStrings(a.SessionId, b.SessionId), 20)
+	totalScore += weightBy(intCmp(a.Start, b.Start), 20)
+	totalScore += weightBy(strCmp(a.StartStr, b.StartStr), 20)
+	totalScore += weightBy(strCmp(a.SessionId, b.SessionId), 20)
 
 	// Weak fields
-	totalScore += weightedCompare(compareStrings(a.Args, b.Args), 5)
-	totalScore += weightedCompare(compareStrings(a.Scanner, b.Scanner), 5)
-	totalScore += weightedCompare(compareStrings(a.ProfileName, b.ProfileName), 5)
+	totalScore += weightBy(strCmp(a.Args, b.Args), 5)
+	totalScore += weightBy(strCmp(a.Scanner, b.Scanner), 5)
+	totalScore += weightBy(strCmp(a.ProfileName, b.ProfileName), 5)
 	// totalScore += weightedCompare(a.PostScripts, b.PostScripts, 10) // List of ScriptORM
 	// totalScore += weightedCompare(a.PreScripts, b.PreScripts, 10)   // List of ScriptORM
 	// totalScore += weightedCompare(a.Results, b.Results, 10)         // List of ResultORM
 	// totalScore += weightedCompare(a.Targets, b.Targets, 10)         // List of TargetORM
 	// totalScore += weightedCompare(a.Stats, b.Stats, 10)             // StatsORM
 	// totalScore += weightedCompare(a.Verbose, b.Verbose, 10)         // VerboseORM
-	totalScore += weightedCompare(compareStrings(a.Version, b.Version), 5)
+	totalScore += weightBy(strCmp(a.Version, b.Version), 5)
 
 	// Return true if total score meets or exceeds the threshold
 	return totalScore >= (maxScore / 2)
@@ -248,42 +229,4 @@ func compareFinishedORMs(a, b *scanpb.FinishedORM) bool {
 		a.Summary == b.Summary &&
 		a.Time == b.Time &&
 		a.TimeStr == b.TimeStr
-}
-
-// Helper function to add weight to comparison results.
-func weightedCompare(condition bool, weight int) int {
-	if condition {
-		return weight
-	}
-	return 0
-}
-
-// Helper function to compare two strings with tolerance for nil or empty values.
-func compareStrings(str1, str2 string) bool {
-	return strings.TrimSpace(str1) != "" && strings.EqualFold(str1, str2)
-}
-
-// Helper function to compare two slices of strings with tolerance for nil or empty slices.
-func compareStringSlices(slice1, slice2 []string) bool {
-	if len(slice1) == 0 || len(slice2) == 0 {
-		return false
-	}
-
-	map1 := make(map[string]struct{}, len(slice1))
-	for _, item := range slice1 {
-		map1[strings.TrimSpace(item)] = struct{}{}
-	}
-
-	for _, item := range slice2 {
-		if _, found := map1[strings.TrimSpace(item)]; found {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Helper function to compare two integers.
-func compareInts(int1, int2 int64) bool {
-	return int1 == int2
 }

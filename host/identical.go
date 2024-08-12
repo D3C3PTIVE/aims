@@ -27,29 +27,6 @@ import (
 	netpb "github.com/maxlandon/aims/proto/network"
 )
 
-// FilterNewHosts filters out any hosts from the newHosts list that are identical to any host in the existingHosts list.
-// Returns a filtered list of new hosts that are not identical to any existing host.
-func FilterNewHosts(newHosts, existingHosts []*pb.HostORM) []*pb.HostORM {
-	var filteredHosts []*pb.HostORM
-
-	for _, newHost := range newHosts {
-		isIdentical := false
-		for _, existingHost := range existingHosts {
-			if AreHostsIdentical(newHost, existingHost) {
-				isIdentical = true
-				break
-			}
-		}
-
-		// If no identical host was found in the existing hosts, add the new host to the filtered list
-		if !isIdentical {
-			filteredHosts = append(filteredHosts, newHost)
-		}
-	}
-
-	return filteredHosts
-}
-
 // AreHostsIdentical compares two pb.HostORM objects to determine if they represent the same host.
 func AreHostsIdentical(host1, host2 *pb.HostORM) bool {
 	if host1 == nil || host2 == nil {

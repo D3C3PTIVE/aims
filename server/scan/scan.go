@@ -20,38 +20,37 @@ package scan
 
 import (
 	"context"
-	"sync"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
-	hostcore "github.com/maxlandon/aims/host"
-	hostspbtype "github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
-	hostspb "github.com/maxlandon/aims/proto/rpc/hosts"
-	"github.com/maxlandon/aims/proto/rpc/scans"
-	pb "github.com/maxlandon/aims/proto/scan"
-	core "github.com/maxlandon/aims/scan"
-	"github.com/maxlandon/aims/server/host"
+	"github.com/maxlandon/aims/host"
+	"github.com/maxlandon/aims/internal/db"
+	hostpb "github.com/maxlandon/aims/proto/host"
+	hostrpcpb "github.com/maxlandon/aims/proto/rpc/hosts"
+	scanrpcpb "github.com/maxlandon/aims/proto/rpc/scans"
+	scanpb "github.com/maxlandon/aims/proto/scan"
+	"github.com/maxlandon/aims/scan"
+	hosts "github.com/maxlandon/aims/server/host"
 )
 
 type server struct {
 	db *gorm.DB
-	*scans.UnimplementedScansServer
+	*scanrpcpb.UnimplementedScansServer
 }
 
 // New returns a new database scan server, from a given db.
 func New(db *gorm.DB) *server {
-	return &server{db: db, UnimplementedScansServer: &scans.UnimplementedScansServer{}}
+	return &server{db: db, UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{}}
 }
 
 // Create creates one or more new scan runs in the database.
-func (s *server) Create(ctx context.Context, req *scans.CreateScanRequest) (*scans.CreateScanResponse, error) {
-	var newScans []*pb.RunORM
-	dbScans := []*pb.RunORM{}
-	dbHosts := []*hostspbtype.HostORM{}
+func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (*scanrpcpb.CreateScanResponse, error) {
+	var newScans []*scanpb.RunORM
+	dbScans := []*scanpb.RunORM{}
+	dbHosts := []*hostpb.HostORM{}
 
 	// Get scans to save
 	for _, h := range req.GetScans() {
@@ -60,135 +59,111 @@ func (s *server) Create(ctx context.Context, req *scans.CreateScanRequest) (*sca
 	}
 
 	// Filter scans to add according to AIMS criteria first.
-	database := Preloads(s.db, &scans.RunFilters{Hosts: true})
-	database.Find(&dbScans)
-
 	// For each host, load services, and check that this host is not
 	// already existing in the database, if we can identify it with certainty.
-	for _, run := range newScans {
-		database := host.Preloads(s.db, &hostspb.HostFilters{Trace: true, Ports: true})
-		database.Find(&dbHosts)
+	filters := WithPreloads(&scanrpcpb.RunFilters{
+		Hosts: true,
+	})
+	database := db.Preload(s.db, filters)
+	database.Find(&dbScans)
 
-		run.Hosts = hostcore.FilterNewHosts(run.Hosts, dbHosts)
+	for _, run := range newScans {
+		hostFilters := hosts.WithPreloads(&hostrpcpb.HostFilters{
+			Trace: true,
+			Ports: true,
+		})
+		hostsDatabase := db.Preload(s.db, hostFilters)
+		hostsDatabase.Find(&dbHosts)
+		run.Hosts = db.FilterNew(run.Hosts, dbHosts, host.AreHostsIdentical)
 	}
 
 	// Then, filter identical scans and write them to database.
-	filtered := core.FilterNewScans(newScans, dbScans)
-	if len(filtered) > 0 {
-		err := s.db.Create(&filtered).Error
-		if err != nil {
-			return nil, err
-		}
+	filtered := db.FilterNew(newScans, dbScans, scan.AreScansIdentical)
+	if len(filtered) == 0 {
+		return nil, errors.New("Scans already exist in the database, skipping")
 	}
 
-	var runsPB []*pb.Run
+	err := database.Create(&filtered).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var runsPB []*scanpb.Run
 	for _, scanORM := range filtered {
 		hpb, _ := scanORM.ToPB(ctx)
 		runsPB = append(runsPB, &hpb)
 	}
 
 	// Response
-	res := &scans.CreateScanResponse{Scans: runsPB}
+	res := &scanrpcpb.CreateScanResponse{Scans: runsPB}
 
 	return res, nil
 }
 
 // Read reads one or more scans from the database, with optional filters and elements to preload.
-func (s *server) Read(ctx context.Context, req *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
-	filts := getFilters(req.GetFilters())
-
+func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*scanrpcpb.ReadScanResponse, error) {
 	// Convert to ORM model
 	hst, err := req.GetScan().ToORM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	dbHosts := []*pb.RunORM{}
+	filters := req.GetFilters()
+
+	dbScans := []*scanpb.RunORM{}
 
 	// Preloads
-	database := Preloads(s.db.Where(hst), req.GetFilters())
+	scanFilters := WithPreloads(filters)
+	database := db.Preload(s.db.Where(hst), scanFilters)
 
 	// Query
-	if filts.MaxResults == 1 {
-		database = database.First(&dbHosts)
+	if filters.MaxResults == 1 {
+		database = database.First(&dbScans)
 	} else {
-		database = database.Find(&dbHosts)
+		database = database.Find(&dbScans)
 	}
 
-	// If ports are requested, load all hosts ports.
-	if filts.Hosts || filts.Ports {
-		for _, dbHost := range dbHosts {
-			database = host.Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: filts.Ports})
-			database.Find(&dbHost.Hosts)
+	scansResp := []*scanpb.Run{}
+
+	// Load hosts if required
+	for _, run := range dbScans {
+		if filters.Hosts {
+			filters := hosts.WithPreloads(&hostrpcpb.HostFilters{
+				Trace: true,
+				Ports: true,
+			})
+			database = db.Preload(s.db, filters)
+			database.Find(&run.Hosts)
 		}
-	}
 
-	hostspb := []*pb.Run{}
-
-	for _, host := range dbHosts {
-		pb, _ := host.ToPB(ctx)
-		hostspb = append(hostspb, &pb)
+		pb, _ := run.ToPB(ctx)
+		scansResp = append(scansResp, &pb)
 	}
 
 	// Response
-	res := &scans.ReadScanResponse{Scans: hostspb}
+	res := &scanrpcpb.ReadScanResponse{Scans: scansResp}
 
 	return res, database.Error
 }
 
-func (server) List(context.Context, *scans.ReadScanRequest) (*scans.ReadScanResponse, error) {
+func (server) List(context.Context, *scanrpcpb.ReadScanRequest) (*scanrpcpb.ReadScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetScanMany not implemented")
 }
 
-func (server) Upsert(context.Context, *scans.UpsertScanRequest) (*scans.UpsertScanResponse, error) {
+func (server) Upsert(context.Context, *scanrpcpb.UpsertScanRequest) (*scanrpcpb.UpsertScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertScan not implemented")
 }
 
-func (server) Delete(context.Context, *scans.DeleteScanRequest) (*scans.DeleteScanResponse, error) {
+func (server) Delete(context.Context, *scanrpcpb.DeleteScanRequest) (*scanrpcpb.DeleteScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteScan not implemented")
 }
 
-// FilterIdenticalScan returns a list of portsfrom which have been removed all ports that are
-// already in the database, with a very high degree of certitude. This avoids redundance when
-// manipulating new ports/services.
-func FilterIdenticalScan(raw []*pb.RunORM, dbHosts []*pb.RunORM) (filtered []*pb.RunORM) {
-	for _, newHost := range raw {
-		done := new(sync.WaitGroup)
-
-		allMatches := []*pb.RunORM{}
-
-		// Check IDs: if non-nil and identical, done checking.
-
-		// Concurrently check all hosts for an identical trace.
-		go func() {
-		}()
-
-		// For now we wait for all queries to finish, but ideally,
-		// some filters have more weight than others, but might be
-		// longer to check, so when one shows that hosts are identical,
-		// all other comparison routines should break.
-		done.Wait()
-
-		// If not identical, add it to the valid, filtered hosts
-		if identical, _ := allScansIdentical(allMatches); !identical {
-			filtered = append(filtered, newHost)
-		}
-
-	}
-	return
-}
-
-func allScansIdentical(all []*pb.RunORM) (yes bool, matches int) {
-	return false, 0
-}
-
-// Preloads loads a given database with preload scan association clauses before querying.
-func Preloads(database *gorm.DB, filters *scans.RunFilters) *gorm.DB {
-	if filters == nil {
-		filters = &scans.RunFilters{}
+func WithPreloads(from *scanrpcpb.RunFilters) (clauses map[string]bool) {
+	if from == nil {
+		return
 	}
 
-	filts := map[string]bool{
+	clauses = map[string]bool{
 		// Base, unconditional preloads for all hosts
 		"Debugging":   true,
 		"PreScripts":  true,
@@ -202,26 +177,8 @@ func Preloads(database *gorm.DB, filters *scans.RunFilters) *gorm.DB {
 		"Stats.Finished": true,
 
 		// Filtered
-		"Hosts": filters.Hosts,
+		"Hosts": from.Hosts,
 	}
 
-	preloaded := database.Preload(clause.Associations)
-
-	for name, load := range filts {
-		if !load {
-			continue
-		}
-
-		preloaded = preloaded.Preload(name)
-	}
-
-	return preloaded
-}
-
-func getFilters(filts *scans.RunFilters) *scans.RunFilters {
-	if filts != nil {
-		return filts
-	}
-
-	return &scans.RunFilters{}
+	return clauses
 }
