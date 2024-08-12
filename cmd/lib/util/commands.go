@@ -1,4 +1,4 @@
-package aims
+package util
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
