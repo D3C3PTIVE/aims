@@ -188,18 +188,30 @@ func importCommand(con *client.Client) func(cmd *cobra.Command, arg string, data
 			return err
 		}
 
-		// Register all objects to database, with adjustements.
-		res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
-			Scans: scanList,
-		})
-
-		err = aims.CheckError(err)
-		if err != nil {
-			return err
-		}
-
 		if len(scanList) > 0 {
-			fmt.Printf("Saved %d scans in database", len(res.Scans))
+			for _, scan := range scanList {
+				res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
+					Scans: []*pb.Run{scan},
+				})
+
+				err = aims.CheckError(err)
+				if err != nil {
+					fmt.Printf("Import error: %s", err.Error())
+					continue
+				}
+
+				if len(res.Scans) == 0 {
+					fmt.Printf("Skipped %s scan, already existing\n", scan.Scanner)
+					continue
+				}
+
+				saved := res.Scans[0]
+
+				fmt.Printf("Saved %s scan (%s) in database\n", saved.Scanner, display.FormatSmallID(saved.Id))
+				if len(saved.Hosts) < len(scan.Hosts) {
+					fmt.Printf("Skipped %d already existing hosts", len(scan.Hosts)-len(saved.Hosts))
+				}
+			}
 		}
 
 		return nil
@@ -220,7 +232,6 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 
 	} else {
 		jsonScans, err := export.ImportJSON[*pb.Run](data, arg)
-		// jsonScans, err := importJSON(data, arg)
 		if err != nil {
 			return scanList, fmt.Errorf("JSON: %s", err.Error())
 		}

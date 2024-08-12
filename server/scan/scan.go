@@ -27,10 +27,13 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	hostcore "github.com/maxlandon/aims/host"
+	hostspbtype "github.com/maxlandon/aims/proto/host"
 	"github.com/maxlandon/aims/proto/rpc/hosts"
 	hostspb "github.com/maxlandon/aims/proto/rpc/hosts"
 	"github.com/maxlandon/aims/proto/rpc/scans"
 	pb "github.com/maxlandon/aims/proto/scan"
+	core "github.com/maxlandon/aims/scan"
 	"github.com/maxlandon/aims/server/host"
 )
 
@@ -46,39 +49,48 @@ func New(db *gorm.DB) *server {
 
 // Create creates one or more new scan runs in the database.
 func (s *server) Create(ctx context.Context, req *scans.CreateScanRequest) (*scans.CreateScanResponse, error) {
-	var hostsORM []pb.RunORM
+	var newScans []*pb.RunORM
+	dbScans := []*pb.RunORM{}
+	dbHosts := []*hostspbtype.HostORM{}
 
+	// Get scans to save
 	for _, h := range req.GetScans() {
-		horm, _ := h.ToORM(ctx)
-		hostsORM = append(hostsORM, horm)
+		scanORM, _ := h.ToORM(ctx)
+		newScans = append(newScans, &scanORM)
 	}
 
 	// Filter scans to add according to AIMS criteria first.
-	dbRuns := []*pb.RunORM{}
-
 	database := Preloads(s.db, &scans.RunFilters{Hosts: true})
-	database.Find(&dbRuns)
+	database.Find(&dbScans)
 
-	// For each host, load services.
-	for _, run := range dbRuns {
+	// For each host, load services, and check that this host is not
+	// already existing in the database, if we can identify it with certainty.
+	for _, run := range newScans {
 		database := host.Preloads(s.db, &hostspb.HostFilters{Trace: true, Ports: true})
-		database.Find(&run.Hosts)
+		database.Find(&dbHosts)
+
+		run.Hosts = hostcore.FilterNewHosts(run.Hosts, dbHosts)
 	}
 
-	filtered := FilterIdenticalScan(hostsORM, dbRuns)
+	// Then, filter identical scans and write them to database.
+	filtered := core.FilterNewScans(newScans, dbScans)
+	if len(filtered) > 0 {
+		err := s.db.Create(&filtered).Error
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	err := s.db.Create(&filtered).Error
-
-	var hostsPB []*pb.Run
-	for _, horm := range hostsORM {
-		hpb, _ := horm.ToPB(ctx)
-		hostsPB = append(hostsPB, &hpb)
+	var runsPB []*pb.Run
+	for _, scanORM := range filtered {
+		hpb, _ := scanORM.ToPB(ctx)
+		runsPB = append(runsPB, &hpb)
 	}
 
 	// Response
-	res := &scans.CreateScanResponse{Scans: hostsPB}
+	res := &scans.CreateScanResponse{Scans: runsPB}
 
-	return res, err
+	return res, nil
 }
 
 // Read reads one or more scans from the database, with optional filters and elements to preload.
@@ -139,7 +151,7 @@ func (server) Delete(context.Context, *scans.DeleteScanRequest) (*scans.DeleteSc
 // FilterIdenticalScan returns a list of portsfrom which have been removed all ports that are
 // already in the database, with a very high degree of certitude. This avoids redundance when
 // manipulating new ports/services.
-func FilterIdenticalScan(raw []pb.RunORM, dbHosts []*pb.RunORM) (filtered []pb.RunORM) {
+func FilterIdenticalScan(raw []*pb.RunORM, dbHosts []*pb.RunORM) (filtered []*pb.RunORM) {
 	for _, newHost := range raw {
 		done := new(sync.WaitGroup)
 

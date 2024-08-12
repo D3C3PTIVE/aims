@@ -20,6 +20,7 @@ package host
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,29 +37,38 @@ type server struct {
 	*hosts.UnimplementedHostsServer
 }
 
-
 // New returns a new database host server, from a given db.
 func New(db *gorm.DB) *server {
 	return &server{db: db, UnimplementedHostsServer: &hosts.UnimplementedHostsServer{}}
 }
 
-
 // Create creates one or more new hosts in the database.
 func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
-	var hostsORM []pb.HostORM
+	var hostsORM []*pb.HostORM
 
 	for _, h := range req.GetHosts() {
 		horm, _ := h.ToORM(ctx)
-		hostsORM = append(hostsORM, horm)
+		hostsORM = append(hostsORM, &horm)
+	}
+
+	if len(hostsORM) == 0 {
+		return nil, errors.New("No scans were provided")
 	}
 
 	// Filter hosts to add according to AIMS criteria first.
 	dbHosts := []*pb.HostORM{}
 	database := Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: true})
 	database.Find(&dbHosts)
-	filtered := host.FilterIdenticalHost(hostsORM, dbHosts)
+	filtered := host.FilterNewHosts(hostsORM, dbHosts)
+
+	if len(filtered) == 0 {
+		return nil, errors.New("Hosts already exist in the database, skipping")
+	}
 
 	err := s.db.Create(&filtered).Error
+	if err != nil {
+		return nil, err
+	}
 
 	var hostsPB []*pb.Host
 	for _, horm := range hostsORM {
@@ -107,7 +117,6 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	return res, database.Error
 }
 
-
 func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
 	// Convert to ORM model
 	// h, err := req.GetHost().ToORM(ctx)
@@ -134,11 +143,18 @@ func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hos
 
 func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
 	// Convert to ORM model
-	// h, err := req.GetHost().ToORM(ctx)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
+	var hostsORM []*pb.HostORM
+
+	for _, h := range req.GetHosts() {
+		horm, _ := h.ToORM(ctx)
+		hostsORM = append(hostsORM, &horm)
+	}
+
+	// Filter hosts to add according to AIMS criteria first.
+	dbHosts := []*pb.HostORM{}
+	database := Preloads(s.db, &hosts.HostFilters{Trace: true, Ports: true})
+	database.Find(&dbHosts)
+
 	// // Query
 	// hosts := []*host.HostORM{}
 	// err = s.db.Where(h).First(&hosts).Error
