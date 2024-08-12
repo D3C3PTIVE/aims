@@ -1,13 +1,14 @@
 package db
 
 import (
-	"github.com/maxlandon/aims/proto/c2"
-	"github.com/maxlandon/aims/proto/credential"
-	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/network"
-	"github.com/maxlandon/aims/proto/scan"
-	"github.com/maxlandon/aims/proto/scan/nmap"
 	"gorm.io/gorm"
+
+	"github.com/d3c3ptive/aims/proto/c2"
+	"github.com/d3c3ptive/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/network"
+	"github.com/d3c3ptive/aims/proto/scan"
+	"github.com/d3c3ptive/aims/proto/scan/nmap"
 )
 
 /*

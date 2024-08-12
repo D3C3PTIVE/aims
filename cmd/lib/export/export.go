@@ -32,8 +32,8 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/maxlandon/aims/client"
-	aims "github.com/maxlandon/aims/cmd/lib/util"
+	"github.com/d3c3ptive/aims/client"
+	aims "github.com/d3c3ptive/aims/cmd/lib/util"
 )
 
 // ImportCommand returns an "import" subcommand to hook into a parent "object" command, to query/write to DB those objects.

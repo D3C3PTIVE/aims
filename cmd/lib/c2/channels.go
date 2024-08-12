@@ -26,13 +26,13 @@ import (
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 
-	core "github.com/maxlandon/aims/c2"
-	"github.com/maxlandon/aims/client"
-	aims "github.com/maxlandon/aims/cmd/lib/util"
-	"github.com/maxlandon/aims/display"
-	pb "github.com/maxlandon/aims/proto/c2"
-	"github.com/maxlandon/aims/proto/rpc/c2"
-	"github.com/maxlandon/aims/scan"
+	core "github.com/d3c3ptive/aims/c2"
+	"github.com/d3c3ptive/aims/client"
+	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	"github.com/d3c3ptive/aims/display"
+	pb "github.com/d3c3ptive/aims/proto/c2"
+	"github.com/d3c3ptive/aims/proto/rpc/c2"
+	"github.com/d3c3ptive/aims/scan"
 )
 
 // ChannelsCommands returns all agent management commands.

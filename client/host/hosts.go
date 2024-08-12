@@ -21,9 +21,9 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 )
 
 type hostClient struct {

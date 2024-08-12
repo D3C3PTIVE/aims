@@ -7,8 +7,8 @@
 package network
 
 import (
-	host "github.com/maxlandon/aims/proto/host"
-	network "github.com/maxlandon/aims/proto/network"
+	host "github.com/d3c3ptive/aims/proto/host"
+	network "github.com/d3c3ptive/aims/proto/network"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

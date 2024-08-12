@@ -4,7 +4,7 @@ import (
 	context "context"
 	fmt "fmt"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	os "github.com/maxlandon/aims/proto/host/os"
+	os "github.com/d3c3ptive/aims/proto/host/os"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	gorm "gorm.io/gorm"
 )

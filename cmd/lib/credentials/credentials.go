@@ -22,10 +22,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/maxlandon/aims/client"
-	aims "github.com/maxlandon/aims/cmd/lib/util"
-	"github.com/maxlandon/aims/proto/credential"
-	"github.com/maxlandon/aims/proto/rpc/credentials"
+	"github.com/d3c3ptive/aims/client"
+	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	"github.com/d3c3ptive/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/rpc/credentials"
 	"github.com/spf13/cobra"
 )
 

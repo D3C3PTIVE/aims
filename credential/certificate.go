@@ -24,7 +24,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // Certificate - An x509 Certificate potentially containing a public key

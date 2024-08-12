@@ -22,16 +22,16 @@ import (
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
-	c2pb "github.com/maxlandon/aims/proto/rpc/c2"
-	"github.com/maxlandon/aims/proto/rpc/credentials"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
-	"github.com/maxlandon/aims/proto/rpc/network"
-	"github.com/maxlandon/aims/proto/rpc/scans"
-	"github.com/maxlandon/aims/server/c2"
-	"github.com/maxlandon/aims/server/credential"
-	"github.com/maxlandon/aims/server/host"
-	networkServer "github.com/maxlandon/aims/server/network"
-	"github.com/maxlandon/aims/server/scan"
+	c2pb "github.com/d3c3ptive/aims/proto/rpc/c2"
+	"github.com/d3c3ptive/aims/proto/rpc/credentials"
+	"github.com/d3c3ptive/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/proto/rpc/network"
+	"github.com/d3c3ptive/aims/proto/rpc/scans"
+	"github.com/d3c3ptive/aims/server/c2"
+	"github.com/d3c3ptive/aims/server/credential"
+	"github.com/d3c3ptive/aims/server/host"
+	networkServer "github.com/d3c3ptive/aims/server/network"
+	"github.com/d3c3ptive/aims/server/scan"
 )
 
 // Options is used to setup the AIMS database service with specific things,

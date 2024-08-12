@@ -7,7 +7,7 @@
 package credentials
 
 import (
-	credential "github.com/maxlandon/aims/proto/credential"
+	credential "github.com/d3c3ptive/aims/proto/credential"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

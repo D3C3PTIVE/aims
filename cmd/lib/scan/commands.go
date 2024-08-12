@@ -28,14 +28,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/cmd/lib/export"
-	aims "github.com/maxlandon/aims/cmd/lib/util"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/proto/rpc/scans"
-	pb "github.com/maxlandon/aims/proto/scan"
-	"github.com/maxlandon/aims/scan"
-	"github.com/maxlandon/aims/scan/nmap"
+	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/cmd/lib/export"
+	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/proto/rpc/scans"
+	pb "github.com/d3c3ptive/aims/proto/scan"
+	"github.com/d3c3ptive/aims/scan"
+	"github.com/d3c3ptive/aims/scan/nmap"
 )
 
 // Commands returns all scan commands.

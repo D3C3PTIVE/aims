@@ -20,10 +20,10 @@ package scan
 import (
 	"fmt"
 
-	"github.com/maxlandon/aims/internal/util"
-	"github.com/maxlandon/aims/proto/scan"
-	scanpb "github.com/maxlandon/aims/proto/scan"
-	"github.com/maxlandon/aims/proto/scan/nmap"
+	"github.com/d3c3ptive/aims/internal/util"
+	"github.com/d3c3ptive/aims/proto/scan"
+	scanpb "github.com/d3c3ptive/aims/proto/scan"
+	"github.com/d3c3ptive/aims/proto/scan/nmap"
 )
 
 // AreScansIdentical compares two scanpb.ScanORM objects to determine if they represent the same host.

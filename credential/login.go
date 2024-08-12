@@ -21,9 +21,9 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/aims/host"
-	"github.com/maxlandon/aims/network"
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/network"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // Login - The use of a credential.Core against a service.

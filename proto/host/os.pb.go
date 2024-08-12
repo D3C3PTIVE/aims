@@ -8,7 +8,7 @@ package host
 
 import (
 	_ "github.com/infobloxopen/protoc-gen-gorm/options"
-	os "github.com/maxlandon/aims/proto/host/os"
+	os "github.com/d3c3ptive/aims/proto/host/os"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

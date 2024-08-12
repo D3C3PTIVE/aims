@@ -24,8 +24,8 @@ import (
 	"sync"
 
 	"github.com/fatih/color"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/proto/c2"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/proto/c2"
 )
 
 type Agent c2.Agent

@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/proto/scan"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/proto/scan"
 )
 
 // Run - Represents a scan before, after or while being run.

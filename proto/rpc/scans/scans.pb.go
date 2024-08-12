@@ -7,8 +7,8 @@
 package scans
 
 import (
-	_ "github.com/maxlandon/aims/proto/host"
-	scan "github.com/maxlandon/aims/proto/scan"
+	_ "github.com/d3c3ptive/aims/proto/host"
+	scan "github.com/d3c3ptive/aims/proto/scan"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

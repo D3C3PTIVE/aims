@@ -5,7 +5,7 @@ import (
 	fmt "fmt"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
-	network "github.com/maxlandon/aims/proto/network"
+	network "github.com/d3c3ptive/aims/proto/network"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	gorm "gorm.io/gorm"

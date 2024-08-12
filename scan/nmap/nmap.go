@@ -21,7 +21,7 @@ package nmap
 import (
 	"encoding/xml"
 
-	"github.com/maxlandon/aims/scan"
+	"github.com/d3c3ptive/aims/scan"
 	"github.com/maxlandon/gondor/maltego"
 )
 

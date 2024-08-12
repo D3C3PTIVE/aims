@@ -26,14 +26,14 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/host"
-	"github.com/maxlandon/aims/internal/db"
-	hostpb "github.com/maxlandon/aims/proto/host"
-	hostrpcpb "github.com/maxlandon/aims/proto/rpc/hosts"
-	scanrpcpb "github.com/maxlandon/aims/proto/rpc/scans"
-	scanpb "github.com/maxlandon/aims/proto/scan"
-	"github.com/maxlandon/aims/scan"
-	hosts "github.com/maxlandon/aims/server/host"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/internal/db"
+	hostpb "github.com/d3c3ptive/aims/proto/host"
+	hostrpcpb "github.com/d3c3ptive/aims/proto/rpc/hosts"
+	scanrpcpb "github.com/d3c3ptive/aims/proto/rpc/scans"
+	scanpb "github.com/d3c3ptive/aims/proto/scan"
+	"github.com/d3c3ptive/aims/scan"
+	hosts "github.com/d3c3ptive/aims/server/host"
 )
 
 type server struct {

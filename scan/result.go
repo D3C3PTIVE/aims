@@ -19,7 +19,7 @@ package scan
 */
 
 import (
-	"github.com/maxlandon/aims/proto/scan"
+	"github.com/d3c3ptive/aims/proto/scan"
 )
 
 // Result - A type containing various objects that are outputs of a scan.

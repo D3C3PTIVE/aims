@@ -21,7 +21,7 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"

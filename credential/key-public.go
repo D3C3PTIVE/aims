@@ -29,7 +29,7 @@ import (
 	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // PublicKey - The Public part of a cryptographic key. All public key types

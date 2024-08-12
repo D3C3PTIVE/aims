@@ -8,8 +8,8 @@ package scan
 
 import (
 	_ "github.com/infobloxopen/protoc-gen-gorm/options"
-	host "github.com/maxlandon/aims/proto/host"
-	nmap "github.com/maxlandon/aims/proto/scan/nmap"
+	host "github.com/d3c3ptive/aims/proto/host"
+	nmap "github.com/d3c3ptive/aims/proto/scan/nmap"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

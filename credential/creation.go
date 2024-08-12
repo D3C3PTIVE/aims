@@ -19,7 +19,7 @@ package credential
 */
 
 import (
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // CreateOptions - A template holding the objects (either optional or required

@@ -19,12 +19,12 @@ package lib
 */
 
 import (
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/cmd/lib/c2"
-	"github.com/maxlandon/aims/cmd/lib/credentials"
-	"github.com/maxlandon/aims/cmd/lib/hosts"
-	"github.com/maxlandon/aims/cmd/lib/scan"
-	"github.com/maxlandon/aims/cmd/lib/services"
+	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/cmd/lib/c2"
+	"github.com/d3c3ptive/aims/cmd/lib/credentials"
+	"github.com/d3c3ptive/aims/cmd/lib/hosts"
+	"github.com/d3c3ptive/aims/cmd/lib/scan"
+	"github.com/d3c3ptive/aims/cmd/lib/services"
 	"github.com/spf13/cobra"
 )
 

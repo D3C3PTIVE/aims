@@ -8,8 +8,8 @@ package host
 
 import (
 	_ "github.com/infobloxopen/protoc-gen-gorm/options"
-	network "github.com/maxlandon/aims/proto/network"
-	nmap "github.com/maxlandon/aims/proto/scan/nmap"
+	network "github.com/d3c3ptive/aims/proto/network"
+	nmap "github.com/d3c3ptive/aims/proto/scan/nmap"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

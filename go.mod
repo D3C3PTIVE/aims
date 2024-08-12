@@ -1,4 +1,4 @@
-module github.com/maxlandon/aims
+module github.com/d3c3ptive/aims
 
 go 1.21
 
@@ -8,10 +8,9 @@ require (
 	github.com/fatih/color v1.15.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/infobloxopen/atlas-app-toolkit v1.1.1
+	github.com/infobloxopen/atlas-app-toolkit/v2 v2.2.1
 	github.com/infobloxopen/protoc-gen-gorm v1.0.1
 	github.com/jedib0t/go-pretty/v6 v6.4.6
-	github.com/jinzhu/gorm v1.9.16
 	github.com/maxlandon/gondor v0.0.0-20211107181652-b501c4771abd
 	github.com/reeflective/team v0.0.0-20230817204851-bf208c25a76c
 	github.com/rsteube/carapace v0.39.1
@@ -61,11 +60,11 @@ require (
 	github.com/hdevalence/ed25519consensus v0.1.0 // indirect
 	github.com/illarion/gonotify v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/infobloxopen/atlas-app-toolkit/v2 v2.2.1 // indirect
 	github.com/insomniacslk/dhcp v0.0.0-20230407062729-974c6f05fe16 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgx/v5 v5.3.1 // indirect
+	github.com/jinzhu/gorm v1.9.16 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect

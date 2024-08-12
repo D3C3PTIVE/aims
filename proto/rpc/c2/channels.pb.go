@@ -7,7 +7,7 @@
 package c2
 
 import (
-	c2 "github.com/maxlandon/aims/proto/c2"
+	c2 "github.com/d3c3ptive/aims/proto/c2"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"

@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // Username - A public credential in the form of a Username .

@@ -26,10 +26,10 @@ import (
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/cmd/lib"
-	"github.com/maxlandon/aims/db"
-	"github.com/maxlandon/aims/server/transport"
+	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/cmd/lib"
+	"github.com/d3c3ptive/aims/db"
+	"github.com/d3c3ptive/aims/server/transport"
 )
 
 func main() {

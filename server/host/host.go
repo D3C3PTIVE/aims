@@ -26,10 +26,10 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/host"
-	"github.com/maxlandon/aims/internal/db"
-	pb "github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/internal/db"
+	pb "github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 )
 
 type server struct {

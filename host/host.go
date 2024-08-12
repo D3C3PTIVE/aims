@@ -24,8 +24,8 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/proto/host"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/proto/host"
 )
 
 // Host - A physical or virtual computer host.

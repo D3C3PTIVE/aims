@@ -19,8 +19,8 @@ package credential
 */
 
 import (
-	"github.com/maxlandon/aims/host"
-	"github.com/maxlandon/aims/proto/credential"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/proto/credential"
 )
 
 // Core - A wrapper around the credential.Core protobuf type. This is unexported

@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	aims "github.com/maxlandon/aims/server"
+	aims "github.com/d3c3ptive/aims/server"
 )
 
 const (

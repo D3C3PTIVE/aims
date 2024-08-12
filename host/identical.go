@@ -21,10 +21,10 @@ package host
 import (
 	"strings"
 
-	"github.com/maxlandon/aims/internal/util"
-	"github.com/maxlandon/aims/proto/host"
-	pb "github.com/maxlandon/aims/proto/host"
-	netpb "github.com/maxlandon/aims/proto/network"
+	"github.com/d3c3ptive/aims/internal/util"
+	"github.com/d3c3ptive/aims/proto/host"
+	pb "github.com/d3c3ptive/aims/proto/host"
+	netpb "github.com/d3c3ptive/aims/proto/network"
 )
 
 // AreHostsIdentical compares two pb.HostORM objects to determine if they represent the same host.

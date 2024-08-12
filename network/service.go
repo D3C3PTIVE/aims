@@ -25,9 +25,9 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/network"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/network"
 	"github.com/maxlandon/gondor/maltego"
 )
 

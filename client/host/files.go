@@ -19,7 +19,7 @@ package host
 */
 
 import (
-	"github.com/maxlandon/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/host"
 )
 
 // ReadDir returns files contained inside one ore directory paths.

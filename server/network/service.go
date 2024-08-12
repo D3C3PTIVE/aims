@@ -25,9 +25,9 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/host"
-	pb "github.com/maxlandon/aims/proto/network"
-	"github.com/maxlandon/aims/proto/rpc/network"
+	"github.com/d3c3ptive/aims/proto/host"
+	pb "github.com/d3c3ptive/aims/proto/network"
+	"github.com/d3c3ptive/aims/proto/rpc/network"
 )
 
 type server struct {

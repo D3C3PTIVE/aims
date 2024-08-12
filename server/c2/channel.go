@@ -8,9 +8,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	core "github.com/maxlandon/aims/c2"
-	pb "github.com/maxlandon/aims/proto/c2"
-	"github.com/maxlandon/aims/proto/rpc/c2"
+	core "github.com/d3c3ptive/aims/c2"
+	pb "github.com/d3c3ptive/aims/proto/c2"
+	"github.com/d3c3ptive/aims/proto/rpc/c2"
 )
 
 type server struct {

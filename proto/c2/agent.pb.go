@@ -8,7 +8,7 @@ package c2
 
 import (
 	_ "github.com/infobloxopen/protoc-gen-gorm/options"
-	host "github.com/maxlandon/aims/proto/host"
+	host "github.com/d3c3ptive/aims/proto/host"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"

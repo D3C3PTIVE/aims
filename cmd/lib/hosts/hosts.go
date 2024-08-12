@@ -28,13 +28,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/maxlandon/aims/client"
-	"github.com/maxlandon/aims/cmd/lib/export"
-	aims "github.com/maxlandon/aims/cmd/lib/util"
-	"github.com/maxlandon/aims/display"
-	"github.com/maxlandon/aims/host"
-	pb "github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/cmd/lib/export"
+	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	"github.com/d3c3ptive/aims/display"
+	"github.com/d3c3ptive/aims/host"
+	pb "github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 )
 
 // Commands returns a command tree to manage and display hosts.
