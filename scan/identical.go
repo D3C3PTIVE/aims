@@ -35,12 +35,6 @@ func AreScansIdentical(a, b *scanpb.RunORM) bool {
 	weightBy := util.WeightedCompare
 	intCmp := util.CompareInts
 	strCmp := util.CompareStrings
-	// compareStringSlices := util.CompareStrings
-
-	// Step 1: Perform unambiguous identification check
-	// if identical, _ := IsHostUnambiguouslyIdentifiable(host1); identical {
-	// 	return true
-	// }
 
 	// Define weights for each field
 	totalScore := 0

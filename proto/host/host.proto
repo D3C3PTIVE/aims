@@ -78,9 +78,9 @@ message Host {
   // @gotags: xml:"endtime,attr,omitempty"
   int64 EndTime = 34;         // Might have issues here with XML unmarshalling
   // @gotags: xml:"ipidsequence"
-  network.IPIDSequence IPIDSequence = 35[(gorm.field).belongs_to = {}];
+  network.IPIDSequence IPIDSequence = 35 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcpsequence"
-  network.TCPSequence TCPSequence = 36[(gorm.field).belongs_to = {}];
+  network.TCPSequence TCPSequence = 36 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"tcptssequence"
   network.TCPTSSequence TCPTSSequence = 37 [(gorm.field).belongs_to = {}];
   network.ICMPResponse ICMPResponse = 38 [(gorm.field).belongs_to = {}];

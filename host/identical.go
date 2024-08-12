@@ -19,9 +19,9 @@ package host
 */
 
 import (
-	"reflect"
 	"strings"
 
+	"github.com/maxlandon/aims/internal/util"
 	"github.com/maxlandon/aims/proto/host"
 	pb "github.com/maxlandon/aims/proto/host"
 	netpb "github.com/maxlandon/aims/proto/network"
@@ -38,67 +38,33 @@ func AreHostsIdentical(host1, host2 *pb.HostORM) bool {
 	// 	return true
 	// }
 
+	weightBy := util.WeightedCompare
+	intCmp := util.CompareInts
+	strCmp := util.CompareStrings
+	compareStringSlices := util.CompareStringSlices
 	score := 0
 
 	// Strong indicators
-	score += weightedCompare(compareStrings(host1.MAC, host2.MAC), 5)
-	score += weightedCompare(compareStringSlices(getHostAddresses(host1), getHostAddresses(host2)), 4)
-	score += weightedCompare(compareStringSlices(getHostHostnames(host1), getHostHostnames(host2)), 4)
-	score += weightedCompare(compareStrings(host1.OSName, host2.OSName) && compareStrings(host1.Arch, host2.Arch), 3)
-	score += weightedCompare(compareInts(host1.StartTime, host2.StartTime) && compareInts(host1.EndTime, host2.EndTime), 5)
+	score += weightBy(strCmp(host1.MAC, host2.MAC), 5)
+	score += weightBy(compareStringSlices(getHostAddresses(host1), getHostAddresses(host2)), 4)
+	score += weightBy(compareStringSlices(getHostHostnames(host1), getHostHostnames(host2)), 4)
+	score += weightBy(strCmp(host1.OSName, host2.OSName) && strCmp(host1.Arch, host2.Arch), 3)
+	score += weightBy(intCmp(host1.StartTime, host2.StartTime) && intCmp(host1.EndTime, host2.EndTime), 5)
 	// score += weightedCompare(compareStrings(host1.TCPSequence, host2.TCPSequence), 3)
-	score += weightedCompare(compareProcesses(host1.Processes, host2.Processes), 3)
-	score += weightedCompare(compareUsers(host1.Users, host2.Users), 4)
+	score += weightBy(compareProcesses(host1.Processes, host2.Processes), 3)
+	score += weightBy(compareUsers(host1.Users, host2.Users), 4)
 
 	// Strong but niche, less likely to appear.
-	score += weightedCompare(compareStatusORMs(host1.Status, host2.Status), 2)
-	score += weightedCompare(compareExtraPortORMs(host1.ExtraPorts, host2.ExtraPorts), 3)
-	score += weightedCompare(compareTraces(host1.Trace, host2.Trace), 3)
+	score += weightBy(compareStatusORMs(host1.Status, host2.Status), 2)
+	score += weightBy(compareExtraPortORMs(host1.ExtraPorts, host2.ExtraPorts), 3)
+	score += weightBy(compareTraces(host1.Trace, host2.Trace), 3)
 
 	// Weaker indicators
-	score += weightedCompare(compareStrings(host1.Comm, host2.Comm), 2)
-	score += weightedCompare(compareStrings(host1.OSFamily, host2.OSFamily), 2)
-	score += weightedCompare(compareStrings(host1.Info, host2.Info), 1)
+	score += weightBy(strCmp(host1.Comm, host2.Comm), 2)
+	score += weightBy(strCmp(host1.OSFamily, host2.OSFamily), 2)
+	score += weightBy(strCmp(host1.Info, host2.Info), 1)
 
 	return score >= 10 // Adjust this threshold based on your confidence level
-}
-
-// Helper function to add weight to comparison results.
-func weightedCompare(condition bool, weight int) int {
-	if condition {
-		return weight
-	}
-	return 0
-}
-
-// Helper function to compare two strings with tolerance for nil or empty values.
-func compareStrings(str1, str2 string) bool {
-	return strings.TrimSpace(str1) != "" && strings.EqualFold(str1, str2)
-}
-
-// Helper function to compare two slices of strings with tolerance for nil or empty slices.
-func compareStringSlices(slice1, slice2 []string) bool {
-	if len(slice1) == 0 || len(slice2) == 0 {
-		return false
-	}
-
-	map1 := make(map[string]struct{}, len(slice1))
-	for _, item := range slice1 {
-		map1[strings.TrimSpace(item)] = struct{}{}
-	}
-
-	for _, item := range slice2 {
-		if _, found := map1[strings.TrimSpace(item)]; found {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Helper function to compare two integers.
-func compareInts(int1, int2 int64) bool {
-	return int1 == int2
 }
 
 // compareExtraPortORMs compares two slices of ExtraPortORM for equality.
@@ -151,7 +117,7 @@ func compareHops(a, b []*netpb.HopORM) bool {
 
 // Helper function to compare the processes.
 func compareProcesses(processes1, processes2 []*pb.ProcessORM) bool {
-	return compareStringSlices(extractProcessNames(processes1), extractProcessNames(processes2))
+	return util.CompareStringSlices(extractProcessNames(processes1), extractProcessNames(processes2))
 }
 
 // Helper function to extract process names from a list of processes.
@@ -167,7 +133,7 @@ func extractProcessNames(processes []*pb.ProcessORM) []string {
 
 // Helper function to compare users.
 func compareUsers(users1, users2 []*pb.UserORM) bool {
-	return compareStringSlices(extractUserNames(users1), extractUserNames(users2))
+	return util.CompareStringSlices(extractUserNames(users1), extractUserNames(users2))
 }
 
 // compareStatusORMs compares two StatusORM objects for equality using weighted comparison.
@@ -180,10 +146,10 @@ func compareStatusORMs(a, b *host.StatusORM) bool {
 	totalScore := 0
 	maxScore := 4 * 10 // Example max score (4 fields with a weight of 10 each)
 
-	totalScore += weightedCompare(compareStrings(a.Id, b.Id), 40)
-	totalScore += weightedCompare(compareStrings(a.Reason, b.Reason), 10)
-	totalScore += weightedCompare(compareStrings(a.ReasonTTL, b.ReasonTTL), 10)
-	totalScore += weightedCompare(compareStrings(a.State, b.State), 10)
+	totalScore += util.WeightedCompare(util.CompareStrings(a.Id, b.Id), 40)
+	totalScore += util.WeightedCompare(util.CompareStrings(a.Reason, b.Reason), 10)
+	totalScore += util.WeightedCompare(util.CompareStrings(a.ReasonTTL, b.ReasonTTL), 10)
+	totalScore += util.WeightedCompare(util.CompareStrings(a.State, b.State), 10)
 
 	// Return true if total score meets or exceeds the threshold
 	return totalScore >= (maxScore / 2)
@@ -227,103 +193,53 @@ func getHostHostnames(host *pb.HostORM) []string {
 	return hostnames
 }
 
-// Example main function to demonstrate usage.
-// func main() {
-// 	host1 := &pb.HostORM{
-// 		MAC:        "00:1A:2B:3C:4D:5E",
-// 		OSName:     "Linux",
-// 		Arch:       "x86_64",
-// 		OSFlavor:   "Ubuntu",
-// 		OSLang:     "English",
-// 		VirtualHost: "host1",
-// 		StartTime:   1625097600,
-// 		EndTime:     1625098200,
-// 		TCPSequence: "SEQ123456",
-// 		Processes: []*pb.ProcessORM{
-// 			{Name: "sshd"},
-// 			{Name: "nginx"},
-// 		},
-// 		Users: []*pb.UserORM{
-// 			{Name: "user1"},
-// 			{Name: "user2"},
-// 		},
+// // IsHostUnambiguouslyIdentifiable checks selected fields ending with *ID that are non-nil and attempts to find an existing host in the database.
+// // Returns true if the host is unambiguously identified as the same.
+// func IsHostUnambiguouslyIdentifiable(host *pb.HostORM, db *Database) (bool, *pb.HostORM) {
+// 	if host == nil {
+// 		return false, nil
 // 	}
 //
-// 	host2 := &pb.HostORM{
-// 		MAC:        "00:1A:2B:3C:4D:5E",
-// 		OSName:     "Linux",
-// 		Arch:       "x86_64",
-// 		OSFlavor:   "Ubuntu",
-// 		OSLang:     "English",
-// 		VirtualHost: "host2",
-// 		StartTime:   1625097600,
-// 		EndTime:     1625098200,
-// 		TCPSequence: "SEQ123456",
-// 		Processes: []*pb.ProcessORM{
-// 			{Name: "sshd"},
-// 			{Name: "nginx"},
-// 		},
-// 		Users: []*pb.UserORM{
-// 			{Name: "user1"},
-// 			{Name: "user2"},
-// 		},
+// 	// Selected fields to check for unambiguous identification
+// 	idFields := []string{
+// 		"TraceId",
+// 		"TCPSequenceId",
+// 		"ICMPResponseId",
+// 		"FileSystemId",
+// 		"DistanceId",
+// 		"UptimeId",
+// 		"OSId",
 // 	}
 //
-// 	fmt.Println(AreHostsIdentical(host1, host2)) // Should print true
+// 	hostValue := reflect.ValueOf(*host)
+//
+// 	// Iterate through selected fields and check if they identify an existing host
+// 	for _, fieldName := range idFields {
+// 		fieldValue := hostValue.FieldByName(fieldName)
+//
+// 		if fieldValue.IsValid() && !fieldValue.IsNil() {
+// 			id := fieldValue.Elem().String() // Get the ID value as a string
+// 			// Check the database for an existing host with this ID
+// 			existingHost := db.FindHostByID(fieldName, id)
+// 			if existingHost != nil {
+// 				return true, existingHost
+// 			}
+// 		}
+// 	}
+//
+// 	// No unambiguous identification found
+// 	return false, nil
 // }
-
-// IsHostUnambiguouslyIdentifiable checks selected fields ending with *ID that are non-nil and attempts to find an existing host in the database.
-// Returns true if the host is unambiguously identified as the same.
-func IsHostUnambiguouslyIdentifiable(host *pb.HostORM, db *Database) (bool, *pb.HostORM) {
-	if host == nil {
-		return false, nil
-	}
-
-	// Selected fields to check for unambiguous identification
-	idFields := []string{
-		"TraceId",
-		"TCPSequenceId",
-		"ICMPResponseId",
-		"FileSystemId",
-		"DistanceId",
-		"UptimeId",
-		"OSId",
-	}
-
-	hostValue := reflect.ValueOf(*host)
-
-	// Iterate through selected fields and check if they identify an existing host
-	for _, fieldName := range idFields {
-		fieldValue := hostValue.FieldByName(fieldName)
-
-		if fieldValue.IsValid() && !fieldValue.IsNil() {
-			id := fieldValue.Elem().String() // Get the ID value as a string
-			// Check the database for an existing host with this ID
-			existingHost := db.FindHostByID(fieldName, id)
-			if existingHost != nil {
-				return true, existingHost
-			}
-		}
-	}
-
-	// No unambiguous identification found
-	return false, nil
-}
-
-// Example Database structure to simulate database queries.
-type Database struct {
-	hosts []*pb.HostORM
-}
-
-// FindHostByID simulates a database query to find a host by a specific ID field.
-func (db *Database) FindHostByID(fieldName, id string) *pb.HostORM {
-	for _, host := range db.hosts {
-		hostValue := reflect.ValueOf(*host)
-		fieldValue := hostValue.FieldByName(fieldName)
-
-		if fieldValue.IsValid() && !fieldValue.IsNil() && fieldValue.Elem().String() == id {
-			return host
-		}
-	}
-	return nil
-}
+//
+// // FindHostByID simulates a database query to find a host by a specific ID field.
+// func (db *Database) FindHostByID(fieldName, id string) *pb.HostORM {
+// 	for _, host := range db.hosts {
+// 		hostValue := reflect.ValueOf(*host)
+// 		fieldValue := hostValue.FieldByName(fieldName)
+//
+// 		if fieldValue.IsValid() && !fieldValue.IsNil() && fieldValue.Elem().String() == id {
+// 			return host
+// 		}
+// 	}
+// 	return nil
+// }

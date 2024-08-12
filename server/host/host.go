@@ -44,7 +44,7 @@ func New(db *gorm.DB) *server {
 
 // Read reads one or more hosts from the database, with optional filters and elements to preload.
 func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	filts := getFilters(req.GetFilters())
+	filts := req.GetFilters()
 
 	// Convert to ORM model
 	hst, err := req.GetHost().ToORM(ctx)
@@ -55,11 +55,11 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	dbHosts := []*pb.HostORM{}
 
 	// Preloads
-	hostFilters := WithPreloads(req.GetFilters())
-	database := db.Preload(s.db.Where(hst), hostFilters)
+	filters := WithPreloads(req.GetFilters())
+	database := db.Preload(s.db.Where(hst), filters)
 
 	// Query
-	if filts.MaxResults == 1 {
+	if filts != nil && filts.MaxResults == 1 {
 		database = database.First(&dbHosts)
 	} else {
 		database = database.Find(&dbHosts)
@@ -215,12 +215,4 @@ func WithPreloads(from *hosts.HostFilters) (clauses map[string]bool) {
 	}
 
 	return clauses
-}
-
-func getFilters(filts *hosts.HostFilters) *hosts.HostFilters {
-	if filts != nil {
-		return filts
-	}
-
-	return &hosts.HostFilters{}
 }

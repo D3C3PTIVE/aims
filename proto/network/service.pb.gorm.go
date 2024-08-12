@@ -25,6 +25,7 @@ type ServiceORM struct {
 	Method        string
 	Name          string
 	OSType        string
+	PortId        string
 	Product       string
 	Protocol      string
 	RPCNum        string
@@ -58,6 +59,7 @@ func (m *Service) ToORM(ctx context.Context) (ServiceORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
+	to.PortId = m.PortId
 	to.Protocol = m.Protocol
 	to.Name = m.Name
 	to.ExtraInfo = m.ExtraInfo
@@ -99,6 +101,7 @@ func (m *ServiceORM) ToPB(ctx context.Context) (Service, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
+	to.PortId = m.PortId
 	to.Protocol = m.Protocol
 	to.Name = m.Name
 	to.ExtraInfo = m.ExtraInfo
@@ -473,6 +476,10 @@ func DefaultApplyFieldMaskService(ctx context.Context, patchee *Service, patcher
 		if f == prefix+"UpdatedAt" {
 			updatedUpdatedAt = true
 			patchee.UpdatedAt = patcher.UpdatedAt
+			continue
+		}
+		if f == prefix+"PortId" {
+			patchee.PortId = patcher.PortId
 			continue
 		}
 		if f == prefix+"Protocol" {

@@ -16,6 +16,8 @@ message Service {
   google.protobuf.Timestamp CreatedAt = 4; 
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp UpdatedAt = 5;
+  // @gotags: display:"Port ID" readonly:"true" xml:"-" 
+  string PortId = 6;
 
   // Nmap
   // @gotags: xml:"proto,attr" display:"Protocol"
