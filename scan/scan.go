@@ -134,7 +134,7 @@ func DisplayDetails() []display.Options {
 	}
 
 	// Core
-
+	add("ID", 1)
 	add("Scanner", 1)
 	add("Name", 1)
 	add("Info", 1)
@@ -148,53 +148,22 @@ func DisplayDetails() []display.Options {
 	return headers
 }
 
-func tasksHeaders() []display.Options {
+// Completions returns some columns to be combined into
+// completion candidates and/or their descriptions.
+func Completions() []display.Options {
 	var headers []display.Options
 	add := func(n string, w int) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
-	add("Time", 1)
+
+	add("ID", 1)
+	add("Scanner", 1)
 	add("Name", 1)
 	add("Info", 1)
+	add("Tasks", 1)
+	add("Args", 1)
 
 	return headers
-}
-
-var tasksFields = map[string]func(h *scan.ScanTask) string{
-	"Time": func(taskEnd *scan.ScanTask) string {
-		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
-	},
-	"Name": func(h *scan.ScanTask) string {
-		return h.Task
-	},
-	"Info": func(h *scan.ScanTask) string {
-		return h.ExtraInfo
-	},
-}
-
-func tasksProgressHeaders() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("Time", 1)
-	add("Name", 1)
-	add("Percent", 1)
-
-	return headers
-}
-
-var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
-	"Name": func(h *scan.TaskProgress) string {
-		return h.Task
-	},
-	"Time": func(taskEnd *scan.TaskProgress) string {
-		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
-	},
-	"Percent": func(taskEnd *scan.TaskProgress) string {
-		return color.HiYellowString(fmt.Sprintf("%v%%", taskEnd.Percent))
-	},
 }
 
 // Fields maps field names to their value generators.
@@ -313,6 +282,55 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 	},
 	"Tasks Details": func(h *scan.Run) string {
 		return formatTasks(h)
+	},
+}
+
+func tasksHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+	add("Time", 1)
+	add("Name", 1)
+	add("Info", 1)
+
+	return headers
+}
+
+var tasksFields = map[string]func(h *scan.ScanTask) string{
+	"Time": func(taskEnd *scan.ScanTask) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Name": func(h *scan.ScanTask) string {
+		return h.Task
+	},
+	"Info": func(h *scan.ScanTask) string {
+		return h.ExtraInfo
+	},
+}
+
+func tasksProgressHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("Time", 1)
+	add("Name", 1)
+	add("Percent", 1)
+
+	return headers
+}
+
+var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
+	"Name": func(h *scan.TaskProgress) string {
+		return h.Task
+	},
+	"Time": func(taskEnd *scan.TaskProgress) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Percent": func(taskEnd *scan.TaskProgress) string {
+		return color.HiYellowString(fmt.Sprintf("%v%%", taskEnd.Percent))
 	},
 }
 

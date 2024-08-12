@@ -19,6 +19,7 @@ package scan
 */
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -65,6 +66,31 @@ func Commands(con *client.Client) *cobra.Command {
 	return scanCmd
 }
 
+// CompleteByID returns hosts completions with their smallened IDs as keys.
+func CompleteByID(client *client.Client) carapace.Action {
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		if msg, err := client.ConnectComplete(); err != nil {
+			return msg
+		}
+
+		// Request
+		res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
+			Scan:    &pb.Run{},
+			Filters: &scans.RunFilters{},
+		})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+
+		options := scan.Completions()
+		options = append(options, display.WithCandidateValue("ID", ""))
+
+		results := display.Completions(res.Scans, scan.DisplayFields, options...)
+
+		return carapace.ActionValuesDescribed(results...).Tag("scans").FilterArgs()
+	})
+}
+
 func listCommand(con *client.Client) *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -101,6 +127,7 @@ func showCommand(con *client.Client) *cobra.Command {
 	showCmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show one ore more scan details",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
 			targets, _ := command.Flags().GetBool("targets")
 			tasks, _ := command.Flags().GetBool("tasks")
@@ -125,9 +152,16 @@ func showCommand(con *client.Client) *cobra.Command {
 			err = aims.CheckError(err)
 
 			// Display
+			found := false
 			for _, h := range res.GetScans() {
-				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, scan.DisplayFields, options...))
+				for _, arg := range args {
+					if len(res.GetScans()) > 1 && found {
+						fmt.Println()
+					}
+					if strings.HasPrefix(h.Id, strip(arg)) {
+						fmt.Println(display.Details(h, scan.DisplayFields, options...))
+					}
+					found = true
 				}
 			}
 
@@ -141,6 +175,8 @@ func showCommand(con *client.Client) *cobra.Command {
 	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("tasks", "t", false, "Show all scan tasks status/details")
 	})
+
+	carapace.Gen(showCmd).PositionalAnyCompletion(CompleteByID(con))
 
 	return showCmd
 }

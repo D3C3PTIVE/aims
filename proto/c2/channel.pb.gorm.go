@@ -25,6 +25,7 @@ type ChannelORM struct {
 	Order             int32
 	PeerID            string
 	ProxyURL          string
+	RawData           string
 	ReconnectInterval int64
 	RemoteAddress     string
 	Running           bool
@@ -61,6 +62,7 @@ func (m *Channel) ToORM(ctx context.Context) (ChannelORM, error) {
 	to.Running = m.Running
 	to.RemoteAddress = m.RemoteAddress
 	to.ProxyURL = m.ProxyURL
+	to.RawData = m.RawData
 	to.ReconnectInterval = m.ReconnectInterval
 	to.Interval = m.Interval
 	to.Jitter = m.Jitter
@@ -96,6 +98,7 @@ func (m *ChannelORM) ToPB(ctx context.Context) (Channel, error) {
 	to.Running = m.Running
 	to.RemoteAddress = m.RemoteAddress
 	to.ProxyURL = m.ProxyURL
+	to.RawData = m.RawData
 	to.ReconnectInterval = m.ReconnectInterval
 	to.Interval = m.Interval
 	to.Jitter = m.Jitter
@@ -482,6 +485,10 @@ func DefaultApplyFieldMaskChannel(ctx context.Context, patchee *Channel, patcher
 		}
 		if f == prefix+"ProxyURL" {
 			patchee.ProxyURL = patcher.ProxyURL
+			continue
+		}
+		if f == prefix+"RawData" {
+			patchee.RawData = patcher.RawData
 			continue
 		}
 		if f == prefix+"ReconnectInterval" {
