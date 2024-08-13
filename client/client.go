@@ -20,7 +20,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/reeflective/team"
 	"github.com/reeflective/team/client"
@@ -85,7 +84,6 @@ func (c *Client) Init() error {
 
 	conn := c.dialer.Conn
 
-	fmt.Println("HERE")
 	c.Hosts = hosts.NewHostsClient(conn)
 	c.users = hosts.NewUsersClient(conn)
 	c.Services = network.NewServicesClient(conn)
@@ -94,10 +92,6 @@ func (c *Client) Init() error {
 	c.Scans = scans.NewScansClient(conn)
 	c.Agents = c2.NewAgentsClient(conn)
 	c.Channels = c2.NewChannelsClient(conn)
-
-	if c.Hosts == nil {
-		fmt.Println("NO HOSTS")
-	}
 
 	return nil
 }

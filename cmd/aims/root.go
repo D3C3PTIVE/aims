@@ -52,6 +52,8 @@ func main() {
 	teamserverCmds := commands.Generate(teamserver, aimsClient.Teamclient)
 	aimsCmd.AddCommand(teamserverCmds)
 
+    BindPrePost(aimsCmd, true, aimsClient.ConnectRun)
+
 	// Completions (also pre-connect to the server)
 	carapace.Gen(aimsCmd)
 
