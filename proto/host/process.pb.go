@@ -28,24 +28,24 @@ type Process struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"PID"
-	Pid int32 `protobuf:"varint,10,opt,name=Pid,proto3" json:"Pid,omitempty" cmd/display:"PID"`
-	// @gotags: cmd/display:"PPID"
-	Ppid int32 `protobuf:"varint,11,opt,name=Ppid,proto3" json:"Ppid,omitempty" cmd/display:"PPID"`
-	// @gotags: cmd/display:"Executable"
-	Executable string `protobuf:"bytes,12,opt,name=Executable,proto3" json:"Executable,omitempty" cmd/display:"Executable"`
-	// @gotags: cmd/display:"Owner"
-	Owner *User `protobuf:"bytes,13,opt,name=Owner,proto3" json:"Owner,omitempty" cmd/display:"Owner"`
-	// @gotags: cmd/display:"Arch"
-	Architecture string `protobuf:"bytes,14,opt,name=Architecture,proto3" json:"Architecture,omitempty" cmd/display:"Arch"`
-	// @gotags: cmd/display:"CmdLine"
-	CmdLine []string `protobuf:"bytes,16,rep,name=CmdLine,proto3" json:"CmdLine,omitempty" cmd/display:"CmdLine"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"PID"
+	Pid int32 `protobuf:"varint,10,opt,name=Pid,proto3" json:"Pid,omitempty" display:"PID"`
+	// @gotags: display:"PPID"
+	Ppid int32 `protobuf:"varint,11,opt,name=Ppid,proto3" json:"Ppid,omitempty" display:"PPID"`
+	// @gotags: display:"Executable"
+	Executable string `protobuf:"bytes,12,opt,name=Executable,proto3" json:"Executable,omitempty" display:"Executable"`
+	// @gotags: display:"Owner"
+	Owner *User `protobuf:"bytes,13,opt,name=Owner,proto3" json:"Owner,omitempty" display:"Owner"`
+	// @gotags: display:"Arch"
+	Architecture string `protobuf:"bytes,14,opt,name=Architecture,proto3" json:"Architecture,omitempty" display:"Arch"`
+	// @gotags: display:"CmdLine"
+	CmdLine []string `protobuf:"bytes,16,rep,name=CmdLine,proto3" json:"CmdLine,omitempty" display:"CmdLine"`
 }
 
 func (x *Process) Reset() {
@@ -175,7 +175,7 @@ var file_host_process_proto_rawDesc = []byte{
 	0x6d, 0x64, 0x4c, 0x69, 0x6e, 0x65, 0x3a, 0x06, 0xba, 0xb9, 0x19, 0x02, 0x08, 0x01, 0x42, 0x6e,
 	0x0a, 0x08, 0x63, 0x6f, 0x6d, 0x2e, 0x68, 0x6f, 0x73, 0x74, 0x42, 0x0c, 0x50, 0x72, 0x6f, 0x63,
 	0x65, 0x73, 0x73, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x24, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64, 0x6f, 0x6e,
+	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69, 0x76, 0x65,
 	0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x68, 0x6f, 0x73, 0x74,
 	0xa2, 0x02, 0x03, 0x48, 0x58, 0x58, 0xaa, 0x02, 0x04, 0x48, 0x6f, 0x73, 0x74, 0xca, 0x02, 0x04,
 	0x48, 0x6f, 0x73, 0x74, 0xe2, 0x02, 0x10, 0x48, 0x6f, 0x73, 0x74, 0x5c, 0x47, 0x50, 0x42, 0x4d,

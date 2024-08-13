@@ -3,8 +3,8 @@ package host
 import (
 	context "context"
 	fmt "fmt"
-	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	os "github.com/d3c3ptive/aims/proto/host/os"
+	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	gorm "gorm.io/gorm"
 )

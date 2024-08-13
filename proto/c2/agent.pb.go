@@ -7,8 +7,8 @@
 package c2
 
 import (
-	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	host "github.com/d3c3ptive/aims/proto/host"
+	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -30,12 +30,12 @@ type Agent struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// Core
 	Host    *host.Host `protobuf:"bytes,9,opt,name=Host,proto3" json:"Host,omitempty"`
 	Name    string     `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
@@ -246,16 +246,16 @@ type Task struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Sent at" readonly:"true" xml:"-"
-	SentAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=SentAt,proto3" json:"SentAt,omitempty" cmd/display:"Sent at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Completed at" readonly:"true" xml:"-"
-	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=CompletedAt,proto3" json:"CompletedAt,omitempty" cmd/display:"Completed at" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"Sent at" readonly:"true" xml:"-"
+	SentAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=SentAt,proto3" json:"SentAt,omitempty" display:"Sent at" readonly:"true" xml:"-"`
+	// @gotags: display:"Completed at" readonly:"true" xml:"-"
+	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=CompletedAt,proto3" json:"CompletedAt,omitempty" display:"Completed at" readonly:"true" xml:"-"`
 	// string AgentID = 10;
 	State       string `protobuf:"bytes,10,opt,name=State,proto3" json:"State,omitempty"`
 	Request     string `protobuf:"bytes,11,opt,name=Request,proto3" json:"Request,omitempty"`   // bytes
@@ -443,8 +443,8 @@ var file_c2_agent_proto_rawDesc = []byte{
 	0x0b, 0x44, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x06, 0xba, 0xb9,
 	0x19, 0x02, 0x08, 0x01, 0x42, 0x60, 0x0a, 0x06, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x32, 0x42, 0x0a,
 	0x41, 0x67, 0x65, 0x6e, 0x74, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x22, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64,
-	0x6f, 0x6e, 0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x32,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69,
+	0x76, 0x65, 0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x32,
 	0xa2, 0x02, 0x03, 0x43, 0x58, 0x58, 0xaa, 0x02, 0x02, 0x43, 0x32, 0xca, 0x02, 0x02, 0x43, 0x32,
 	0xe2, 0x02, 0x0e, 0x43, 0x32, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74,
 	0x61, 0xea, 0x02, 0x02, 0x43, 0x32, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,

@@ -7,9 +7,9 @@
 package host
 
 import (
-	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	network "github.com/d3c3ptive/aims/proto/network"
 	nmap "github.com/d3c3ptive/aims/proto/scan/nmap"
+	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -30,45 +30,45 @@ type Host struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
 	// int64 Id = 1 [(gorm.field).tag = {primary_key: true}];
 	// string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// General ------------------------------------
-	// @gotags: cmd/display:"MAC Address"
-	MAC string `protobuf:"bytes,10,opt,name=MAC,proto3" json:"MAC,omitempty" cmd/display:"MAC Address"`
-	// @gotags: cmd/display:"Comm"
-	Comm string `protobuf:"bytes,11,opt,name=Comm,proto3" json:"Comm,omitempty" cmd/display:"Comm"`
-	// @gotags: cmd/display:"OS Name"
-	OSName string `protobuf:"bytes,12,opt,name=OSName,proto3" json:"OSName,omitempty" cmd/display:"OS Name"`
-	// @gotags: cmd/display:"OS Flavor"
-	OSFlavor string `protobuf:"bytes,13,opt,name=OSFlavor,proto3" json:"OSFlavor,omitempty" cmd/display:"OS Flavor"`
-	// @gotags: cmd/display:"OS Service Pack"
-	OSSp string `protobuf:"bytes,14,opt,name=OSSp,proto3" json:"OSSp,omitempty" cmd/display:"OS Service Pack"`
-	// @gotags: cmd/display:"OS Language"
-	OSLang string `protobuf:"bytes,15,opt,name=OSLang,proto3" json:"OSLang,omitempty" cmd/display:"OS Language"`
-	// @gotags: cmd/display:"OS Family"
-	OSFamily string `protobuf:"bytes,16,opt,name=OSFamily,proto3" json:"OSFamily,omitempty" cmd/display:"OS Family"`
-	// @gotags: cmd/display:"CPU Arch"
-	Arch string `protobuf:"bytes,17,opt,name=Arch,proto3" json:"Arch,omitempty" cmd/display:"CPU Arch"`
-	// @gotags: cmd/display:"Purpose"
-	Purpose string `protobuf:"bytes,18,opt,name=Purpose,proto3" json:"Purpose,omitempty" cmd/display:"Purpose"`
-	// @gotags: cmd/display:"Info"
-	Info string `protobuf:"bytes,19,opt,name=Info,proto3" json:"Info,omitempty" cmd/display:"Info"`
-	// @gotags: cmd/display:"Scope"
-	Scope string `protobuf:"bytes,20,opt,name=Scope,proto3" json:"Scope,omitempty" cmd/display:"Scope"`
-	// @gotags: cmd/display:"Virtual Host"
-	VirtualHost string `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty" cmd/display:"Virtual Host"`
-	// @gotags: cmd/display:"Users"
-	Users []*User `protobuf:"bytes,22,rep,name=Users,proto3" json:"Users,omitempty" cmd/display:"Users"`
-	// @gotags: cmd/display:"Processes"
-	Processes []*Process `protobuf:"bytes,23,rep,name=Processes,proto3" json:"Processes,omitempty" cmd/display:"Processes"`
-	// @gotags: cmd/display:"Filesystem"
-	FS *FileSystem `protobuf:"bytes,24,opt,name=FS,proto3" json:"FS,omitempty" cmd/display:"Filesystem"`
+	// @gotags: display:"MAC Address"
+	MAC string `protobuf:"bytes,10,opt,name=MAC,proto3" json:"MAC,omitempty" display:"MAC Address"`
+	// @gotags: display:"Comm"
+	Comm string `protobuf:"bytes,11,opt,name=Comm,proto3" json:"Comm,omitempty" display:"Comm"`
+	// @gotags: display:"OS Name"
+	OSName string `protobuf:"bytes,12,opt,name=OSName,proto3" json:"OSName,omitempty" display:"OS Name"`
+	// @gotags: display:"OS Flavor"
+	OSFlavor string `protobuf:"bytes,13,opt,name=OSFlavor,proto3" json:"OSFlavor,omitempty" display:"OS Flavor"`
+	// @gotags: display:"OS Service Pack"
+	OSSp string `protobuf:"bytes,14,opt,name=OSSp,proto3" json:"OSSp,omitempty" display:"OS Service Pack"`
+	// @gotags: display:"OS Language"
+	OSLang string `protobuf:"bytes,15,opt,name=OSLang,proto3" json:"OSLang,omitempty" display:"OS Language"`
+	// @gotags: display:"OS Family"
+	OSFamily string `protobuf:"bytes,16,opt,name=OSFamily,proto3" json:"OSFamily,omitempty" display:"OS Family"`
+	// @gotags: display:"CPU Arch"
+	Arch string `protobuf:"bytes,17,opt,name=Arch,proto3" json:"Arch,omitempty" display:"CPU Arch"`
+	// @gotags: display:"Purpose"
+	Purpose string `protobuf:"bytes,18,opt,name=Purpose,proto3" json:"Purpose,omitempty" display:"Purpose"`
+	// @gotags: display:"Info"
+	Info string `protobuf:"bytes,19,opt,name=Info,proto3" json:"Info,omitempty" display:"Info"`
+	// @gotags: display:"Scope"
+	Scope string `protobuf:"bytes,20,opt,name=Scope,proto3" json:"Scope,omitempty" display:"Scope"`
+	// @gotags: display:"Virtual Host"
+	VirtualHost string `protobuf:"bytes,21,opt,name=VirtualHost,proto3" json:"VirtualHost,omitempty" display:"Virtual Host"`
+	// @gotags: display:"Users"
+	Users []*User `protobuf:"bytes,22,rep,name=Users,proto3" json:"Users,omitempty" display:"Users"`
+	// @gotags: display:"Processes"
+	Processes []*Process `protobuf:"bytes,23,rep,name=Processes,proto3" json:"Processes,omitempty" display:"Processes"`
+	// @gotags: display:"Filesystem"
+	FS *FileSystem `protobuf:"bytes,24,opt,name=FS,proto3" json:"FS,omitempty" display:"Filesystem"`
 	// @gotags: xml:"address"
 	Addresses []*network.Address `protobuf:"bytes,25,rep,name=Addresses,proto3" json:"Addresses,omitempty" xml:"address"`
 	// Nmap ---------------------------------------
@@ -406,16 +406,16 @@ type Hostname struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Name" xml:"name,attr"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" cmd/display:"Name" xml:"name,attr"`
-	// @gotags: cmd/display:"Type" xml:"type,attr"
-	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty" cmd/display:"Type" xml:"type,attr"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"Name" xml:"name,attr"
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name" xml:"name,attr"`
+	// @gotags: display:"Type" xml:"type,attr"
+	Type string `protobuf:"bytes,11,opt,name=Type,proto3" json:"Type,omitempty" display:"Type" xml:"type,attr"`
 }
 
 func (x *Hostname) Reset() {
@@ -767,7 +767,7 @@ var file_host_host_proto_rawDesc = []byte{
 	0x61, 0x73, 0x6f, 0x6e, 0x54, 0x54, 0x4c, 0x3a, 0x06, 0xba, 0xb9, 0x19, 0x02, 0x08, 0x01, 0x42,
 	0x6b, 0x0a, 0x08, 0x63, 0x6f, 0x6d, 0x2e, 0x68, 0x6f, 0x73, 0x74, 0x42, 0x09, 0x48, 0x6f, 0x73,
 	0x74, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x24, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62,
-	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64, 0x6f, 0x6e, 0x2f, 0x61,
+	0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69, 0x76, 0x65, 0x2f, 0x61,
 	0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x68, 0x6f, 0x73, 0x74, 0xa2, 0x02,
 	0x03, 0x48, 0x58, 0x58, 0xaa, 0x02, 0x04, 0x48, 0x6f, 0x73, 0x74, 0xca, 0x02, 0x04, 0x48, 0x6f,
 	0x73, 0x74, 0xe2, 0x02, 0x10, 0x48, 0x6f, 0x73, 0x74, 0x5c, 0x47, 0x50, 0x42, 0x4d, 0x65, 0x74,

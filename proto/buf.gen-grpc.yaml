@@ -2,7 +2,7 @@ version: v1
 managed:
   enabled: true
   go_package_prefix:
-    default: github.com/maxlandon/aims/proto
+    default: github.com/d3c3ptive/aims/proto
     except:
       - buf.build/googleapis/googleapis
 

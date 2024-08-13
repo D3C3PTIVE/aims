@@ -95,24 +95,24 @@ type Public struct {
 	unknownFields protoimpl.UnknownFields
 
 	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
-	// @gotags: cmd/display:"Created at" readonly:"true"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true"`
-	// @gotags: cmd/display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true"`
-	// @gotags: cmd/display:"Type" readonly:"true"
-	Type PublicType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PublicType" json:"Type,omitempty" cmd/display:"Type" readonly:"true"`
-	// @gotags: cmd/display:"Username" readonly:"true"
-	Username string `protobuf:"bytes,11,opt,name=Username,proto3" json:"Username,omitempty" cmd/display:"Username" readonly:"true"`
+	// @gotags: display:"Created at" readonly:"true"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
+	// @gotags: display:"Updated at" readonly:"true"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
+	// @gotags: display:"Type" readonly:"true"
+	Type PublicType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PublicType" json:"Type,omitempty" display:"Type" readonly:"true"`
+	// @gotags: display:"Username" readonly:"true"
+	Username string `protobuf:"bytes,11,opt,name=Username,proto3" json:"Username,omitempty" display:"Username" readonly:"true"`
 	// Data - When the Public credential is a cryptographic key/certificate
 	// rather than a username, the key/certificate data is stored in this field.
-	// @gotags: cmd/display:"Data" readonly:"true"
-	Data string `protobuf:"bytes,12,opt,name=Data,proto3" json:"Data,omitempty" cmd/display:"Data" readonly:"true"`
+	// @gotags: display:"Data" readonly:"true"
+	Data string `protobuf:"bytes,12,opt,name=Data,proto3" json:"Data,omitempty" display:"Data" readonly:"true"`
 	// Claims - Some public credentials, such as JSON Web Tokens,
 	// can bear claims, which are a list of key-value pairs. These
 	// claims are stored as the bytes of a JSON-marshalled map[string]interface{}
 	// A method is provided for credentials to get this map.
-	// @gotags: cmd/display:"Claims" readonly:"true"
-	Claims string `protobuf:"bytes,13,opt,name=Claims,proto3" json:"Claims,omitempty" cmd/display:"Claims" readonly:"true"`
+	// @gotags: display:"Claims" readonly:"true"
+	Claims string `protobuf:"bytes,13,opt,name=Claims,proto3" json:"Claims,omitempty" display:"Claims" readonly:"true"`
 }
 
 func (x *Public) Reset() {
@@ -230,7 +230,7 @@ var file_credential_public_proto_rawDesc = []byte{
 	0x74, 0x65, 0x10, 0x04, 0x42, 0x91, 0x01, 0x0a, 0x0e, 0x63, 0x6f, 0x6d, 0x2e, 0x63, 0x72, 0x65,
 	0x64, 0x65, 0x6e, 0x74, 0x69, 0x61, 0x6c, 0x42, 0x0b, 0x50, 0x75, 0x62, 0x6c, 0x69, 0x63, 0x50,
 	0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x2a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64, 0x6f, 0x6e, 0x2f, 0x61, 0x69, 0x6d,
+	0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69, 0x76, 0x65, 0x2f, 0x61, 0x69, 0x6d,
 	0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x72, 0x65, 0x64, 0x65, 0x6e, 0x74, 0x69,
 	0x61, 0x6c, 0xa2, 0x02, 0x03, 0x43, 0x58, 0x58, 0xaa, 0x02, 0x0a, 0x43, 0x72, 0x65, 0x64, 0x65,
 	0x6e, 0x74, 0x69, 0x61, 0x6c, 0xca, 0x02, 0x0a, 0x43, 0x72, 0x65, 0x64, 0x65, 0x6e, 0x74, 0x69,

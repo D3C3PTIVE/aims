@@ -28,49 +28,49 @@ type Service struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Port ID" readonly:"true" xml:"-"
-	PortId string `protobuf:"bytes,6,opt,name=PortId,proto3" json:"PortId,omitempty" cmd/display:"Port ID" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"Port ID" readonly:"true" xml:"-"
+	PortId string `protobuf:"bytes,6,opt,name=PortId,proto3" json:"PortId,omitempty" display:"Port ID" readonly:"true" xml:"-"`
 	// Nmap
-	// @gotags: xml:"proto,attr" cmd/display:"Protocol"
-	Protocol string `protobuf:"bytes,10,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"proto,attr" cmd/display:"Protocol"`
-	// @gotags: xml:"name,attr" cmd/display:"Name"
-	Name string `protobuf:"bytes,11,opt,name=Name,proto3" json:"Name,omitempty" xml:"name,attr" cmd/display:"Name"`
-	// @gotags: xml:"extrainfo,attr" cmd/display:"Extra Info"
-	ExtraInfo string `protobuf:"bytes,12,opt,name=ExtraInfo,proto3" json:"ExtraInfo,omitempty" xml:"extrainfo,attr" cmd/display:"Extra Info"`
-	// @gotags: xml:"devicetype,attr" cmd/display:"Device Type"
-	DeviceType string `protobuf:"bytes,17,opt,name=DeviceType,proto3" json:"DeviceType,omitempty" xml:"devicetype,attr" cmd/display:"Device Type"`
+	// @gotags: xml:"proto,attr" display:"Protocol"
+	Protocol string `protobuf:"bytes,10,opt,name=Protocol,proto3" json:"Protocol,omitempty" xml:"proto,attr" display:"Protocol"`
+	// @gotags: xml:"name,attr" display:"Name"
+	Name string `protobuf:"bytes,11,opt,name=Name,proto3" json:"Name,omitempty" xml:"name,attr" display:"Name"`
+	// @gotags: xml:"extrainfo,attr" display:"Extra Info"
+	ExtraInfo string `protobuf:"bytes,12,opt,name=ExtraInfo,proto3" json:"ExtraInfo,omitempty" xml:"extrainfo,attr" display:"Extra Info"`
+	// @gotags: xml:"devicetype,attr" display:"Device Type"
+	DeviceType string `protobuf:"bytes,17,opt,name=DeviceType,proto3" json:"DeviceType,omitempty" xml:"devicetype,attr" display:"Device Type"`
 	// @gotags: xml:"hostname,attr"
 	Hostname string `protobuf:"bytes,18,opt,name=Hostname,proto3" json:"Hostname,omitempty" xml:"hostname,attr"`
-	// @gotags: xml:"method,attr" cmd/display:"Method"
-	Method string `protobuf:"bytes,19,opt,name=Method,proto3" json:"Method,omitempty" xml:"method,attr" cmd/display:"Method"`
-	// @gotags: xml:"ostype,attr" cmd/display:"OS Type"
-	OSType string `protobuf:"bytes,20,opt,name=OSType,proto3" json:"OSType,omitempty" xml:"ostype,attr" cmd/display:"OS Type"`
-	// @gotags: xml:"product,attr" cmd/display:"Product"
-	Product string `protobuf:"bytes,21,opt,name=Product,proto3" json:"Product,omitempty" xml:"product,attr" cmd/display:"Product"`
-	// @gotags: xml:"rpcnum,attr" cmd/display:"RPC Number"
-	RPCNum string `protobuf:"bytes,22,opt,name=RPCNum,proto3" json:"RPCNum,omitempty" xml:"rpcnum,attr" cmd/display:"RPC Number"`
-	// @gotags: xml:"servicefp,attr" cmd/display:"Fingerprint"
-	ServiceFP string `protobuf:"bytes,23,opt,name=ServiceFP,proto3" json:"ServiceFP,omitempty" xml:"servicefp,attr" cmd/display:"Fingerprint"`
-	// @gotags: xml:"tunnel,attr" cmd/display:"Tunnel"
-	Tunnel string `protobuf:"bytes,24,opt,name=Tunnel,proto3" json:"Tunnel,omitempty" xml:"tunnel,attr" cmd/display:"Tunnel"`
-	// @gotags: xml:"lowver,attr" cmd/display:"Low Version"
-	LowVersion string `protobuf:"bytes,25,opt,name=LowVersion,proto3" json:"LowVersion,omitempty" xml:"lowver,attr" cmd/display:"Low Version"`
-	// @gotags: xml:"highver,attr" cmd/display:"High Version"
-	HighVersion string `protobuf:"bytes,26,opt,name=HighVersion,proto3" json:"HighVersion,omitempty" xml:"highver,attr" cmd/display:"High Version"`
-	// @gotags: xml:"version,attr" cmd/display:"Version"
-	Version string `protobuf:"bytes,27,opt,name=Version,proto3" json:"Version,omitempty" xml:"version,attr" cmd/display:"Version"`
+	// @gotags: xml:"method,attr" display:"Method"
+	Method string `protobuf:"bytes,19,opt,name=Method,proto3" json:"Method,omitempty" xml:"method,attr" display:"Method"`
+	// @gotags: xml:"ostype,attr" display:"OS Type"
+	OSType string `protobuf:"bytes,20,opt,name=OSType,proto3" json:"OSType,omitempty" xml:"ostype,attr" display:"OS Type"`
+	// @gotags: xml:"product,attr" display:"Product"
+	Product string `protobuf:"bytes,21,opt,name=Product,proto3" json:"Product,omitempty" xml:"product,attr" display:"Product"`
+	// @gotags: xml:"rpcnum,attr" display:"RPC Number"
+	RPCNum string `protobuf:"bytes,22,opt,name=RPCNum,proto3" json:"RPCNum,omitempty" xml:"rpcnum,attr" display:"RPC Number"`
+	// @gotags: xml:"servicefp,attr" display:"Fingerprint"
+	ServiceFP string `protobuf:"bytes,23,opt,name=ServiceFP,proto3" json:"ServiceFP,omitempty" xml:"servicefp,attr" display:"Fingerprint"`
+	// @gotags: xml:"tunnel,attr" display:"Tunnel"
+	Tunnel string `protobuf:"bytes,24,opt,name=Tunnel,proto3" json:"Tunnel,omitempty" xml:"tunnel,attr" display:"Tunnel"`
+	// @gotags: xml:"lowver,attr" display:"Low Version"
+	LowVersion string `protobuf:"bytes,25,opt,name=LowVersion,proto3" json:"LowVersion,omitempty" xml:"lowver,attr" display:"Low Version"`
+	// @gotags: xml:"highver,attr" display:"High Version"
+	HighVersion string `protobuf:"bytes,26,opt,name=HighVersion,proto3" json:"HighVersion,omitempty" xml:"highver,attr" display:"High Version"`
+	// @gotags: xml:"version,attr" display:"Version"
+	Version string `protobuf:"bytes,27,opt,name=Version,proto3" json:"Version,omitempty" xml:"version,attr" display:"Version"`
 	// @gotags: xml:"conf,attr"
 	Confidence int32 `protobuf:"varint,28,opt,name=Confidence,proto3" json:"Confidence,omitempty" xml:"conf,attr"`
-	// @gotags: xml:"cpe" cmd/display:"CPEs"
-	CPEs []string `protobuf:"bytes,29,rep,name=CPEs,proto3" json:"CPEs,omitempty" xml:"cpe" cmd/display:"CPEs"` // "Common Platform Enumeration":standardized way to name software apps, OSs and Hardware platforms
-	// @gotags: cmd/display:"Authenticated"
-	Authenticated  bool                 `protobuf:"varint,30,opt,name=Authenticated,proto3" json:"Authenticated,omitempty" cmd/display:"Authenticated"`
+	// @gotags: xml:"cpe" display:"CPEs"
+	CPEs []string `protobuf:"bytes,29,rep,name=CPEs,proto3" json:"CPEs,omitempty" xml:"cpe" display:"CPEs"` // "Common Platform Enumeration":standardized way to name software apps, OSs and Hardware platforms
+	// @gotags: display:"Authenticated"
+	Authenticated  bool                 `protobuf:"varint,30,opt,name=Authenticated,proto3" json:"Authenticated,omitempty" display:"Authenticated"`
 	AdditionalInfo []*Service_AddedInfo `protobuf:"bytes,40,rep,name=AdditionalInfo,proto3" json:"AdditionalInfo,omitempty"`
 }
 
@@ -379,7 +379,7 @@ var file_network_service_proto_rawDesc = []byte{
 	0xba, 0xb9, 0x19, 0x02, 0x08, 0x01, 0x42, 0x80, 0x01, 0x0a, 0x0b, 0x63, 0x6f, 0x6d, 0x2e, 0x6e,
 	0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0x42, 0x0c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x50,
 	0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x27, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64, 0x6f, 0x6e, 0x2f, 0x61, 0x69, 0x6d,
+	0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69, 0x76, 0x65, 0x2f, 0x61, 0x69, 0x6d,
 	0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0xa2,
 	0x02, 0x03, 0x4e, 0x58, 0x58, 0xaa, 0x02, 0x07, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0xca,
 	0x02, 0x07, 0x4e, 0x65, 0x74, 0x77, 0x6f, 0x72, 0x6b, 0xe2, 0x02, 0x13, 0x4e, 0x65, 0x74, 0x77,

@@ -3,10 +3,10 @@ package host
 import (
 	context "context"
 	fmt "fmt"
-	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
-	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	network "github.com/d3c3ptive/aims/proto/network"
 	nmap "github.com/d3c3ptive/aims/proto/scan/nmap"
+	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
+	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	gorm "gorm.io/gorm"

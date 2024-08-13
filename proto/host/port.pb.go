@@ -7,9 +7,9 @@
 package host
 
 import (
-	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	network "github.com/d3c3ptive/aims/proto/network"
 	nmap "github.com/d3c3ptive/aims/proto/scan/nmap"
+	_ "github.com/infobloxopen/protoc-gen-gorm/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -30,12 +30,12 @@ type Port struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// @gotags: xml:"portid,attr"
 	Number uint32 `protobuf:"varint,10,opt,name=Number,proto3" json:"Number,omitempty" xml:"portid,attr"`
 	// Nmap --------------------------------
@@ -302,12 +302,12 @@ type State struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// Nmap
 	// @gotags: xml:"state,attr"
 	State string `protobuf:"bytes,10,opt,name=State,proto3" json:"State,omitempty" xml:"state,attr"`
@@ -470,8 +470,8 @@ var file_host_port_proto_rawDesc = []byte{
 	0x52, 0x09, 0x52, 0x65, 0x61, 0x73, 0x6f, 0x6e, 0x54, 0x54, 0x4c, 0x3a, 0x06, 0xba, 0xb9, 0x19,
 	0x02, 0x08, 0x01, 0x42, 0x6b, 0x0a, 0x08, 0x63, 0x6f, 0x6d, 0x2e, 0x68, 0x6f, 0x73, 0x74, 0x42,
 	0x09, 0x50, 0x6f, 0x72, 0x74, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x24, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64,
-	0x6f, 0x6e, 0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x68, 0x6f,
+	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69,
+	0x76, 0x65, 0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x68, 0x6f,
 	0x73, 0x74, 0xa2, 0x02, 0x03, 0x48, 0x58, 0x58, 0xaa, 0x02, 0x04, 0x48, 0x6f, 0x73, 0x74, 0xca,
 	0x02, 0x04, 0x48, 0x6f, 0x73, 0x74, 0xe2, 0x02, 0x10, 0x48, 0x6f, 0x73, 0x74, 0x5c, 0x47, 0x50,
 	0x42, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0xea, 0x02, 0x04, 0x48, 0x6f, 0x73, 0x74,

@@ -29,12 +29,12 @@ type Script struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true"`
-	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: display:"ID" readonly:"true"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
+	// @gotags: display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
 	// gotags: xml:"id,attr"
 	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
 	// @gotags: xml:"output,attr"
@@ -132,8 +132,8 @@ type Element struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true"`
+	// @gotags: display:"ID" readonly:"true"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"key,attr,omitempty"
 	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" xml:"key,attr,omitempty"`
 	// @gotags: xml:",innerxml"
@@ -199,8 +199,8 @@ type Table struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true"`
+	// @gotags: display:"ID" readonly:"true"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"key,attr,omitempty"
 	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" xml:"key,attr,omitempty"`
 	// @gotags: xml:"table,omitempty"
@@ -275,8 +275,8 @@ type Smurf struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: cmd/display:"ID" readonly:"true"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true"`
+	// @gotags: display:"ID" readonly:"true"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true"`
 	// @gotags: xml:"responses,attr"
 	Responses string `protobuf:"bytes,10,opt,name=Responses,proto3" json:"Responses,omitempty" xml:"responses,attr"`
 }
@@ -377,7 +377,7 @@ var file_scan_nmap_nmap_proto_rawDesc = []byte{
 	0x73, 0x65, 0x73, 0x3a, 0x06, 0xba, 0xb9, 0x19, 0x02, 0x08, 0x01, 0x42, 0x8a, 0x01, 0x0a, 0x0d,
 	0x63, 0x6f, 0x6d, 0x2e, 0x73, 0x63, 0x61, 0x6e, 0x2e, 0x6e, 0x6d, 0x61, 0x70, 0x42, 0x09, 0x4e,
 	0x6d, 0x61, 0x70, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x29, 0x67, 0x69, 0x74, 0x68,
-	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x61, 0x78, 0x6c, 0x61, 0x6e, 0x64, 0x6f, 0x6e,
+	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x33, 0x63, 0x33, 0x70, 0x74, 0x69, 0x76, 0x65,
 	0x2f, 0x61, 0x69, 0x6d, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x73, 0x63, 0x61, 0x6e,
 	0x2f, 0x6e, 0x6d, 0x61, 0x70, 0xa2, 0x02, 0x03, 0x53, 0x4e, 0x58, 0xaa, 0x02, 0x09, 0x53, 0x63,
 	0x61, 0x6e, 0x2e, 0x4e, 0x6d, 0x61, 0x70, 0xca, 0x02, 0x09, 0x53, 0x63, 0x61, 0x6e, 0x5c, 0x4e,

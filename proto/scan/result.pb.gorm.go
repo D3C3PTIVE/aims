@@ -3,9 +3,9 @@ package scan
 import (
 	context "context"
 	fmt "fmt"
-	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	host "github.com/d3c3ptive/aims/proto/host"
 	network "github.com/d3c3ptive/aims/proto/network"
+	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
 	gorm "gorm.io/gorm"
 	strings "strings"
