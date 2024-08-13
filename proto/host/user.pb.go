@@ -28,16 +28,16 @@ type User struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"` // -------------------------------------
-	// @gotags: display:"Name"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name"`
-	// @gotags: display:"UID"
-	UID    int32    `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty" display:"UID"`
+	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"` // -------------------------------------
+	// @gotags: cmd/display:"Name"
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" cmd/display:"Name"`
+	// @gotags: cmd/display:"UID"
+	UID    int32    `protobuf:"varint,11,opt,name=UID,proto3" json:"UID,omitempty" cmd/display:"UID"`
 	Groups []*Group `protobuf:"bytes,12,rep,name=Groups,proto3" json:"Groups,omitempty"`
 }
 
@@ -121,16 +121,16 @@ type Group struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: display:"ID" hidden:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" hidden:"true" strict:"yes"`
-	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: display:"Name"
-	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" display:"Name"`
-	// @gotags: display:"Group ID"
-	GID     int32   `protobuf:"varint,11,opt,name=GID,proto3" json:"GID,omitempty" display:"Group ID"`
+	// @gotags: cmd/display:"ID" hidden:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" hidden:"true" strict:"yes"`
+	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Name"
+	Name string `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty" cmd/display:"Name"`
+	// @gotags: cmd/display:"Group ID"
+	GID     int32   `protobuf:"varint,11,opt,name=GID,proto3" json:"GID,omitempty" cmd/display:"Group ID"`
 	Members []*User `protobuf:"bytes,12,rep,name=Members,proto3" json:"Members,omitempty"`
 }
 

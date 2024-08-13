@@ -28,24 +28,24 @@ type Process struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: display:"PID"
-	Pid int32 `protobuf:"varint,10,opt,name=Pid,proto3" json:"Pid,omitempty" display:"PID"`
-	// @gotags: display:"PPID"
-	Ppid int32 `protobuf:"varint,11,opt,name=Ppid,proto3" json:"Ppid,omitempty" display:"PPID"`
-	// @gotags: display:"Executable"
-	Executable string `protobuf:"bytes,12,opt,name=Executable,proto3" json:"Executable,omitempty" display:"Executable"`
-	// @gotags: display:"Owner"
-	Owner *User `protobuf:"bytes,13,opt,name=Owner,proto3" json:"Owner,omitempty" display:"Owner"`
-	// @gotags: display:"Arch"
-	Architecture string `protobuf:"bytes,14,opt,name=Architecture,proto3" json:"Architecture,omitempty" display:"Arch"`
-	// @gotags: display:"CmdLine"
-	CmdLine []string `protobuf:"bytes,16,rep,name=CmdLine,proto3" json:"CmdLine,omitempty" display:"CmdLine"`
+	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"PID"
+	Pid int32 `protobuf:"varint,10,opt,name=Pid,proto3" json:"Pid,omitempty" cmd/display:"PID"`
+	// @gotags: cmd/display:"PPID"
+	Ppid int32 `protobuf:"varint,11,opt,name=Ppid,proto3" json:"Ppid,omitempty" cmd/display:"PPID"`
+	// @gotags: cmd/display:"Executable"
+	Executable string `protobuf:"bytes,12,opt,name=Executable,proto3" json:"Executable,omitempty" cmd/display:"Executable"`
+	// @gotags: cmd/display:"Owner"
+	Owner *User `protobuf:"bytes,13,opt,name=Owner,proto3" json:"Owner,omitempty" cmd/display:"Owner"`
+	// @gotags: cmd/display:"Arch"
+	Architecture string `protobuf:"bytes,14,opt,name=Architecture,proto3" json:"Architecture,omitempty" cmd/display:"Arch"`
+	// @gotags: cmd/display:"CmdLine"
+	CmdLine []string `protobuf:"bytes,16,rep,name=CmdLine,proto3" json:"CmdLine,omitempty" cmd/display:"CmdLine"`
 }
 
 func (x *Process) Reset() {

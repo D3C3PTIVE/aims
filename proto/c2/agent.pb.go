@@ -30,12 +30,12 @@ type Agent struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
 	// Core
 	Host    *host.Host `protobuf:"bytes,9,opt,name=Host,proto3" json:"Host,omitempty"`
 	Name    string     `protobuf:"bytes,10,opt,name=Name,proto3" json:"Name,omitempty"`
@@ -246,16 +246,16 @@ type Task struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// @gotags: display:"ID" readonly:"true" strict:"yes"
-	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" display:"ID" readonly:"true" strict:"yes"`
-	// @gotags: display:"Created at" readonly:"true" xml:"-"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true" xml:"-"`
-	// @gotags: display:"Updated at" readonly:"true" xml:"-"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true" xml:"-"`
-	// @gotags: display:"Sent at" readonly:"true" xml:"-"
-	SentAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=SentAt,proto3" json:"SentAt,omitempty" display:"Sent at" readonly:"true" xml:"-"`
-	// @gotags: display:"Completed at" readonly:"true" xml:"-"
-	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=CompletedAt,proto3" json:"CompletedAt,omitempty" display:"Completed at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"ID" readonly:"true" strict:"yes"
+	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty" cmd/display:"ID" readonly:"true" strict:"yes"`
+	// @gotags: cmd/display:"Created at" readonly:"true" xml:"-"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Updated at" readonly:"true" xml:"-"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Sent at" readonly:"true" xml:"-"
+	SentAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=SentAt,proto3" json:"SentAt,omitempty" cmd/display:"Sent at" readonly:"true" xml:"-"`
+	// @gotags: cmd/display:"Completed at" readonly:"true" xml:"-"
+	CompletedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=CompletedAt,proto3" json:"CompletedAt,omitempty" cmd/display:"Completed at" readonly:"true" xml:"-"`
 	// string AgentID = 10;
 	State       string `protobuf:"bytes,10,opt,name=State,proto3" json:"State,omitempty"`
 	Request     string `protobuf:"bytes,11,opt,name=Request,proto3" json:"Request,omitempty"`   // bytes

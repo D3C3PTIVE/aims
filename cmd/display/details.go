@@ -25,8 +25,8 @@ import (
 )
 
 // Details is almost identical to Table and requires a type parameter for
-// displaying an object with more details. The headers function parameter can
-// either be one also used for displaying the type in a table, or another with
+// cmd/displaying an object with more details. The headers function parameter can
+// either be one also used for cmd/displaying the type in a table, or another with
 // different output for all/some of the fields.
 // If the headers are weighted, a newline is left between each group of headers (grouped by weight).
 func Details[T any](value T, fields map[string]func(T) string, opts ...Options) string {

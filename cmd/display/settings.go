@@ -71,7 +71,7 @@ func WithAutoSmallID() Options {
 	}
 }
 
-// WithHeader adds a specific header for the display using these options.
+// WithHeader adds a specific header for the cmd/display using these options.
 func WithHeader(name string, weight int) Options {
 	return func(opts *opts) *opts {
 		if opts.weights == nil {
@@ -106,7 +106,7 @@ func WithSplitCandidate(sep string) Options {
 	}
 }
 
-// FormatSmallID returns a smallened ID for table display.
+// FormatSmallID returns a smallened ID for table cmd/display.
 func FormatSmallID(id string) string {
 	if len(id) <= 8 {
 		return id

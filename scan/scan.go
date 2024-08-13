@@ -26,7 +26,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	"github.com/d3c3ptive/aims/display"
+
+	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/proto/scan"
 )
 

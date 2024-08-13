@@ -123,16 +123,16 @@ type Private struct {
 	unknownFields protoimpl.UnknownFields
 
 	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
-	// @gotags: display:"Created at" readonly:"true"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
-	// @gotags: display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
-	// @gotags: display:"Type" readonly:"true"
-	Type PrivateType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PrivateType" json:"Type,omitempty" display:"Type" readonly:"true"`
+	// @gotags: cmd/display:"Created at" readonly:"true"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true"`
+	// @gotags: cmd/display:"Updated at" readonly:"true"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true"`
+	// @gotags: cmd/display:"Type" readonly:"true"
+	Type PrivateType `protobuf:"varint,10,opt,name=Type,proto3,enum=credential.PrivateType" json:"Type,omitempty" cmd/display:"Type" readonly:"true"`
 	// No data passed into Maltego at this point.
 	Data string `protobuf:"bytes,11,opt,name=Data,proto3" json:"Data,omitempty"`
-	// @gotags: display:"JTR Format" readonly:"true"
-	JTRFormat string `protobuf:"bytes,12,opt,name=JTRFormat,proto3" json:"JTRFormat,omitempty" display:"JTR Format" readonly:"true"`
+	// @gotags: cmd/display:"JTR Format" readonly:"true"
+	JTRFormat string `protobuf:"bytes,12,opt,name=JTRFormat,proto3" json:"JTRFormat,omitempty" cmd/display:"JTR Format" readonly:"true"`
 }
 
 func (x *Private) Reset() {

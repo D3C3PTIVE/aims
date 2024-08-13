@@ -31,14 +31,14 @@ type Realm struct {
 	unknownFields protoimpl.UnknownFields
 
 	Id string `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
-	// @gotags: display:"Created at" readonly:"true"
-	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" display:"Created at" readonly:"true"`
-	// @gotags: display:"Updated at" readonly:"true"
-	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" display:"Updated at" readonly:"true"`
-	// @gotags: display:"Key"
-	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" display:"Key"`
-	// @gotags: display:"Value"
-	Value string `protobuf:"bytes,11,opt,name=Value,proto3" json:"Value,omitempty" display:"Value"`
+	// @gotags: cmd/display:"Created at" readonly:"true"
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=CreatedAt,proto3" json:"CreatedAt,omitempty" cmd/display:"Created at" readonly:"true"`
+	// @gotags: cmd/display:"Updated at" readonly:"true"
+	UpdatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=UpdatedAt,proto3" json:"UpdatedAt,omitempty" cmd/display:"Updated at" readonly:"true"`
+	// @gotags: cmd/display:"Key"
+	Key string `protobuf:"bytes,10,opt,name=Key,proto3" json:"Key,omitempty" cmd/display:"Key"`
+	// @gotags: cmd/display:"Value"
+	Value string `protobuf:"bytes,11,opt,name=Value,proto3" json:"Value,omitempty" cmd/display:"Value"`
 }
 
 func (x *Realm) Reset() {

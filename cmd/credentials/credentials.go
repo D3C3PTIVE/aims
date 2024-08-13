@@ -29,7 +29,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Commands returns a command tree to manage and display credentials.
+// Commands returns a command tree to manage and cmd/display credentials.
 func Commands(con *client.Client) *cobra.Command {
 	credentialsCmd := &cobra.Command{
 		Use:     "credentials",

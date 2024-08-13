@@ -26,7 +26,7 @@ import (
 // TableWith requires a type parameter consisting of a type for which a corresponding map
 // of "Column Field" to a function generating its table value exits, passed as the fields
 // function argument.
-// The values argument is the list of objects to be displayed in the table, with options.
+// The values argument is the list of objects to be cmd/displayed in the table, with options.
 func Table[T any](values []T, fields map[string]func(T) string, opts ...Options) *table.Table {
 	options := defaultOpts(opts...)
 

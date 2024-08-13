@@ -25,10 +25,11 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/d3c3ptive/aims/display"
+	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/proto/host"
 	"github.com/d3c3ptive/aims/proto/network"
-	"github.com/maxlandon/gondor/maltego"
 )
 
 // Service - A service somewhere on a network.
@@ -88,14 +89,17 @@ func Details() []display.Options {
 	add("Num", 1)
 	add("Proto", 1)
 	add("Product", 1)
+	add("Version", 1)
 
 	add("State", 2)
 	add("Reason", 2)
 	add("Method", 2)
 
 	// Network
-	add("Extra Info", 3)
+	add("Device type", 2)
 	add("Info", 3)
+	add("Extra Info", 3)
+	add("Fingerprint", 3)
 	// add("Hops", 3)
 	// add("Route", 3) -- command-line flaag --traceroute
 
@@ -172,8 +176,13 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		product += color.HiBlackString(fmt.Sprintf(" (v%s)", port.Service.Version))
 		return product
 	},
-	"Extra Info": func(port *host.Port) string {
-		return port.Service.ExtraInfo
+	"Version": func(port *host.Port) string {
+		serv := port.Service
+		version := port.Service.Version
+		if serv.HighVersion != "" && serv.LowVersion != "" {
+			version += color.HiBlackString(" (%s / %s)", serv.LowVersion, serv.HighVersion)
+		}
+		return version
 	},
 	"Info": func(port *host.Port) string {
 		if len(port.Scripts) == 0 {
@@ -182,14 +191,21 @@ var DisplayFields = map[string]func(port *host.Port) string{
 
 		var scripts string
 		for _, script := range port.Scripts {
-			if script.Output == "" {
+			name := script.Name
+			if script.Output == "" && script.Id == "" {
 				continue
 			}
+			if script.Id != "" {
+				name = fmt.Sprintf("(%s) ", script.Id) + name
+			}
 
-			scripts += fmt.Sprintf("%s %s\n", script.Name, script.Output)
+			scripts += fmt.Sprintf("%s %s\n", name, script.Output)
 		}
 
 		return strings.TrimSuffix(scripts, "\n")
+	},
+	"Extra Info": func(port *host.Port) string {
+		return port.Service.ExtraInfo
 	},
 	"Fingerprint": func(port *host.Port) string {
 		return port.Service.ServiceFP
