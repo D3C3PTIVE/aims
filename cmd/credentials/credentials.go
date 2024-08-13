@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/d3c3ptive/aims/client"
-	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/proto/credential"
 	"github.com/d3c3ptive/aims/proto/rpc/credentials"
 	"github.com/spf13/cobra"

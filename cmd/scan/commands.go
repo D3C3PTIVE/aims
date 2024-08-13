@@ -29,8 +29,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/d3c3ptive/aims/client"
-	"github.com/d3c3ptive/aims/cmd/lib/export"
-	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/display"
 	"github.com/d3c3ptive/aims/proto/rpc/scans"
 	pb "github.com/d3c3ptive/aims/proto/scan"

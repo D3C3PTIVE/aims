@@ -30,7 +30,7 @@ import (
 
 	core "github.com/d3c3ptive/aims/c2"
 	"github.com/d3c3ptive/aims/client"
-	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/display"
 	pb "github.com/d3c3ptive/aims/proto/c2"
 	"github.com/d3c3ptive/aims/proto/rpc/c2"

@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/d3c3ptive/aims/client"
-	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	aims "github.com/d3c3ptive/aims/cmd"
 )
 
 // ImportCommand returns an "import" subcommand to hook into a parent "object" command, to query/write to DB those objects.

@@ -1,4 +1,4 @@
-package hosts
+package services
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
@@ -26,33 +26,77 @@ import (
 
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/d3c3ptive/aims/client"
-	"github.com/d3c3ptive/aims/cmd/lib/export"
-	aims "github.com/d3c3ptive/aims/cmd/lib/util"
+	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/display"
-	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/network"
 	pb "github.com/d3c3ptive/aims/proto/host"
 	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 )
 
-// Commands returns a command tree to manage and display hosts.
-func Commands(client *client.Client) *cobra.Command {
-	hostsCmd := &cobra.Command{
-		Use:     "hosts",
-		Short:   "Manage database hosts",
+// Commands returns a command tree to manage and display services.
+func Commands(con *client.Client) *cobra.Command {
+	servicesCmd := &cobra.Command{
+		Use:     "services",
+		Short:   "Manage database services",
 		GroupID: "database",
 	}
 
 	listCmd := &cobra.Command{
 		Use:   "list",
-		Short: "Display hosts (with filters or styles)",
+		Short: "Display services (with filters or styles)",
 		RunE: func(command *cobra.Command, args []string) error {
-			res, err := client.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
 				Filters: &hosts.HostFilters{
-					Trace: true,
+					Ports: true,
+				},
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			if len(res.GetHosts()) == 0 {
+				return nil
+			}
+
+			var ports []*pb.Port
+			for _, h := range res.GetHosts() {
+				ports = append(ports, h.GetPorts()...)
+			}
+
+			table := display.Table(ports, network.DisplayFields, network.Headers()...)
+			fmt.Println(table.Render())
+
+			return nil
+		},
+	}
+
+	servicesCmd.AddCommand(listCmd)
+
+	rmCmd := &cobra.Command{
+		Use:   "rm",
+		Short: "Remove one or more services from the database",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+
+	servicesCmd.AddCommand(rmCmd)
+
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show one ore more services details",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			options := network.Details()
+
+			// Request
+			res, err := con.Hosts.Read(cmd.Context(), &hosts.ReadHostRequest{
+				Host: &pb.Host{},
+				Filters: &hosts.HostFilters{
+					Ports: true,
 				},
 			})
 			err = aims.CheckError(err)
@@ -60,142 +104,58 @@ func Commands(client *client.Client) *cobra.Command {
 				return err
 			}
 
-			if len(res.GetHosts()) == 0 {
-				fmt.Printf("No hosts in database.\n")
-				// con.PrintInfof("No hosts in database.\n")
-				return nil
+			var ports []*pb.Port
+			for _, h := range res.GetHosts() {
+				ports = append(ports, h.GetPorts()...)
 			}
-
-			// Generate the table of hosts.
-			// TODO: Print to command stdout.
-			table := display.Table(res.GetHosts(), host.DisplayFields, host.DisplayHeaders()...)
-			fmt.Println(table.Render())
-
-			return nil
-		},
-	}
-
-	hostsCmd.AddCommand(listCmd)
-
-	addCmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add hosts to the database",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-	}
-
-	aims.Bind(addCmd.Name(), false, addCmd, func(f *pflag.FlagSet) {
-		f.StringP("file", "f", "", "Path to file containing hosts data")
-	})
-
-	hostsCmd.AddCommand(addCmd)
-
-	rmCmd := &cobra.Command{
-		Use:   "rm",
-		Short: "Remove one or more hosts from the database",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-	}
-
-	rmComps := carapace.Gen(rmCmd)
-	rmComps.PositionalAnyCompletion(CompleteByHostnameOrIP(client))
-
-	hostsCmd.AddCommand(rmCmd)
-
-	showCmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show one ore more hosts details",
-		RunE: func(command *cobra.Command, args []string) error {
-			traceroute, _ := command.Flags().GetBool("traceroute")
-
-			options := host.DisplayDetails()
-
-			if traceroute {
-				options = append(options, display.WithHeader("Route", 3))
-			}
-
-			// Request
-			res, err := client.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-					Trace: true,
-				},
-			})
-			err = aims.CheckError(err)
 
 			// Display
-			for _, h := range res.GetHosts() {
+			for _, h := range ports {
 				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, host.DisplayFields, options...))
+					fmt.Println(display.Details(h, network.DisplayFields, options...))
 				}
 			}
-
 			return nil
 		},
 	}
-	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
-		f.BoolP("traceroute", "T", false, "Print full network routes to host")
-	})
-	hostsCmd.AddCommand(showCmd)
+	servicesCmd.AddCommand(showCmd)
 
 	showComps := carapace.Gen(showCmd)
-	showComps.PositionalAnyCompletion(CompleteByID(client))
+	showComps.PositionalAnyCompletion(CompleteByID(con))
 
 	// Export
-	exportCmd := export.ExportCommand(hostsCmd, client, exportCommand(client))
-	hostsCmd.AddCommand(exportCmd)
+	exportCmd := export.ExportCommand(servicesCmd, con, exportCommand(con))
+	servicesCmd.AddCommand(exportCmd)
 
-	return hostsCmd
+	return servicesCmd
 }
 
-// CompleteByID returns hosts completions with their smallened IDs as keys.
+// CompleteByID returns port/service completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
-
 		// Request
 		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host: &pb.Host{},
+			Filters: &hosts.HostFilters{
+				Ports: true,
+			},
 		})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
-		options := host.Completions()
+		options := network.Completions()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
-		results := display.Completions(res.Hosts, host.DisplayFields, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
-	})
-}
-
-// CompleteByHostnameOrIP returns completions for all hostnames,
-// or if not found for some hosts, their corresponding addresses.
-func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
+		var ports []*pb.Port
+		for _, h := range res.GetHosts() {
+			ports = append(ports, h.GetPorts()...)
 		}
 
-		// Request
-		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
-			Host: &pb.Host{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		options := host.Completions()
-		options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))
-		options = append(options, display.WithSplitCandidate(","))
-
-		results := display.Completions(res.Hosts, host.DisplayFields, options...)
+		results := display.Completions(ports, network.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
 	})
@@ -210,7 +170,6 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 				Host: &pb.Host{},
 				Filters: &hosts.HostFilters{
 					Ports: true,
-					Trace: true,
 				},
 			})
 			err = aims.CheckError(err)
@@ -218,13 +177,17 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 				return err
 			}
 
-			return res.GetHosts()
+			servicesList := []*pb.Port{}
+			for _, h := range res.GetHosts() {
+				servicesList = append(servicesList, h.Ports...)
+			}
+
+			return servicesList
 		} else {
 			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
 				Filters: &hosts.HostFilters{
 					Ports: true,
-					Trace: true,
 				},
 			})
 			err = aims.CheckError(err)
@@ -233,6 +196,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 			}
 
 			scanList := []*pb.Host{}
+			servicesList := []*pb.Port{}
 
 			// Display
 			for _, arg := range args {
@@ -242,7 +206,12 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 					}
 				}
 			}
-			return scanList
+
+			for _, h := range scanList {
+				servicesList = append(servicesList, h.Ports...)
+			}
+
+			return servicesList
 		}
 	}
 

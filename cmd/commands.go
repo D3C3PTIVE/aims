@@ -1,4 +1,4 @@
-package util
+package cmd
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
@@ -21,6 +21,7 @@ package util
 import (
 	"errors"
 
+	"github.com/d3c3ptive/aims/client"
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -39,6 +40,36 @@ func Bind(name string, persistent bool, cmd *cobra.Command, flags func(f *pflag.
 		cmd.PersistentFlags().AddFlagSet(flagSet)
 	} else {
 		cmd.Flags().AddFlagSet(flagSet)
+	}
+}
+
+// BindGroup is a helper used to bind a list of root commands to a given menu, for a given "command help group".
+// @group - Name of the group under which the command should be shown. Preferably use a string in the constants package.
+// @menu  - The command menu to which the commands should be bound (either server or implant menu).
+// @ cmds - A list of functions returning a list of root commands to bind. See any package's `commands.go` file and function.
+func BindGroup(group string, menu *cobra.Command, con *client.Client, cmds ...func(con *client.Client) *cobra.Command) {
+	found := false
+
+	// Ensure the given command group is available in the menu.
+	if group != "" {
+		for _, grp := range menu.Groups() {
+			if grp.Title == group {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			menu.AddGroup(&cobra.Group{
+				ID:    group,
+				Title: group,
+			})
+		}
+	}
+
+	// Bind the command to the root
+	for _, initCommand := range cmds {
+		menu.AddCommand(initCommand(con))
 	}
 }
 
