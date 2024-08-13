@@ -10,14 +10,14 @@ import "google/protobuf/timestamp.proto";
 // The inner elements can be an arbitrary collection of Tables and Elements. They can be empty
 message Script {
   option (gorm.opts).ormable = true;
-  // @gotags: display:"ID" readonly:"true"
+  // @gotags: display:"ID" readonly:"true" xml:"script_id"
   string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
   // @gotags: display:"Created at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp CreatedAt = 4;
   // @gotags: display:"Updated at" readonly:"true" xml:"-" 
   google.protobuf.Timestamp UpdatedAt = 5;
 
-  // gotags: xml:"id,attr"
+  // @gotags: xml:"id,attr"
   string Name = 10;
   // @gotags: xml:"output,attr"
   string Output = 11;

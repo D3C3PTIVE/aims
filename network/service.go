@@ -30,6 +30,7 @@ import (
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/proto/host"
 	"github.com/d3c3ptive/aims/proto/network"
+	"github.com/d3c3ptive/aims/proto/scan/nmap"
 )
 
 // Service - A service somewhere on a network.
@@ -71,7 +72,6 @@ func Headers() (headers []display.Options) {
 	add("Method", 1)
 	add("Extra Info", 1)
 
-	// add("Info", 3)
 	// add("ID", 3)
 
 	return headers
@@ -99,13 +99,10 @@ func Details() []display.Options {
 	add("Device type", 2)
 	add("Info", 3)
 	add("Extra Info", 3)
-	add("Fingerprint", 3)
-	// add("Hops", 3)
-	// add("Route", 3) -- command-line flaag --traceroute
 
 	// Tools
-	// add("Comment", 4)
-	// add("Hosts scripts", 5)
+	add("Scripts", 4)
+	add("Fingerprint", 4)
 
 	return headers
 }
@@ -192,14 +189,10 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		var scripts string
 		for _, script := range port.Scripts {
 			name := script.Name
-			if script.Output == "" && script.Id == "" {
+			if script.Output == "" && script.Name == "" {
 				continue
 			}
-			if script.Id != "" {
-				name = fmt.Sprintf("(%s) ", script.Id) + name
-			}
-
-			scripts += fmt.Sprintf("%s %s\n", name, script.Output)
+			scripts += fmt.Sprintf("(%s) %s\n", name, script.Output)
 		}
 
 		return strings.TrimSuffix(scripts, "\n")
@@ -233,4 +226,62 @@ var DisplayFields = map[string]func(port *host.Port) string{
 	"Reason": func(port *host.Port) string {
 		return port.State.Reason
 	},
+	"Scripts": func(port *host.Port) string {
+		scripts := ""
+		for _, script := range port.Scripts {
+			scripts += printScript(script, 0)
+		}
+
+		return scripts
+	},
+}
+
+// Recursive function to print a ScriptORM object with nested structures
+func printScript(script *nmap.Script, indentLevel int) string {
+	buf := new(strings.Builder)
+	indent := strings.Repeat("  ", indentLevel)
+
+	name := script.Name
+	if name == "" {
+		name = script.Id
+	}
+	fmt.Fprintf(buf, "\n%sName: %s\n", indent, color.HiBlueString(name))
+	if script.Output != "" {
+		fmt.Fprintf(buf, "%sOutput: %s\n", indent, script.Output)
+	}
+
+	// Print Elements
+	if len(script.Elements) > 0 {
+		fmt.Fprintf(buf, "%sElements:\n", indent)
+		for _, element := range script.Elements {
+			fmt.Fprintf(buf, "%s %s : %s\n", indent, element.Key, element.Value)
+		}
+	}
+
+	// Print Tables and their rows
+	if len(script.Tables) > 0 {
+		fmt.Printf("%sTables:\n", indent)
+		for _, table := range script.Tables {
+			printTable(table, indentLevel+1, buf)
+		}
+	}
+
+	return buf.String()
+}
+
+// Recursive function to print a TableORM object with nested rows
+func printTable(table *nmap.Table, indentLevel int, buf *strings.Builder) {
+	indent := strings.Repeat("  ", indentLevel)
+	fmt.Fprintf(buf, "%s %s\n", indent, table.Key)
+
+	// Print rows
+	if len(table.Elements) > 0 {
+		for _, element := range table.Elements {
+			fmt.Fprintf(buf, "%s %s : %s\n", indent, element.Key, element.Value)
+		}
+	}
+
+	if len(table.Tables) > 0 {
+		printTable(table, indentLevel+1, buf)
+	}
 }

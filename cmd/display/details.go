@@ -83,7 +83,7 @@ func displayGroup[T any](value T, headers []string, fields map[string]func(T) st
 		if head == "Purpose" {
 			fmt.Println(val)
 		}
-		if val == "" {
+		if strings.TrimSpace(val) == "" {
 			continue
 		}
 
@@ -91,6 +91,10 @@ func displayGroup[T any](value T, headers []string, fields map[string]func(T) st
 		fieldName := colorDetailFieldName(headName + " ")
 		value := colorDetailFieldValue(val)
 		group += fmt.Sprintf("%s: %s\n", fieldName, value)
+	}
+
+	if strings.TrimSpace(group) == "" {
+		return group
 	}
 
 	return group + "\n"
