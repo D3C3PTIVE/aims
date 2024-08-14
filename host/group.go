@@ -21,8 +21,9 @@ package host
 import (
 	"context"
 
-	"github.com/d3c3ptive/aims/proto/host"
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/d3c3ptive/aims/proto/host"
 )
 
 // Group - A computer group of users.

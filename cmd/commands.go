@@ -21,11 +21,12 @@ package cmd
 import (
 	"errors"
 
-	"github.com/d3c3ptive/aims/client"
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc/status"
+
+	"github.com/d3c3ptive/aims/client"
 )
 
 // BindGroup is a helper used to bind a list of root commands to a given menu, for a given "command help group".

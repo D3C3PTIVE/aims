@@ -22,8 +22,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/d3c3ptive/aims/proto/host"
 	"github.com/maxlandon/gondor/maltego"
+
+	"github.com/d3c3ptive/aims/proto/host"
 )
 
 // Port - A port on a Host.

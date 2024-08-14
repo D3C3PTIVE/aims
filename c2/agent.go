@@ -23,13 +23,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/host"
 	"github.com/d3c3ptive/aims/internal/util"
 	"github.com/d3c3ptive/aims/proto/c2"
-	"github.com/fatih/color"
 )
 
+// Agent represents a C2 agent (implant).
 type Agent c2.Agent
 
 //
