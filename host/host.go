@@ -78,9 +78,9 @@ func DisplayDetails() []display.Options {
 	add("Hostnames", 2)
 	add("Addresses", 2)
 	add("Hops", 2)
-	add("Extra Ports", 2)
 
 	// Hardware
+	add("Extra Ports", 3)
 	add("Purpose", 3)
 	add("MAC", 3)
 	add("Virtual Host", 3)
@@ -302,11 +302,13 @@ func printExtraPorts(port *host.ExtraPort, indentLevel int) string {
 	fmt.Fprintf(buf, "\n%s%s: %d", indent, color.HiYellowString(port.State), port.GetCount())
 
 	// Print Elements
+	reasons := []string{}
 	if len(port.Reasons) > 0 {
 		for _, reason := range port.Reasons {
-			reasonindent := strings.Repeat("  ", indentLevel+2)
-			fmt.Fprintf(buf, "\n%s%d %s", reasonindent, reason.GetCount(), reason.Reason)
+			reasons = append(reasons, fmt.Sprintf("%d %s", reason.Count, reason.Reason))
 		}
+
+		fmt.Fprintf(buf, " (%s)", strings.Join(reasons, ", "))
 	}
 
 	return buf.String()

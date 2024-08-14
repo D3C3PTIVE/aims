@@ -113,7 +113,7 @@ func Commands(client *client.Client) *cobra.Command {
 			options := host.DisplayDetails()
 
 			if traceroute {
-				options = append(options, display.WithHeader("Route", 3))
+				options = append(options, display.WithHeader("Route", 4))
 			}
 
 			// Request
