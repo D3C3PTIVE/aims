@@ -78,6 +78,7 @@ func DisplayDetails() []display.Options {
 	add("Hostnames", 2)
 	add("Addresses", 2)
 	add("Hops", 2)
+	add("Extra Ports", 2)
 
 	// Hardware
 	add("Purpose", 3)
@@ -86,7 +87,7 @@ func DisplayDetails() []display.Options {
 
 	// Tools
 	add("Comment", 4)
-	add("Hosts scripts", 5)
+	add("Hosts scripts", 4)
 
 	return headers
 }
@@ -138,7 +139,6 @@ var DisplayFields = map[string]func(h *host.Host) string{
 		}
 		return strings.Join(addresses, "\n")
 	},
-
 	"Status": func(h *host.Host) string {
 		return ""
 	},
@@ -148,6 +148,14 @@ var DisplayFields = map[string]func(h *host.Host) string{
 		}
 
 		return fmt.Sprint(len(h.Trace.Hops))
+	},
+	"Extra Ports": func(h *host.Host) string {
+		ports := ""
+		for _, port := range h.ExtraPorts {
+			ports += printExtraPorts(port, 1)
+		}
+
+		return ports
 	},
 	"Arch": getProbableCPU,
 	"MAC":  func(h *host.Host) string { return h.MAC },
@@ -199,6 +207,9 @@ var DisplayFields = map[string]func(h *host.Host) string{
 		}
 
 		return strings.TrimSuffix(routes, "\n")
+	},
+	"Scripts": func(h *host.Host) string {
+		return ""
 	},
 }
 
@@ -281,4 +292,22 @@ func getProbableCPU(h *host.Host) string {
 	}
 
 	return color.HiBlackString("[%d] ", most) + cpuArch
+}
+
+// Recursive function to print a ScriptORM object with nested structures
+func printExtraPorts(port *host.ExtraPort, indentLevel int) string {
+	buf := new(strings.Builder)
+	indent := strings.Repeat("  ", indentLevel)
+
+	fmt.Fprintf(buf, "\n%s%s: %d", indent, color.HiYellowString(port.State), port.GetCount())
+
+	// Print Elements
+	if len(port.Reasons) > 0 {
+		for _, reason := range port.Reasons {
+			reasonindent := strings.Repeat("  ", indentLevel+2)
+			fmt.Fprintf(buf, "\n%s%d %s", reasonindent, reason.GetCount(), reason.Reason)
+		}
+	}
+
+	return buf.String()
 }

@@ -46,9 +46,9 @@ message Reason {
   option (gorm.opts).ormable = true;
   string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
 
-  // @gotags: xml:"reason"
+  // @gotags: xml:"reason,attr"
   string Reason = 3;
-  // @gotags: xml:"count"
+  // @gotags: xml:"count,attr"
   int32 Count = 4;
 }
 
@@ -57,10 +57,12 @@ message ExtraPort {
   option (gorm.opts).ormable = true;
   string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
         
-  // @gotags: xml:"count"
-  int32 Count = 10;
+  // @gotags: xml:"state,attr"
+  string State = 10;
+  // @gotags: xml:"count,attr"
+  int32 Count = 11;
   // @gotags: xml:"extrareasons"
-  repeated Reason Reasons = 11;
+  repeated Reason Reasons = 12;
 }
 
 // State - Contains information about a given's port status
