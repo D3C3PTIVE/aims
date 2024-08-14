@@ -21,12 +21,13 @@ package c2
 import (
 	"fmt"
 	"strings"
-	"sync"
-
-	"github.com/fatih/color"
+	"time"
 
 	"github.com/d3c3ptive/aims/cmd/display"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/internal/util"
 	"github.com/d3c3ptive/aims/proto/c2"
+	"github.com/fatih/color"
 )
 
 type Agent c2.Agent
@@ -42,17 +43,14 @@ func DisplayHeaders() (headers []display.Options) {
 	}
 
 	add("ID", 1)
-	add("Hostname", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Addresses", 1)
+	add("Tool", 1)
+	add("Name", 1)
+	add("User/Hostname", 1)
+	add("OS", 1)
+	add("Channels", 1)
 
-	add("Status", 2)
-	add("Channels", 2)
-
-	add("Arch", 3)
-	add("MAC", 3)
-	add("Purpose", 3)
+	add("Last/Next Check-in", 2)
+	add("Tasks", 2)
 
 	return headers
 }
@@ -66,23 +64,23 @@ func DisplayDetails() []display.Options {
 
 	// Core
 	add("ID", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Arch", 1)
-	add("Status", 1)
+	add("Tool", 1)
+	add("Name", 1)
+	add("Host ID", 1)
+	add("User/Hostname", 1)
+	add("OS", 1)
+	add("Process", 1)
+	add("Working directory", 1)
 
-	add("Purpose", 2)
-	add("MAC", 2)
-	add("Virtual.Agent", 2)
+	// Tasks
+	add("Last/Next Check-in", 2)
+	add("Tasks ", 2)
 
 	// Network
-	add("Hostnames", 3)
-	add("Addresses", 3)
-	add("Hops", 3)
+	add("Channel Details", 3)
 
 	// Tools
-	add("Comment", 4)
-	add("Host scripts", 5)
+	// add("Task Details", 3)
 
 	return headers
 }
@@ -96,120 +94,107 @@ func Completions() []display.Options {
 	}
 
 	add("ID", 1)
-	add("", 1)
-	add("OS Name", 1)
-	add("Addresses", 1)
+	add("Name", 1)
+	add("Tool", 1)
+	add("User/Hostname", 1)
+	add("Channels", 1)
 
 	return headers
 }
 
 // Fields maps field names to their value generators.
 var DisplayFields = map[string]func(h *c2.Agent) string{
-	// Table
 	"ID": func(h *c2.Agent) string {
-		if h.Host.Status.State == "up" {
-			return color.HiGreenString(display.FormatSmallID(h.Id))
+		// id := display.FormatSmallID(h.Id)
+		// Either up and within checkin, green
+
+		// Or dead and behind checkin, red
+
+		// Or not dead but behind checkin. yellow
+		return ""
+	},
+	"Tool": func(h *c2.Agent) string {
+		return h.Tool
+	},
+	"Name": func(h *c2.Agent) string {
+		return h.Name
+	},
+	"Host ID": func(h *c2.Agent) string {
+		if h.Host == nil {
+			return "No host"
 		}
 		return display.FormatSmallID(h.Id)
 	},
-	"Addresses": func(h *c2.Agent) string {
-		var addresses []string
-		for _, hn := range h.Host.Addresses {
-			addresses = append(addresses, hn.Addr)
+	"User/Hostname": func(h *c2.Agent) string {
+		user, host := "", ""
+		if h.User != nil {
+			user = h.User.Name
 		}
-		return strings.Join(addresses, "\n")
-	},
-
-	"Status": func(h *c2.Agent) string {
-		return ""
-	},
-	"Hops": func(h *c2.Agent) string {
-		if h.Host.Trace == nil {
-			return ""
-		}
-
-		return fmt.Sprint(len(h.Host.Trace.Hops))
-	},
-	"MAC": func(h *c2.Agent) string { return h.Host.MAC },
-	"Purpose": func(h *c2.Agent) string {
-		if h.Host.OS == nil {
-			return ""
-		}
-		// Look at OS matches for various types.
-		// Don't include them all, just 2/3 more recurring ones.
-		if h.Host.Purpose != "" {
-			return h.Host.Purpose
-		}
-
-		times := map[string]int{}
-
-		for _, m := range h.Host.OS.Matches {
-			for _, c := range m.Classes {
-				println(c.Type)
-				if c.Type != "" {
-					times[c.Type]++
+		// Find first host name
+		if len(h.Host.Hostnames) > 0 {
+			for _, hostname := range h.Host.Hostnames {
+				if hostname.Name == "localhost" {
+					continue
 				}
+				host = hostname.Name
+				break
 			}
 		}
 
-		var purposes []string
-		for name, times := range times {
-			typeStr := name + display.Dim + fmt.Sprintf("(%d)", times)
-			purposes = append(purposes, typeStr)
+		return fmt.Sprintf("%s@%s", color.HiWhiteString(user), color.HiWhiteString(host))
+	},
+	"OS": func(h *c2.Agent) string {
+		name, family := host.GetOperatingSystem(h.Host)
+
+		if name == "" && family == "" {
+			return color.HiRedString("Undefined")
 		}
 
-		return strings.Join(purposes, " | ")
+		return fmt.Sprintf("%s %s", family, name)
+	},
+	"Process": func(h *c2.Agent) string {
+		if h.Process == nil {
+			return "No process information"
+		}
+
+		process := fmt.Sprintf("%d", h.Process.Id)
+		if h.Process.Owner != nil && h.Process.Owner.Name != "" {
+			process += fmt.Sprintf("- %s -", h.Process.Owner)
+		}
+
+		if h.Process.Ppid != 0 {
+			process += color.HiBlackString(fmt.Sprintf("(P )", h.Process.Ppid))
+		}
+		if len(h.Process.CmdLine) != 0 {
+			process += fmt.Sprintf("[%s]", strings.Join(h.Process.CmdLine, " "))
+		}
+
+		return process
+	},
+	"Working directory": func(h *c2.Agent) string {
+		return color.HiBlueString(h.WorkingDirectory)
 	},
 
-	// Details
+	"Last/Next Check-in": func(h *c2.Agent) string {
+		last := time.Unix(h.LastCheckin, 0)
+		next := time.Unix(h.NextCheckin, 0)
+		lastTime := util.FormatDateDelta(last, false, false)
+		nextTime := util.FormatDateDelta(next, false, true)
+		return fmt.Sprintf("%s/%s", lastTime, nextTime)
+	},
+	"Tasks": func(h *c2.Agent) string {
+		tasks := ""
+		completed := h.TasksCountCompleted
+		if completed < h.TasksCount {
+			tasks = color.HiYellowString("%d", completed)
+		}
+		return fmt.Sprintf("%s/%d", tasks, h.TasksCount)
+	},
+	"Channel Details": func(h *c2.Agent) string {
+		return ""
+	},
+	// Route should return the pivots graph for this agent.
 	"Route": func(h *c2.Agent) string {
-		if h.Host.Trace == nil {
-			return ""
-		}
-
-		routes := "\n" + display.Reset
-
-		for i := len(h.Host.Trace.Hops) - 1; i >= 0; i-- {
-			hop := h.Host.Trace.Hops[i]
-			line := display.Dim + "  |_ "
-			rtt := display.Dim + fmt.Sprintf("%*s", 6, hop.RTT) + display.Reset
-			ipPad := fmt.Sprintf("%*s  ", 18, hop.IPAddr)
-			line += rtt + ipPad + display.Bold + display.FgYellow + hop.Host + display.Reset
-			routes += line + "\n"
-		}
-
-		return strings.TrimSuffix(routes, "\n")
+		return ""
 	},
-}
-
-// FilterIdentical returns a list of.Agents from which have been removed all.Agents that are
-// already in the database, with a very high degree of certitude. This avoids redundance when
-// manipulating new.Agents.
-func FilterIdenticalAgent(raw []c2.AgentORM, dbHosts []*c2.AgentORM) (filtered []c2.AgentORM) {
-	// For each.Agent to add:
-	for _, newAgent := range raw {
-		done := new(sync.WaitGroup)
-
-		allMatches := []*c2.AgentORM{}
-
-		// Check IDs: if non-nil and identical, done checking.
-
-		// For now we wait for all queries to finish, but ideally,
-		// some filters have more weight than others, but might be
-		// longer to check, so when one shows that.Agents are identical,
-		// all other comparison routines should break.
-		done.Wait()
-
-		// If identical, add it to the valid, filtered.Agents
-		if identical, _ := allAgentsIdentical(allMatches); identical {
-			filtered = append(filtered, newAgent)
-		}
-
-	}
-
-	return
-}
-
-func allAgentsIdentical(all []*c2.AgentORM) (yes bool, matches int) {
-	return false, 0
 }

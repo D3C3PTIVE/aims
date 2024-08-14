@@ -21,15 +21,18 @@ message Channel {
   google.protobuf.Timestamp UpdatedAt = 5;
 
   // Base
-  string AgentID = 10;
+  string Type = 9;
+  string Direction = 10;
   string PeerID = 11;
   int32 Order = 12;
   bool Running = 13;
-  string RemoteAddress = 14;
-  string ProxyURL = 15;
+  string Protocol = 14;
+  string RemoteAddress = 15;
+  string LocalAddress = 16; // Filled by the Connection type
+  string ProxyURL = 17;
   // Malleable Profile = 13;
   // Also add a simpler field for querying URI/remotes.
-  string RawData = 16;
+  string RawData = 18;
 
   int64 ReconnectInterval = 21;
   int64 Interval = 22;
@@ -38,7 +41,6 @@ message Channel {
   // Live
   int32 Attempts = 30;
   int32 Failures = 31;
-  int64 NextCheckin = 32;
-  // string LocalAddress = 8; // Filled by the Connection type
-  // string RemoteAddress = 9; // Filled by the Connection type
+  int64 LastCheckin = 32;
+  int64 NextCheckin = 33;
 }

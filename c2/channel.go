@@ -19,11 +19,15 @@ package c2
 */
 
 import (
+	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/fatih/color"
 
 	"github.com/d3c3ptive/aims/cmd/display"
+	"github.com/d3c3ptive/aims/internal/util"
 	"github.com/d3c3ptive/aims/proto/c2"
 )
 
@@ -39,6 +43,7 @@ func DisplayHeadersChannel() (headers []display.Options) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
 
+	add("#", 1) // Order
 	add("ID", 1)
 	add("Address", 1)
 
@@ -47,6 +52,7 @@ func DisplayHeadersChannel() (headers []display.Options) {
 	add("Arch", 3)
 	add("MAC", 3)
 	add("Purpose", 3)
+	add("Proxy", 5)
 
 	return headers
 }
@@ -91,14 +97,53 @@ func CompletionsChannel() []display.Options {
 // Fields maps field names to their value generators.
 var DisplayFieldsChannel = map[string]func(h *c2.Channel) string{
 	// Table
+	"Order": func(h *c2.Channel) string {
+		return color.HiBlackString(fmt.Sprintf("%d", h.Order))
+	},
 	"ID": func(h *c2.Channel) string {
 		if h.Running {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
 		return display.FormatSmallID(h.Id)
 	},
+	"Protocol": func(h *c2.Channel) string {
+		return h.Protocol
+	},
 	"Remote Address ": func(h *c2.Channel) string {
-		return h.RemoteAddress
+		direction := ""
+		if h.Direction == "Bind" {
+			direction = "==>"
+		} else {
+			direction = "<=="
+		}
+
+		return fmt.Sprintf("%s %s %s", h.LocalAddress, direction, h.RemoteAddress)
+	},
+	"Try/Fails": func(h *c2.Channel) string {
+		tries := fmt.Sprintf("%d", h.Attempts)
+		failures := fmt.Sprintf("%d", h.Failures)
+		if h.Failures > 0 {
+			return color.HiRedString(fmt.Sprintf("%d", h.Failures))
+		}
+		return fmt.Sprintf("%s/%s", tries, failures)
+	},
+	"Beaconing": func(h *c2.Channel) string {
+		if strings.ToLower(h.Type) == "session" {
+			return color.HiBlackString("none")
+		}
+
+		stats := fmt.Sprintf("%s (+/-%s)", h.Interval, time.Duration(h.Jitter).String())
+		return stats
+	},
+	"Last/Next Check-in": func(h *c2.Channel) string {
+		last := time.Unix(h.LastCheckin, 0)
+		next := time.Unix(h.NextCheckin, 0)
+		lastTime := util.FormatDateDelta(last, false, false)
+		nextTime := util.FormatDateDelta(next, false, true)
+		return fmt.Sprintf("%s/%s", lastTime, nextTime)
+	},
+	"Proxy": func(h *c2.Channel) string {
+		return h.ProxyURL
 	},
 }
 

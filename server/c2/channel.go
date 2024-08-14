@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	core "github.com/d3c3ptive/aims/c2"
 	pb "github.com/d3c3ptive/aims/proto/c2"
 	"github.com/d3c3ptive/aims/proto/rpc/c2"
 )
@@ -34,7 +33,8 @@ func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.Cr
 	dbAgents := []*pb.AgentORM{}
 	database := Preloads(s.db, &c2.AgentFilters{})
 	database.Find(&dbAgents)
-	filtered := core.FilterIdenticalAgent(agents, dbAgents)
+	// filtered := core.FilterIdenticalAgent(agents, dbAgents)
+    filtered := agents
 
 	err := s.db.Create(&filtered).Error
 

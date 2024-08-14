@@ -85,7 +85,7 @@ func Commands(client *client.Client) *cobra.Command {
 		},
 	}
 
-	aims.Bind(addCmd.Name(), false, addCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(addCmd.Name(), false, addCmd, func(f *pflag.FlagSet) {
 		f.StringP("file", "f", "", "Path to file containing hosts data")
 	})
 
@@ -136,7 +136,7 @@ func Commands(client *client.Client) *cobra.Command {
 			return nil
 		},
 	}
-	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("traceroute", "T", false, "Print full network routes to host")
 	})
 	hostsCmd.AddCommand(showCmd)

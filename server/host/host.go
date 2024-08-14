@@ -204,6 +204,9 @@ func WithPreloads(from *hosts.HostFilters) (clauses map[string]bool) {
 		"Processes": from.Processes,
 
 		"Ports":              from.Ports,
+		"Ports.Service":      from.Ports,
+		"Ports.State":        from.Ports,
+		"Ports.Scripts":      from.Ports,
 		"ExtraPorts":         from.Ports,
 		"ExtraPorts.Reasons": from.Ports,
 

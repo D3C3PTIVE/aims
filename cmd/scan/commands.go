@@ -53,7 +53,7 @@ func Commands(con *client.Client) *cobra.Command {
 	importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
 	scanCmd.AddCommand(importCmd)
 
-	aims.Bind(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.BoolP("nmap", "N", false, "Hint (or force) parsing the file(s) as nmap scans (default nmap format used is xml)")
 	})
 
@@ -169,10 +169,10 @@ func showCommand(con *client.Client) *cobra.Command {
 		},
 	}
 
-	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("targets", "T", false, "Show scan targets' details")
 	})
-	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("tasks", "t", false, "Show all scan tasks status/details")
 	})
 

@@ -77,7 +77,7 @@ func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cob
 	}
 	importCmd.AddGroup(&cobra.Group{ID: "database", Title: "database"})
 
-	aims.Bind(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.StringP("format", "F", "json", "Hint (or force) the file with a specific serialization format")
 		f.BoolP("stdin", "i", false, "Read values from stdin")
 	})
@@ -118,7 +118,7 @@ func ExportCommand(parent *cobra.Command, con *client.Client, data func(cmd *cob
 
 	exportCmd.AddGroup(&cobra.Group{ID: "database", Title: "database"})
 
-	aims.Bind(exportCmd.Name(), false, exportCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(exportCmd.Name(), false, exportCmd, func(f *pflag.FlagSet) {
 		f.BoolP("xml", "X", false, "Export data in XML format")
 	})
 

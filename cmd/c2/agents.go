@@ -106,7 +106,7 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 	showComps := carapace.Gen(showCmd)
 	showComps.PositionalAnyCompletion(CompleteByID(con))
 
-	aims.Bind(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
 		f.BoolP("tasks", "t", false, "Show all agent tasks status/details")
 	})
 

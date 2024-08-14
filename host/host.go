@@ -125,11 +125,11 @@ var DisplayFields = map[string]func(h *host.Host) string{
 		return strings.Join(hostnames, "\n")
 	},
 	"OS Name": func(h *host.Host) string {
-		osName, _ := osMatched(h)
+		osName, _ := GetOperatingSystem(h)
 		return osName
 	},
 	"OS Family": func(h *host.Host) string {
-		_, fam := osMatched(h)
+		_, fam := GetOperatingSystem(h)
 		return fam
 	},
 	"Addresses": func(h *host.Host) string {
@@ -213,7 +213,25 @@ var DisplayFields = map[string]func(h *host.Host) string{
 	},
 }
 
-func osMatched(h *host.Host) (osName, osFamily string) {
+// GetOperatingSystem returns the operating system of the host based on potential
+// OS guess matches, or if none and the information is known without any guessing.
+func GetOperatingSystem(h *host.Host) (osName, osFamily string) {
+	// If we have the information without the guesses.
+	if h.OSFamily != "" {
+		osFamily = h.OSFamily
+	}
+	if h.OSName == "" {
+		osName = h.OSName
+	}
+	if h.OSFlavor == "" {
+		osName += " " + h.OSFlavor
+	}
+
+	if osName != "" {
+		return
+	}
+
+	// Else if we have to use nmap-style guesses.
 	if h.OS == nil || len(h.OS.Matches) == 0 {
 		return
 	}

@@ -41,7 +41,8 @@ message Agent {
   // Communications
   int64 FirstContact = 50;
   int64 LastCheckin = 51;
-  repeated Channel Channels = 52;
+  int64 NextCheckin = 52;
+  repeated Channel Channels = 53;
 
   // Others
   repeated Task Tasks = 90;

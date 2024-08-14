@@ -28,21 +28,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Bind is a convenience function to bind flags to a given command.
-// name - The name of the flag set (can be empty).
-// cmd  - The command to which the flags should be bound.
-// flags - A function exposing the flag set through which flags are declared.
-func Bind(name string, persistent bool, cmd *cobra.Command, flags func(f *pflag.FlagSet)) {
-	flagSet := pflag.NewFlagSet(name, pflag.ContinueOnError) // Create the flag set.
-	flags(flagSet)                                           // Let the user bind any number of flags to it.
-
-	if persistent {
-		cmd.PersistentFlags().AddFlagSet(flagSet)
-	} else {
-		cmd.Flags().AddFlagSet(flagSet)
-	}
-}
-
 // BindGroup is a helper used to bind a list of root commands to a given menu, for a given "command help group".
 // @group - Name of the group under which the command should be shown. Preferably use a string in the constants package.
 // @menu  - The command menu to which the commands should be bound (either server or implant menu).
@@ -70,6 +55,21 @@ func BindGroup(group string, menu *cobra.Command, con *client.Client, cmds ...fu
 	// Bind the command to the root
 	for _, initCommand := range cmds {
 		menu.AddCommand(initCommand(con))
+	}
+}
+
+// BindFlags is a convenience function to bind flags to a given command.
+// name - The name of the flag set (can be empty).
+// cmd  - The command to which the flags should be bound.
+// flags - A function exposing the flag set through which flags are declared.
+func BindFlags(name string, persistent bool, cmd *cobra.Command, flags func(f *pflag.FlagSet)) {
+	flagSet := pflag.NewFlagSet(name, pflag.ContinueOnError) // Create the flag set.
+	flags(flagSet)                                           // Let the user bind any number of flags to it.
+
+	if persistent {
+		cmd.PersistentFlags().AddFlagSet(flagSet)
+	} else {
+		cmd.Flags().AddFlagSet(flagSet)
 	}
 }
 

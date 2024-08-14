@@ -44,6 +44,7 @@ func main() {
 	// No working connection yet, handled by teamclient.
 	aimsClient, err := client.New(opts...)
 
+
 	aimsClient.AddConnectHooks(preRunServer(teamserver, aimsClient))
 
 	// Generate and bind all AIM objects' subcommand/trees.
@@ -52,7 +53,7 @@ func main() {
 	teamserverCmds := commands.Generate(teamserver, aimsClient.Teamclient)
 	aimsCmd.AddCommand(teamserverCmds)
 
-    BindPrePost(aimsCmd, true, aimsClient.ConnectRun)
+    bindRunners(aimsCmd, true, aimsClient.ConnectRun)
 
 	// Completions (also pre-connect to the server)
 	carapace.Gen(aimsCmd)
@@ -92,3 +93,4 @@ func preRunServer(teamserver *server.Server, con *client.Client) func() error {
 		return nil
 	}
 }
+

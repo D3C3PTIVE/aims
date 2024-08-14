@@ -13,22 +13,26 @@ import (
 )
 
 type ChannelORM struct {
-	AgentID           string
 	AgentId           *string
 	Attempts          int32
 	CreatedAt         *time.Time
+	Direction         string
 	Failures          int32
 	Id                string `gorm:"type:uuid;primaryKey"`
 	Interval          int64
 	Jitter            int64
+	LastCheckin       int64
+	LocalAddress      string
 	NextCheckin       int64
 	Order             int32
 	PeerID            string
+	Protocol          string
 	ProxyURL          string
 	RawData           string
 	ReconnectInterval int64
 	RemoteAddress     string
 	Running           bool
+	Type              string
 	UpdatedAt         *time.Time
 }
 
@@ -56,11 +60,14 @@ func (m *Channel) ToORM(ctx context.Context) (ChannelORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
-	to.AgentID = m.AgentID
+	to.Type = m.Type
+	to.Direction = m.Direction
 	to.PeerID = m.PeerID
 	to.Order = m.Order
 	to.Running = m.Running
+	to.Protocol = m.Protocol
 	to.RemoteAddress = m.RemoteAddress
+	to.LocalAddress = m.LocalAddress
 	to.ProxyURL = m.ProxyURL
 	to.RawData = m.RawData
 	to.ReconnectInterval = m.ReconnectInterval
@@ -68,6 +75,7 @@ func (m *Channel) ToORM(ctx context.Context) (ChannelORM, error) {
 	to.Jitter = m.Jitter
 	to.Attempts = m.Attempts
 	to.Failures = m.Failures
+	to.LastCheckin = m.LastCheckin
 	to.NextCheckin = m.NextCheckin
 	if posthook, ok := interface{}(m).(ChannelWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
@@ -92,11 +100,14 @@ func (m *ChannelORM) ToPB(ctx context.Context) (Channel, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
-	to.AgentID = m.AgentID
+	to.Type = m.Type
+	to.Direction = m.Direction
 	to.PeerID = m.PeerID
 	to.Order = m.Order
 	to.Running = m.Running
+	to.Protocol = m.Protocol
 	to.RemoteAddress = m.RemoteAddress
+	to.LocalAddress = m.LocalAddress
 	to.ProxyURL = m.ProxyURL
 	to.RawData = m.RawData
 	to.ReconnectInterval = m.ReconnectInterval
@@ -104,6 +115,7 @@ func (m *ChannelORM) ToPB(ctx context.Context) (Channel, error) {
 	to.Jitter = m.Jitter
 	to.Attempts = m.Attempts
 	to.Failures = m.Failures
+	to.LastCheckin = m.LastCheckin
 	to.NextCheckin = m.NextCheckin
 	if posthook, ok := interface{}(m).(ChannelWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
@@ -463,8 +475,12 @@ func DefaultApplyFieldMaskChannel(ctx context.Context, patchee *Channel, patcher
 			patchee.UpdatedAt = patcher.UpdatedAt
 			continue
 		}
-		if f == prefix+"AgentID" {
-			patchee.AgentID = patcher.AgentID
+		if f == prefix+"Type" {
+			patchee.Type = patcher.Type
+			continue
+		}
+		if f == prefix+"Direction" {
+			patchee.Direction = patcher.Direction
 			continue
 		}
 		if f == prefix+"PeerID" {
@@ -479,8 +495,16 @@ func DefaultApplyFieldMaskChannel(ctx context.Context, patchee *Channel, patcher
 			patchee.Running = patcher.Running
 			continue
 		}
+		if f == prefix+"Protocol" {
+			patchee.Protocol = patcher.Protocol
+			continue
+		}
 		if f == prefix+"RemoteAddress" {
 			patchee.RemoteAddress = patcher.RemoteAddress
+			continue
+		}
+		if f == prefix+"LocalAddress" {
+			patchee.LocalAddress = patcher.LocalAddress
 			continue
 		}
 		if f == prefix+"ProxyURL" {
@@ -509,6 +533,10 @@ func DefaultApplyFieldMaskChannel(ctx context.Context, patchee *Channel, patcher
 		}
 		if f == prefix+"Failures" {
 			patchee.Failures = patcher.Failures
+			continue
+		}
+		if f == prefix+"LastCheckin" {
+			patchee.LastCheckin = patcher.LastCheckin
 			continue
 		}
 		if f == prefix+"NextCheckin" {

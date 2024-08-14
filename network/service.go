@@ -166,6 +166,9 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		return proto
 	},
 	"Product": func(port *host.Port) string {
+		if port.Service == nil {
+			return ""
+		}
 		product := port.Service.Product
 		if port.Service.Version == "" {
 			return product
@@ -198,13 +201,22 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		return strings.TrimSuffix(scripts, "\n")
 	},
 	"Extra Info": func(port *host.Port) string {
+		if port.Service == nil {
+			return ""
+		}
 		return port.Service.ExtraInfo
 	},
 	"Fingerprint": func(port *host.Port) string {
+		if port.Service == nil {
+			return ""
+		}
 		return port.Service.ServiceFP
 	},
 
 	"Method": func(port *host.Port) string {
+		if port.Service == nil {
+			return ""
+		}
 		return color.HiBlackString(port.Service.Method)
 	},
 	"State": func(port *host.Port) string {
@@ -224,6 +236,9 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		return port.State.State
 	},
 	"Reason": func(port *host.Port) string {
+		if port.State == nil {
+			return "undefined"
+		}
 		return port.State.Reason
 	},
 	"Scripts": func(port *host.Port) string {

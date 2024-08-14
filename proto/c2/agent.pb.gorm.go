@@ -27,6 +27,7 @@ type AgentORM struct {
 	LastCheckin         int64
 	Locale              string
 	Name                string
+	NextCheckin         int64
 	Process             *host.ProcessORM `gorm:"foreignKey:ProcessId;references:Id"`
 	ProcessId           *string
 	Runtime             string
@@ -95,6 +96,7 @@ func (m *Agent) ToORM(ctx context.Context) (AgentORM, error) {
 	}
 	to.FirstContact = m.FirstContact
 	to.LastCheckin = m.LastCheckin
+	to.NextCheckin = m.NextCheckin
 	for _, v := range m.Channels {
 		if v != nil {
 			if tempChannels, cErr := v.ToORM(ctx); cErr == nil {
@@ -174,6 +176,7 @@ func (m *AgentORM) ToPB(ctx context.Context) (Agent, error) {
 	}
 	to.FirstContact = m.FirstContact
 	to.LastCheckin = m.LastCheckin
+	to.NextCheckin = m.NextCheckin
 	for _, v := range m.Channels {
 		if v != nil {
 			if tempChannels, cErr := v.ToPB(ctx); cErr == nil {
@@ -790,6 +793,10 @@ func DefaultApplyFieldMaskAgent(ctx context.Context, patchee *Agent, patcher *Ag
 		}
 		if f == prefix+"LastCheckin" {
 			patchee.LastCheckin = patcher.LastCheckin
+			continue
+		}
+		if f == prefix+"NextCheckin" {
+			patchee.NextCheckin = patcher.NextCheckin
 			continue
 		}
 		if f == prefix+"Channels" {

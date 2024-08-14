@@ -44,9 +44,9 @@ func bindCommands(rootCmd *cobra.Command, con *client.Client) {
 		c2.ChannelsCommands,
 	)
 }
-// BindPrePost is used to register specific pre/post-runs for a given command/tree.
+// bindRunners is used to register specific pre/post-runs for a given command/tree.
 // This allows us to optimize client-to-server connections for things like completions.
-func BindPrePost(root *cobra.Command, pre bool, runs ...func(_ *cobra.Command, _ []string) error) {
+func bindRunners(root *cobra.Command, pre bool, runs ...func(_ *cobra.Command, _ []string) error) {
 	for _, cmd := range root.Commands() {
 		ePreE := cmd.PersistentPreRunE
 		ePostE := cmd.PersistentPostRunE
@@ -62,7 +62,7 @@ func BindPrePost(root *cobra.Command, pre bool, runs ...func(_ *cobra.Command, _
 		// Always go to find the leaf commands, irrespective
 		// of what we do with this parent command.
 		if cmd.HasSubCommands() {
-			BindPrePost(cmd, pre, runs...)
+			bindRunners(cmd, pre, runs...)
 		}
 
 		// If the command has no runners, there's nothing to bind:
