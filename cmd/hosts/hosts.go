@@ -33,8 +33,8 @@ import (
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/host"
-	pb "github.com/d3c3ptive/aims/proto/host"
-	"github.com/d3c3ptive/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/host/pb"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 )
 
 // Commands returns a command tree to manage and cmd/display hosts.

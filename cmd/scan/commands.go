@@ -32,10 +32,10 @@ import (
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
-	"github.com/d3c3ptive/aims/proto/rpc/scans"
-	pb "github.com/d3c3ptive/aims/proto/scan"
 	"github.com/d3c3ptive/aims/scan"
 	"github.com/d3c3ptive/aims/scan/nmap"
+	pb "github.com/d3c3ptive/aims/scan/pb"
+	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
 // Commands returns all scan commands.

@@ -28,7 +28,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/d3c3ptive/aims/cmd/display"
-	"github.com/d3c3ptive/aims/proto/scan"
+	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
 // Run - Represents a scan before, after or while being run.

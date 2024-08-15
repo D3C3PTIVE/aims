@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/d3c3ptive/aims/proto/network"
+	network "github.com/d3c3ptive/aims/network/pb"
 )
 
 // Address - An address somewhere on a network, or on a host.

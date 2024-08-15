@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/d3c3ptive/aims/proto/rpc/hosts"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 )
 
 type userServer struct {

@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package c2; 
+
+import "c2/pb/agent.proto";
+
+// Agents is a service that allows to interact with all c2s.
+service Agents {
+   // General
+   rpc Create(CreateAgentRequest) returns (CreateAgentResponse) {}
+   rpc Read(ReadAgentRequest) returns (ReadAgentResponse) {}
+   rpc Upsert(UpsertAgentRequest) returns (UpsertAgentResponse) {}
+   rpc Delete(DeleteAgentRequest) returns (DeleteAgentResponse) {}
+}
+
+message AgentFilters {
+    int64 MaxResults = 1;
+}
+
+// General
+
+message CreateAgentRequest {
+    AgentFilters Filters = 1;
+    repeated c2.Agent Agents = 2;
+}
+
+message CreateAgentResponse {
+    repeated c2.Agent Agents = 1;
+}
+
+message ReadAgentRequest{
+    AgentFilters Filters = 1;
+    c2.Agent Agent = 2;
+}
+
+message ReadAgentResponse{
+    repeated c2.Agent Agents = 1;
+}
+
+message UpsertAgentRequest{
+    AgentFilters Filters = 1;
+    repeated c2.Agent Agents = 2;
+}
+
+message UpsertAgentResponse{
+    repeated c2.Agent Agents = 1;
+}
+
+message DeleteAgentRequest{
+    repeated c2.Agent Agents = 1;
+}
+
+message DeleteAgentResponse{
+    repeated c2.Agent Agents = 1;
+};

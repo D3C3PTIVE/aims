@@ -27,12 +27,12 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/d3c3ptive/aims/host"
+	hostpb "github.com/d3c3ptive/aims/host/pb"
+	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
-	hostpb "github.com/d3c3ptive/aims/proto/host"
-	hostrpcpb "github.com/d3c3ptive/aims/proto/rpc/hosts"
-	scanrpcpb "github.com/d3c3ptive/aims/proto/rpc/scans"
-	scanpb "github.com/d3c3ptive/aims/proto/scan"
 	"github.com/d3c3ptive/aims/scan"
+	scanpb "github.com/d3c3ptive/aims/scan/pb"
+	scanrpcpb "github.com/d3c3ptive/aims/scan/pb/rpc"
 	hosts "github.com/d3c3ptive/aims/server/host"
 )
 

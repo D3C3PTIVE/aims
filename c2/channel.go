@@ -26,11 +26,12 @@ import (
 
 	"github.com/fatih/color"
 
+	c2 "github.com/d3c3ptive/aims/c2/pb"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/internal/util"
-	"github.com/d3c3ptive/aims/proto/c2"
 )
 
+// Channel represents a C2 communication channel (transport).
 type Channel c2.Channel
 
 //

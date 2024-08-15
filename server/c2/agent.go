@@ -7,8 +7,8 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	pb "github.com/d3c3ptive/aims/proto/c2"
-	"github.com/d3c3ptive/aims/proto/rpc/c2"
+	pb "github.com/d3c3ptive/aims/c2/pb"
+	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 )
 
 type channelServer struct {

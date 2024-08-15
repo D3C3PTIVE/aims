@@ -21,14 +21,13 @@ package host
 import (
 	"strings"
 
+	host "github.com/d3c3ptive/aims/host/pb"
 	"github.com/d3c3ptive/aims/internal/util"
-	"github.com/d3c3ptive/aims/proto/host"
-	pb "github.com/d3c3ptive/aims/proto/host"
-	netpb "github.com/d3c3ptive/aims/proto/network"
+	network "github.com/d3c3ptive/aims/network/pb"
 )
 
 // AreHostsIdentical compares two pb.HostORM objects to determine if they represent the same host.
-func AreHostsIdentical(host1, host2 *pb.HostORM) bool {
+func AreHostsIdentical(host1, host2 *host.HostORM) bool {
 	if host1 == nil || host2 == nil {
 		return false
 	}
@@ -68,7 +67,7 @@ func AreHostsIdentical(host1, host2 *pb.HostORM) bool {
 }
 
 // compareExtraPortORMs compares two slices of ExtraPortORM for equality.
-func compareExtraPortORMs(a, b []*pb.ExtraPortORM) bool {
+func compareExtraPortORMs(a, b []*host.ExtraPortORM) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -89,7 +88,7 @@ func compareExtraPortORMs(a, b []*pb.ExtraPortORM) bool {
 }
 
 // compareTraces compares two TraceORM objects for equality.
-func compareTraces(a, b *netpb.TraceORM) bool {
+func compareTraces(a, b *network.TraceORM) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -100,7 +99,7 @@ func compareTraces(a, b *netpb.TraceORM) bool {
 }
 
 // compareHops compares two slices of HopORM for equality.
-func compareHops(a, b []*netpb.HopORM) bool {
+func compareHops(a, b []*network.HopORM) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -116,12 +115,12 @@ func compareHops(a, b []*netpb.HopORM) bool {
 }
 
 // Helper function to compare the processes.
-func compareProcesses(processes1, processes2 []*pb.ProcessORM) bool {
+func compareProcesses(processes1, processes2 []*host.ProcessORM) bool {
 	return util.CompareStringSlices(extractProcessNames(processes1), extractProcessNames(processes2))
 }
 
 // Helper function to extract process names from a list of processes.
-func extractProcessNames(processes []*pb.ProcessORM) []string {
+func extractProcessNames(processes []*host.ProcessORM) []string {
 	names := make([]string, 0, len(processes))
 	for _, process := range processes {
 		if process != nil {
@@ -132,7 +131,7 @@ func extractProcessNames(processes []*pb.ProcessORM) []string {
 }
 
 // Helper function to compare users.
-func compareUsers(users1, users2 []*pb.UserORM) bool {
+func compareUsers(users1, users2 []*host.UserORM) bool {
 	return util.CompareStringSlices(extractUserNames(users1), extractUserNames(users2))
 }
 
@@ -156,7 +155,7 @@ func compareStatusORMs(a, b *host.StatusORM) bool {
 }
 
 // Helper function to extract user names from a list of users.
-func extractUserNames(users []*pb.UserORM) []string {
+func extractUserNames(users []*host.UserORM) []string {
 	names := make([]string, 0, len(users))
 	for _, user := range users {
 		if user != nil {
@@ -167,7 +166,7 @@ func extractUserNames(users []*pb.UserORM) []string {
 }
 
 // Helper functions to extract relevant data from pb.HostORM (assuming string representations).
-func getHostAddresses(host *pb.HostORM) []string {
+func getHostAddresses(host *host.HostORM) []string {
 	if host == nil || host.Addresses == nil {
 		return nil
 	}
@@ -180,7 +179,7 @@ func getHostAddresses(host *pb.HostORM) []string {
 	return addresses
 }
 
-func getHostHostnames(host *pb.HostORM) []string {
+func getHostHostnames(host *host.HostORM) []string {
 	if host == nil || host.Hostnames == nil {
 		return nil
 	}

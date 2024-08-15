@@ -27,12 +27,12 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
+	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client/transport"
-	"github.com/d3c3ptive/aims/proto/rpc/c2"
-	"github.com/d3c3ptive/aims/proto/rpc/credentials"
-	"github.com/d3c3ptive/aims/proto/rpc/hosts"
-	"github.com/d3c3ptive/aims/proto/rpc/network"
-	"github.com/d3c3ptive/aims/proto/rpc/scans"
+	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
+	network "github.com/d3c3ptive/aims/network/pb/rpc"
+	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
 // Client connects to an AIMS database through a gRPC connection.

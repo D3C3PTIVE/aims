@@ -28,9 +28,9 @@ import (
 	"github.com/maxlandon/gondor/maltego"
 
 	"github.com/d3c3ptive/aims/cmd/display"
-	"github.com/d3c3ptive/aims/proto/host"
-	"github.com/d3c3ptive/aims/proto/network"
-	"github.com/d3c3ptive/aims/proto/scan/nmap"
+	host "github.com/d3c3ptive/aims/host/pb"
+	network "github.com/d3c3ptive/aims/network/pb"
+	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 // Service - A service somewhere on a network.

@@ -22,13 +22,13 @@ import (
 	"context"
 
 	"github.com/d3c3ptive/aims/client"
-	"github.com/d3c3ptive/aims/proto/host"
-	"github.com/d3c3ptive/aims/proto/rpc/hosts"
+	"github.com/d3c3ptive/aims/host/pb"
+	"github.com/d3c3ptive/aims/host/pb/rpc"
 )
 
 type hostClient struct {
 	*client.Client
-	h *host.Host
+	h *pb.Host
 }
 
 func Hosts(c *client.Client) hostClient {
@@ -39,48 +39,48 @@ func Hosts(c *client.Client) hostClient {
 
 // Create creates one or more hosts into the database, and returns their
 // updated contents (after all fields initilized and database insertion).
-func (c *hostClient) Create(h ...*host.Host) []*host.Host {
-	res, _ := c.Hosts.Create(context.Background(), &hosts.CreateHostRequest{
+func (c *hostClient) Create(h ...*pb.Host) []*pb.Host {
+	res, _ := c.Hosts.Create(context.Background(), &rpc.CreateHostRequest{
 		Hosts: h,
 	})
 
 	return res.GetHosts()
 }
 
-func (c *hostClient) Read(host *host.Host) *host.Host {
+func (c *hostClient) Read(host *pb.Host) *pb.Host {
 	return nil
 }
 
 // ReadByID returns a host by its ID (optionally shortened), or nil if not found in database.
-func (c *hostClient) ReadByID(id string) *host.Host {
+func (c *hostClient) ReadByID(id string) *pb.Host {
 	return nil
 }
 
 // List returns a list of hosts that match one or more properties.
-func (c *hostClient) List(host *host.Host) []*host.Host {
+func (c *hostClient) List(host *pb.Host) []*pb.Host {
 	return nil
 }
 
 // Update updates one or more hosts in the database.
-func (c *hostClient) Update(hosts ...*host.Host) []*host.Host {
+func (c *hostClient) Update(hosts ...*pb.Host) []*pb.Host {
 	return nil
 }
 
 // Delete deletes one or more hosts in the database.
 // Provided hosts not yet in the database are ignored.
-func (c *hostClient) Delete(host ...*host.Host) {
+func (c *hostClient) Delete(host ...*pb.Host) {
 }
 
 // Delete one or more hosts in database.
 func (c *hostClient) DeleteByID(id string) {
 }
 
-func (c hostClient) WithHost(h *host.Host) hostClient {
+func (c hostClient) WithHost(h *pb.Host) hostClient {
 	c.h = h
 	return c
 }
 
 func (c hostClient) WithHostID(id string) hostClient {
-	c.h = &host.Host{Id: id}
+	c.h = &pb.Host{Id: id}
 	return c
 }

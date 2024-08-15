@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/d3c3ptive/aims/proto/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // NonReplayableHash - A credential.PasswordHash password hash that cannot be replayed to authenticate

@@ -18,7 +18,7 @@ package credential
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import "github.com/d3c3ptive/aims/proto/credential"
+import credential "github.com/d3c3ptive/aims/credential/pb"
 
 // Origin - The origin of a credential.Core, with any information related
 // to the Origin.Type, which might manual, imports, services, crackers, etc.

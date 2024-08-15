@@ -27,9 +27,9 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/host/pb"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
-	pb "github.com/d3c3ptive/aims/proto/host"
-	"github.com/d3c3ptive/aims/proto/rpc/hosts"
 )
 
 type server struct {

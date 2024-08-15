@@ -3,12 +3,12 @@ package db
 import (
 	"gorm.io/gorm"
 
-	"github.com/d3c3ptive/aims/proto/c2"
-	"github.com/d3c3ptive/aims/proto/credential"
-	"github.com/d3c3ptive/aims/proto/host"
-	"github.com/d3c3ptive/aims/proto/network"
-	"github.com/d3c3ptive/aims/proto/scan"
-	"github.com/d3c3ptive/aims/proto/scan/nmap"
+	c2 "github.com/d3c3ptive/aims/c2/pb"
+	credential "github.com/d3c3ptive/aims/credential/pb"
+	host "github.com/d3c3ptive/aims/host/pb"
+	network "github.com/d3c3ptive/aims/network/pb"
+	scan "github.com/d3c3ptive/aims/scan/pb"
+	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 /*

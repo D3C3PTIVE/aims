@@ -21,7 +21,7 @@ package scan
 import (
 	"context"
 
-	"github.com/d3c3ptive/aims/proto/scan"
+	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
 // Target - This type can be used as an Input object to a scan,

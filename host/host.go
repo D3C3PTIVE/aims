@@ -26,13 +26,13 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/d3c3ptive/aims/cmd/display"
-	"github.com/d3c3ptive/aims/proto/host"
+	"github.com/d3c3ptive/aims/host/pb"
 )
 
 // Host - A physical or virtual computer host.
 // The type has several categories of fields: general information,
 // and Nmap-compliant fields (ports, status, route, scripts etc).
-type Host host.Host
+type Host pb.Host
 
 //
 // [ Display Functions ] --------------------------------------------------
@@ -109,47 +109,47 @@ func Completions() []display.Options {
 }
 
 // Fields maps field names to their value generators.
-var DisplayFields = map[string]func(h *host.Host) string{
+var DisplayFields = map[string]func(h *pb.Host) string{
 	// Table
-	"ID": func(h *host.Host) string {
+	"ID": func(h *pb.Host) string {
 		if h.Status.State == "up" {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
 		return display.FormatSmallID(h.Id)
 	},
-	"Hostnames": func(h *host.Host) string {
+	"Hostnames": func(h *pb.Host) string {
 		var hostnames []string
 		for _, hn := range h.Hostnames {
 			hostnames = append(hostnames, hn.Name)
 		}
 		return strings.Join(hostnames, "\n")
 	},
-	"OS Name": func(h *host.Host) string {
+	"OS Name": func(h *pb.Host) string {
 		osName, _ := GetOperatingSystem(h)
 		return osName
 	},
-	"OS Family": func(h *host.Host) string {
+	"OS Family": func(h *pb.Host) string {
 		_, fam := GetOperatingSystem(h)
 		return fam
 	},
-	"Addresses": func(h *host.Host) string {
+	"Addresses": func(h *pb.Host) string {
 		var addresses []string
 		for _, hn := range h.Addresses {
 			addresses = append(addresses, hn.Addr)
 		}
 		return strings.Join(addresses, "\n")
 	},
-	"Status": func(h *host.Host) string {
+	"Status": func(h *pb.Host) string {
 		return ""
 	},
-	"Hops": func(h *host.Host) string {
+	"Hops": func(h *pb.Host) string {
 		if h.Trace == nil {
 			return ""
 		}
 
 		return fmt.Sprint(len(h.Trace.Hops))
 	},
-	"Extra Ports": func(h *host.Host) string {
+	"Extra Ports": func(h *pb.Host) string {
 		ports := ""
 		for _, port := range h.ExtraPorts {
 			ports += printExtraPorts(port, 1)
@@ -158,8 +158,8 @@ var DisplayFields = map[string]func(h *host.Host) string{
 		return ports
 	},
 	"Arch": getProbableCPU,
-	"MAC":  func(h *host.Host) string { return h.MAC },
-	"Purpose": func(h *host.Host) string {
+	"MAC":  func(h *pb.Host) string { return h.MAC },
+	"Purpose": func(h *pb.Host) string {
 		if h.OS == nil {
 			return ""
 		}
@@ -190,7 +190,7 @@ var DisplayFields = map[string]func(h *host.Host) string{
 	},
 
 	// Details
-	"Route": func(h *host.Host) string {
+	"Route": func(h *pb.Host) string {
 		if h.Trace == nil {
 			return ""
 		}
@@ -208,14 +208,14 @@ var DisplayFields = map[string]func(h *host.Host) string{
 
 		return strings.TrimSuffix(routes, "\n")
 	},
-	"Scripts": func(h *host.Host) string {
+	"Scripts": func(h *pb.Host) string {
 		return ""
 	},
 }
 
 // GetOperatingSystem returns the operating system of the host based on potential
 // OS guess matches, or if none and the information is known without any guessing.
-func GetOperatingSystem(h *host.Host) (osName, osFamily string) {
+func GetOperatingSystem(h *pb.Host) (osName, osFamily string) {
 	// If we have the information without the guesses.
 	if h.OSFamily != "" {
 		osFamily = h.OSFamily
@@ -236,8 +236,8 @@ func GetOperatingSystem(h *host.Host) (osName, osFamily string) {
 		return
 	}
 
-	var strongest *host.OSMatch
-	var second *host.OSMatch
+	var strongest *pb.OSMatch
+	var second *pb.OSMatch
 
 	for _, m := range h.OS.Matches {
 		if strongest == nil {
@@ -268,7 +268,7 @@ func GetOperatingSystem(h *host.Host) (osName, osFamily string) {
 	return
 }
 
-func getProbableCPU(h *host.Host) string {
+func getProbableCPU(h *pb.Host) string {
 	if h.Arch != "" {
 		return h.Arch
 	}
@@ -313,7 +313,7 @@ func getProbableCPU(h *host.Host) string {
 }
 
 // Recursive function to print a ScriptORM object with nested structures
-func printExtraPorts(port *host.ExtraPort, indentLevel int) string {
+func printExtraPorts(port *pb.ExtraPort, indentLevel int) string {
 	buf := new(strings.Builder)
 	indent := strings.Repeat("  ", indentLevel)
 

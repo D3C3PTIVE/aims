@@ -21,13 +21,12 @@ import (
 	"fmt"
 
 	"github.com/d3c3ptive/aims/internal/util"
-	"github.com/d3c3ptive/aims/proto/scan"
-	scanpb "github.com/d3c3ptive/aims/proto/scan"
-	"github.com/d3c3ptive/aims/proto/scan/nmap"
+	scan "github.com/d3c3ptive/aims/scan/pb"
+	"github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
-// AreScansIdentical compares two scanpb.ScanORM objects to determine if they represent the same host.
-func AreScansIdentical(a, b *scanpb.RunORM) bool {
+// AreScansIdentical compares two scan.ScanORM objects to determine if they represent the same host.
+func AreScansIdentical(a, b *scan.RunORM) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -211,7 +210,7 @@ func compareScriptORMs(a, b []*nmap.ScriptORM) bool {
 }
 
 // compareFinishedORMs compares two FinishedORM objects for equality using relevant fields.
-func compareFinishedORMs(a, b *scanpb.FinishedORM) bool {
+func compareFinishedORMs(a, b *scan.FinishedORM) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

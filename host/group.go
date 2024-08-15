@@ -23,7 +23,7 @@ import (
 
 	"github.com/maxlandon/gondor/maltego"
 
-	"github.com/d3c3ptive/aims/proto/host"
+	host "github.com/d3c3ptive/aims/host/pb"
 )
 
 // Group - A computer group of users.

@@ -22,7 +22,7 @@ deps:
 
 .PHONY: gen
 gen:
-	cd proto
+	# cd proto
 
 	# Generate the code for Protobuf definitions
 	buf generate --template buf.gen-gorm.yaml

@@ -28,7 +28,7 @@ import (
 	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/d3c3ptive/aims/proto/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // PrivateKey - The Private part of a cryptographic key. All private key types

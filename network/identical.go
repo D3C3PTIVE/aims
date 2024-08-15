@@ -20,7 +20,7 @@ package network
 
 import (
 	"github.com/d3c3ptive/aims/internal/util"
-	pb "github.com/d3c3ptive/aims/proto/network"
+	"github.com/d3c3ptive/aims/network/pb"
 )
 
 // AreServicesIdentical compares two ServiceORM objects for similarity based on weighted fields.

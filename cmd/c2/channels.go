@@ -27,11 +27,11 @@ import (
 	"github.com/spf13/cobra"
 
 	core "github.com/d3c3ptive/aims/c2"
+	"github.com/d3c3ptive/aims/c2/pb"
+	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
-	pb "github.com/d3c3ptive/aims/proto/c2"
-	"github.com/d3c3ptive/aims/proto/rpc/c2"
 	"github.com/d3c3ptive/aims/scan"
 )
 

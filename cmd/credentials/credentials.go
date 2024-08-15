@@ -26,8 +26,8 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
-	"github.com/d3c3ptive/aims/proto/credential"
-	"github.com/d3c3ptive/aims/proto/rpc/credentials"
+	credential "github.com/d3c3ptive/aims/credential/pb"
+	"github.com/d3c3ptive/aims/credential/pb/rpc"
 )
 
 // Commands returns a command tree to manage and cmd/display credentials.
@@ -44,7 +44,7 @@ func Commands(con *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
-			req := &credentials.ReadCredentialRequest{
+			req := &rpc.ReadCredentialRequest{
 				Credential: &credential.Core{},
 			}
 
