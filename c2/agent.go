@@ -107,13 +107,23 @@ func Completions() []display.Options {
 // Fields maps field names to their value generators.
 var DisplayFields = map[string]func(h *c2.Agent) string{
 	"ID": func(h *c2.Agent) string {
-		// id := display.FormatSmallID(h.Id)
-		// Either up and within checkin, green
+		id := display.FormatSmallID(h.Id)
+		// If dead and behind checkin, red
+		if h.IsDead {
+			return color.HiRedString(id)
+		}
 
-		// Or dead and behind checkin, red
+		activeC2 := ActiveChannelFor(h)
 
-		// Or not dead but behind checkin. yellow
-		return ""
+		// If up and behind checkin more than jitter (if beacon) consider it dead.
+		next := time.Unix(activeC2.NextCheckin, 0)
+		jitter := time.Duration(activeC2.Jitter)
+
+		if activeC2.NextCheckin != 0 && next.Add(jitter).Before(time.Now()) {
+			return color.HiYellowString(id)
+		}
+
+		return color.HiGreenString(id)
 	},
 	"Tool": func(h *c2.Agent) string {
 		return h.Tool
@@ -192,8 +202,32 @@ var DisplayFields = map[string]func(h *c2.Agent) string{
 		}
 		return fmt.Sprintf("%s/%d", tasks, h.TasksCount)
 	},
+	// Returns a newline-separated list of all RUNNING channels.
+	"Channels": func(h *c2.Agent) string {
+		channels := ""
+		for _, channel := range h.Channels {
+			if !channel.Running {
+				continue
+			}
+
+			direction := ""
+			if strings.ToLower(channel.Direction) == "Bind" {
+				direction = "==>"
+			} else {
+				direction = "<=="
+			}
+			channels += fmt.Sprintf("[%s] %s %s %s\n",
+				channel.Protocol,
+				channel.LocalAddress,
+				direction,
+				channel.RemoteAddress,
+			)
+		}
+		return strings.TrimSuffix(channels, "\n")
+	},
 	"Channel Details": func(h *c2.Agent) string {
-		return ""
+		table := display.Table(h.Channels, DisplayFieldsChannel, DisplayHeadersChannel()...)
+		return table.Render()
 	},
 	// Route should return the pivots graph for this agent.
 	"Route": func(h *c2.Agent) string {

@@ -44,16 +44,13 @@ func DisplayHeadersChannel() (headers []display.Options) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
 
-	add("#", 1) // Order
+	add("#", 1)
 	add("ID", 1)
-	add("Address", 1)
-
-	add("Status", 2)
-
-	add("Arch", 3)
-	add("MAC", 3)
-	add("Purpose", 3)
-	add("Proxy", 5)
+	add("Connection", 1)
+	add("Try/Fails", 1)
+	add("Beaconing", 1)
+	add("Last/Next Check-in", 1)
+	add("Proxy", 1)
 
 	return headers
 }
@@ -110,9 +107,9 @@ var DisplayFieldsChannel = map[string]func(h *c2.Channel) string{
 	"Protocol": func(h *c2.Channel) string {
 		return h.Protocol
 	},
-	"Remote Address ": func(h *c2.Channel) string {
+	"Connection": func(h *c2.Channel) string {
 		direction := ""
-		if h.Direction == "Bind" {
+		if strings.ToLower(h.Direction) == "Bind" {
 			direction = "==>"
 		} else {
 			direction = "<=="
@@ -146,6 +143,17 @@ var DisplayFieldsChannel = map[string]func(h *c2.Channel) string{
 	"Proxy": func(h *c2.Channel) string {
 		return h.ProxyURL
 	},
+}
+
+// ActiveChannelFor returns the first active channel for a given agent.
+func ActiveChannelFor(agent *c2.Agent) *c2.Channel {
+	for _, channel := range agent.Channels {
+		if channel.Running {
+			return channel
+		}
+	}
+
+	return nil
 }
 
 // FilterIdentical returns a list of.Channels from which have been removed all.Channels that are
