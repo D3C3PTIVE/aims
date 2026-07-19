@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 
 	nmapscan "github.com/d3c3ptive/nmap"
@@ -55,9 +56,9 @@ func runCommand(con *client.Client) *cobra.Command {
 // and Scans.Create folds it into the DB (dedup/merge). Typed flags + completions are the
 // documented follow-on (SCAN.md §D); this is the passthrough-first cut.
 func runNmapCommand(con *client.Client) *cobra.Command {
-	return &cobra.Command{
-		Use:                "nmap [nmap args...]",
-		Short:              "Run an nmap scan (raw passthrough) and store the results",
+	cmd := &cobra.Command{
+		Use:   "nmap [nmap args...]",
+		Short: "Run an nmap scan (raw passthrough) and store the results",
 		Long: "Run an nmap scan by passing arguments straight through to the nmap binary.\n" +
 			"Everything after `nmap` is forwarded verbatim, so no `--` separator is needed:\n\n" +
 			"    aims scan run nmap -sT -sV -p1-1000 scanme.nmap.org\n\n" +
@@ -67,6 +68,12 @@ func runNmapCommand(con *client.Client) *cobra.Command {
 			return runNmap(command, con, args)
 		},
 	}
+
+	// DisableFlagParsing turns off cobra's own completion, so all completion is dispatched
+	// through one positional-tail callback (targets from the DB, NSE names after --script).
+	carapace.Gen(cmd).PositionalAnyCompletion(completeRunNmap(con))
+
+	return cmd
 }
 
 func runNmap(command *cobra.Command, con *client.Client, args []string) error {
