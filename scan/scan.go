@@ -401,14 +401,14 @@ func formatTasks(h *scan.Run) string {
 
 	if len(running) > 0 {
 		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
-		table.SetTitle("\n" + color.HiYellowString("Running tasks"))
+		table.SetTitle("%s", "\n"+color.HiYellowString("Running tasks"))
 		tasksDisplay += table.Render()
 	}
 
 	if len(done) > 0 {
 
 		table := display.Table(done, tasksFields, tasksHeaders()...)
-		table.SetTitle("\n" + color.HiYellowString("Done tasks"))
+		table.SetTitle("%s", "\n"+color.HiYellowString("Done tasks"))
 		tasksDisplay += table.Render()
 	}
 

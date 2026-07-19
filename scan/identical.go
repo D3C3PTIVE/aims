@@ -20,50 +20,95 @@ package scan
 import (
 	"fmt"
 
-	"github.com/d3c3ptive/aims/internal/util"
 	scan "github.com/d3c3ptive/aims/scan/pb"
-	"github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
-// AreScansIdentical compares two scan.ScanORM objects to determine if they represent the same host.
+// AreScansIdentical reports whether two runs are the same scan re-imported.
+//
+// RawXML is the scanner's verbatim output and thus a definitive fingerprint: when both runs carry
+// it, equality alone decides identity and inequality alone rules it out. Only when a run lacks raw
+// output does it fall back to a field-weighted comparison over the runs' identity fields.
+//
+// The fallback counts *evidence*, not absence: a field contributes only when both runs actually
+// populated it — agreement is positive evidence, a disagreement on a populated field is
+// disqualifying, and a field left empty on either side is neutral. Two dataless runs therefore score
+// no evidence and are not "identical" (the earlier scoring treated two empty task-lists as a match,
+// which made every empty run collide with every other). Runs match when they agree on every
+// populated identity field, disagree on none, and carry at least one field of real evidence.
 func AreScansIdentical(a, b *scan.RunORM) bool {
 	if a == nil || b == nil {
 		return false
 	}
 
-	weightBy := util.WeightedCompare
-	intCmp := util.CompareInts
-	strCmp := util.CompareStrings
+	// RawXML is decisive when both runs have it.
+	if a.RawXML != "" && b.RawXML != "" {
+		return a.RawXML == b.RawXML
+	}
 
-	// Define weights for each field
-	totalScore := 0
-	maxScore := 20 * 10 // Example max score (20 fields with a weight of 10 each)
+	var ev evidence
+	ev.str(a.Args, b.Args)
+	ev.str(a.Scanner, b.Scanner)
+	ev.str(a.StartStr, b.StartStr)
+	ev.str(a.SessionId, b.SessionId)
+	ev.str(a.ProfileName, b.ProfileName)
+	ev.str(a.Version, b.Version)
+	ev.num(a.Start, b.Start)
 
-	// Unambiguous fields
-	totalScore += weightBy(strCmp(a.RawXML, b.RawXML), 200)
-	totalScore += weightBy(compareScanTasks(a.Begin, b.Begin), 50)
-	totalScore += weightBy(compareScanTasks(a.End, b.End), 50)
-	totalScore += weightBy(compareTaskProgresses(a.Progress, b.Progress), 50) // List of TaskProgressORM
+	// Task lists count only when at least one run has them — a shared empty list is not evidence.
+	ev.list(len(a.Begin) > 0 || len(b.Begin) > 0, compareScanTasks(a.Begin, b.Begin))
+	ev.list(len(a.End) > 0 || len(b.End) > 0, compareScanTasks(a.End, b.End))
+	ev.list(len(a.Progress) > 0 || len(b.Progress) > 0, compareTaskProgresses(a.Progress, b.Progress))
 
-	// Strong fields
-	totalScore += weightBy(intCmp(a.Start, b.Start), 20)
-	totalScore += weightBy(strCmp(a.StartStr, b.StartStr), 20)
-	totalScore += weightBy(strCmp(a.SessionId, b.SessionId), 20)
+	return ev.identical()
+}
 
-	// Weak fields
-	totalScore += weightBy(strCmp(a.Args, b.Args), 5)
-	totalScore += weightBy(strCmp(a.Scanner, b.Scanner), 5)
-	totalScore += weightBy(strCmp(a.ProfileName, b.ProfileName), 5)
-	// totalScore += weightedCompare(a.PostScripts, b.PostScripts, 10) // List of ScriptORM
-	// totalScore += weightedCompare(a.PreScripts, b.PreScripts, 10)   // List of ScriptORM
-	// totalScore += weightedCompare(a.Results, b.Results, 10)         // List of ResultORM
-	// totalScore += weightedCompare(a.Targets, b.Targets, 10)         // List of TargetORM
-	// totalScore += weightedCompare(a.Stats, b.Stats, 10)             // StatsORM
-	// totalScore += weightedCompare(a.Verbose, b.Verbose, 10)         // VerboseORM
-	totalScore += weightBy(strCmp(a.Version, b.Version), 5)
+// evidence accumulates a same-scan judgement over the runs' identity fields: how many populated
+// fields agreed, and whether any populated field disagreed. Only fields both runs set are weighed;
+// shared absence is never counted.
+type evidence struct {
+	agree    int
+	conflict bool
+}
 
-	// Return true if total score meets or exceeds the threshold
-	return totalScore >= (maxScore / 2)
+// str weighs a string field: neutral if either side is empty, otherwise agreement or conflict.
+func (e *evidence) str(a, b string) {
+	if a == "" || b == "" {
+		return
+	}
+	if a == b {
+		e.agree++
+	} else {
+		e.conflict = true
+	}
+}
+
+// num weighs an integer field, treating zero as "unset" (hence neutral).
+func (e *evidence) num(a, b int64) {
+	if a == 0 || b == 0 {
+		return
+	}
+	if a == b {
+		e.agree++
+	} else {
+		e.conflict = true
+	}
+}
+
+// list weighs a collection comparison, but only when the collection is actually present on a run.
+func (e *evidence) list(present, equal bool) {
+	if !present {
+		return
+	}
+	if equal {
+		e.agree++
+	} else {
+		e.conflict = true
+	}
+}
+
+// identical holds when the runs agreed on at least one populated field and disagreed on none.
+func (e *evidence) identical() bool {
+	return e.agree > 0 && !e.conflict
 }
 
 // compareScanTasks compares two lists of ScanTaskORM objects for equality without considering IDs.
@@ -188,38 +233,4 @@ func compareScanTaskORMs(a, b *scan.ScanTaskORM) bool {
 // generateTaskKey generates a unique key for a ScanTaskORM based on non-ID fields.
 func generateTaskKey(task *scan.ScanTaskORM) string {
 	return fmt.Sprintf("%s|%s|%d", task.ExtraInfo, task.Task, task.Time)
-}
-
-// compareScriptORMs compares two slices of ScriptORM for equality.
-func compareScriptORMs(a, b []*nmap.ScriptORM) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	seen := make(map[string]bool)
-	for _, scriptA := range a {
-		for _, scriptB := range b {
-			if scriptA.Id == scriptB.Id && scriptA.Name == scriptB.Name && scriptA.Output == scriptB.Output {
-				seen[scriptA.Id] = true
-				break
-			}
-		}
-	}
-
-	return len(seen) == len(a)
-}
-
-// compareFinishedORMs compares two FinishedORM objects for equality using relevant fields.
-func compareFinishedORMs(a, b *scan.FinishedORM) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-
-	return a.Elapsed == b.Elapsed &&
-		a.ErrorMsg == b.ErrorMsg &&
-		a.Exit == b.Exit &&
-		a.StatsId == b.StatsId &&
-		a.Summary == b.Summary &&
-		a.Time == b.Time &&
-		a.TimeStr == b.TimeStr
 }

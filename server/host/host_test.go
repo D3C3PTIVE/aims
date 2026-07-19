@@ -31,6 +31,7 @@ import (
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	network "github.com/d3c3ptive/aims/network/pb"
+	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 // newTestServer returns a host server backed by a fresh, migrated sqlite database (pure-Go
@@ -158,6 +159,97 @@ func TestUpsertMergesAndIsIdempotent(t *testing.T) {
 	}
 	if got := len(h.GetAddresses()); got != 1 {
 		t.Errorf("merged host has %d addresses, want 1 (10.0.0.1 not duplicated)", got)
+	}
+}
+
+// TestUpsertEnrichesExistingPort is the deep in-place enrichment contract: a second observation of
+// a port the host already has must have its new evidence — a filled Service.Product, a new NSE
+// script, a new state reason — written back onto the *existing* port row, not dropped and not
+// duplicated onto a second port.
+func TestUpsertEnrichesExistingPort(t *testing.T) {
+	s, ctx := newTestServer(t)
+
+	// Seed: 10.0.0.1 with port 80 open, service named http but no product yet, no scripts.
+	seed := &pb.Host{
+		Addresses: []*network.Address{{Addr: "10.0.0.1"}},
+		Ports: []*pb.Port{{
+			Number:   80,
+			Protocol: "tcp",
+			State:    &pb.State{State: "open"},
+			Service:  &network.Service{Name: "http"},
+		}},
+	}
+	if _, err := s.Create(ctx, &hosts.CreateHostRequest{Hosts: []*pb.Host{seed}}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// Enrich the SAME port 80: fill the service product, add an NSE script and a state reason.
+	enriched := &pb.Host{
+		Addresses: []*network.Address{{Addr: "10.0.0.1"}},
+		Ports: []*pb.Port{{
+			Number:   80,
+			Protocol: "tcp",
+			Service:  &network.Service{Name: "http", Product: "nginx", LowVersion: "1.25"},
+			Scripts:  []*nmap.Script{{Name: "http-title", Output: "Welcome"}},
+			Reasons:  []*pb.Reason{{Reason: "syn-ack"}},
+		}},
+	}
+	if _, err := s.Upsert(ctx, &hosts.UpsertHostRequest{Hosts: []*pb.Host{enriched}}); err != nil {
+		t.Fatalf("enriching upsert: %v", err)
+	}
+
+	// Read back with the port subtree fully preloaded.
+	res, err := s.Read(ctx, &hosts.ReadHostRequest{
+		Host:    &pb.Host{},
+		Filters: &hosts.HostFilters{Ports: true, Scripts: true},
+	})
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	all := res.GetHosts()
+	if len(all) != 1 {
+		t.Fatalf("db holds %d hosts, want 1", len(all))
+	}
+	if got := len(all[0].GetPorts()); got != 1 {
+		t.Fatalf("host has %d ports, want 1 (enriched in place, not duplicated)", got)
+	}
+
+	p := all[0].GetPorts()[0]
+	if got := p.GetService().GetProduct(); got != "nginx" {
+		t.Errorf("Service.Product = %q, want %q (fill-merged onto the existing service)", got, "nginx")
+	}
+	if got := p.GetService().GetLowVersion(); got != "1.25" {
+		t.Errorf("Service.LowVersion = %q, want %q (fill-merged onto the existing service)", got, "1.25")
+	}
+	if got := len(p.GetScripts()); got != 1 || (len(p.GetScripts()) == 1 && p.GetScripts()[0].GetName() != "http-title") {
+		t.Errorf("port scripts = %v, want one http-title script (appended to the existing port)", p.GetScripts())
+	}
+	if got := len(p.GetReasons()); got != 1 {
+		t.Errorf("port has %d reasons, want 1 (syn-ack appended to the existing port)", got)
+	}
+	// The original state observation is preserved (fill-only, never clobbered).
+	if got := p.GetState().GetState(); got != "open" {
+		t.Errorf("port state = %q, want %q (first observation preserved)", got, "open")
+	}
+
+	// Idempotent: re-applying the identical enrichment must not duplicate the script or reason
+	// (only ID-less rows are appended, and these now carry DB IDs).
+	if _, err := s.Upsert(ctx, &hosts.UpsertHostRequest{Hosts: []*pb.Host{enriched}}); err != nil {
+		t.Fatalf("re-enriching upsert: %v", err)
+	}
+	res, err = s.Read(ctx, &hosts.ReadHostRequest{
+		Host:    &pb.Host{},
+		Filters: &hosts.HostFilters{Ports: true, Scripts: true},
+	})
+	if err != nil {
+		t.Fatalf("read after re-enrich: %v", err)
+	}
+	p = res.GetHosts()[0].GetPorts()[0]
+	if got := len(p.GetScripts()); got != 1 {
+		t.Errorf("after idempotent re-enrich: %d scripts, want 1 (not duplicated)", got)
+	}
+	if got := len(p.GetReasons()); got != 1 {
+		t.Errorf("after idempotent re-enrich: %d reasons, want 1 (not duplicated)", got)
 	}
 }
 
