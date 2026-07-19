@@ -219,6 +219,53 @@ fork's imports to the new module path + `pb` layout — mechanical, not a rewrit
 to `Scans.Create`. Ship **passthrough first** (`aims scan run nmap -- -sS -p1-1000 target`
 → `WithCustomArguments`), map typed cobra flags → the `WithXxx` options later per tool.
 
+### CLI surface — raw passthrough, plus completion only where AIMS adds value
+
+Two settled decisions for how `aims scan run <tool>` presents on the command line.
+
+**1. Full passthrough with no `--` — use `DisableFlagParsing`.** cobra only forces the `--`
+because its default parser errors on unknown flags like `-sS`. Set `DisableFlagParsing = true`
+on the `run <tool>` command and every token after the tool name lands in `args` verbatim,
+straight into `WithCustomArguments(args...)`:
+
+```go
+runNmap := &cobra.Command{
+    Use:                "nmap [nmap args...]",
+    DisableFlagParsing: true,           // `aims scan run nmap -sS -p1-1000 target` — no `--`
+    RunE: func(cmd *cobra.Command, args []string) error { /* args → WithCustomArguments */ },
+}
+```
+
+(Trade-off: cobra also stops handling `-h/--help` for that command, so either let `nmap --help`
+fall through to nmap or check for it manually. For a passthrough wrapper, falling through is
+usually what you want.) The alternative — keep parsing but `Flags().SetInterspersed(false)` +
+`FParseErrWhitelist{UnknownFlags:true}` — is only worth it if you need a few *aims-owned* flags
+interleaved with native ones; it's fiddlier (a value-taking flag like `-p 80` can confuse which
+token is the positional). Force `-oX -` under the hood regardless of user args so we always get
+parseable XML back — a correctness lever, independent of parsing mode.
+
+**2. Don't mirror nmap's flags — type + complete only where AIMS knows more than nmap does.**
+Mirroring hundreds of nmap flags is a maintenance treadmill the shell bridges already do (badly).
+Spend completion effort *only* where the AIMS DB is the unique source:
+
+- **Targets — the killer completion.** AIMS *has* the host store, so `run nmap <TAB>` should
+  offer known hosts/addresses/hostnames. Reuse the existing live-DB carapace callback
+  `host.CompleteByHostnameOrIP` (`cmd/hosts`) verbatim. No shell completer can ever do this — it
+  is the demo that sells the subcommand.
+- **NSE scripts.** Parse nmap's `scripts/script.db` (its shipped index: `Entry{filename,
+  categories}`) for described, category-grouped `--script` completion; that same dir-read is the
+  front half of the NSE→DB mapping below. Fallback: `nmap --script-help all`; resolve the dir via
+  `nmap --datadir` / the standard `/usr/share/nmap/scripts` locations.
+- **Everything else → raw passthrough**, optionally with carapace-bridge (`bridge.ActionZsh
+  ("nmap")` / `ActionBash`) as a catch-all for the flag long-tail. Treat the bridge as a
+  *fallback*, not the plan: it depends on the operator's shell having `_nmap` loaded, spawns a
+  shell per completion, loses descriptions, and — decisively — cannot complete DB targets.
+
+Because `DisableFlagParsing` turns off cobra's own completion, the way to get *both* raw
+passthrough and rich completion is one carapace `ActionCallback` on the positional tail that
+dispatches on `c.Args`: after `--script` serve NSE scripts, in target position serve DB targets,
+else defer to the bridge. carapace hands you the full arg vector, so we own the logic.
+
 ### zgrab2 — NOT wired; the value is the NSE mapping (ingest only)
 
 `~/code/github.com/maxlandon/zgrab2` is still `module github.com/zmap/zgrab2` (no AIMS
