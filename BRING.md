@@ -95,6 +95,16 @@ render a well-delimited, replaceable segment**, not assume a fixed prompt string
 > TODO: paste the operator's sec-prompt (PS1 + oh-my-posh) here when provided, and template the
 > agent segment to slot into it.
 
+> **Idea — traceroute at a glance in the prompt.** When a traceroute to the agent's host is
+> available, fold a *brief, immediately useful* summary of it into the prompt segment — e.g. the
+> hop distance and the last hop before the target (`[web01 ·3h·gw 10.0.0.1]`), so the operator sees
+> the network path/position of the box they're driving without running a command. Data path: the
+> agent's host is `Agent.Host` (belongs_to `host.Host`), whose `Trace`/`Hops` and `Distance` carry
+> the route; the agent lookup would need to preload `Agent.Host.Trace.Hops` (and `Distance`) and
+> the payload would carry a pre-rendered compact route string (reusing the existing host route/hop
+> rendering in `host.DisplayFields`). Show nothing when no trace exists. Keep it terse — a prompt is
+> not a table. Ties into the display snapshot (point-in-time, display-only), not dispatch.
+
 ### Alias root — `aimsi`, not shadowed root commands
 
 Do **not** define top-level aliases like `ls`/`ps` that shadow real commands. Instead define one
