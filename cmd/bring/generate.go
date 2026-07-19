@@ -19,27 +19,81 @@ package bring
 */
 
 import (
-	"errors"
+	"context"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 
+	pb "github.com/d3c3ptive/aims/c2/pb"
+	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client"
+	aims "github.com/d3c3ptive/aims/cmd"
 )
 
-// runBring is the ONLY part of the bring feature that couples to the c2 agents data model, and it
-// is deliberately left unwired for now: the agents command/model is still in flux (a parallel work
-// item). When it settles, this becomes:
-//
-//	res, err := con.Agents.Read(command.Context(), &c2.ReadAgentRequest{
-//	    Agent:   &pb.Agent{Id: args[0]},
-//	    Filters: &c2.AgentFilters{MaxResults: 1},
-//	})
-//	// ...map the returned *pb.Agent into an agentContext, then:
-//	return writePayload(command.OutOrStdout(), ctx)
-//
-// Everything else — the payload format (payload.go), sanitization (shell.SanitizeDisplay) and the
-// whole `aims init` shell integration — is already complete and tested, so this is the last mile.
+// agentReader is the narrow slice of c2.AgentsClient that bring needs. Depending on this one method
+// keeps bring's coupling to the (still-evolving) agents API minimal and makes the lookup
+// unit-testable with a mock. c2.AgentsClient satisfies it.
+type agentReader interface {
+	Read(ctx context.Context, in *c2.ReadAgentRequest, opts ...grpc.CallOption) (*c2.ReadAgentResponse, error)
+}
+
+// runBring reads the requested agent from the server and writes its context payload to stdout for
+// the trusted bring() shell function to consume.
 func runBring(con *client.Client, command *cobra.Command, args []string) error {
-	return errors.New("bring: agent lookup is not wired to the c2 data model yet; " +
-		"`aims init <shell>` (the shell integration) is ready to use — see BRING.md")
+	return emitAgentPayload(command.Context(), con.Agents, args[0], command.OutOrStdout())
+}
+
+// emitAgentPayload looks up the agent by id and writes its payload. This is the single place bring
+// touches the agents data model, so it can evolve with that API without disturbing the rest of the
+// feature.
+//
+// Today it matches by exact id: the client exposes only Read (which resolves one exact record
+// server-side), so a shortened id cannot be prefix-resolved here yet. Once the agents service adds
+// a List RPC, switch the request to List and short-id prefix matching works via
+// findAgentByIDPrefix below (already the resolver, and already tested) — a one-line change.
+func emitAgentPayload(ctx context.Context, agents agentReader, id string, w io.Writer) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("bring: no agent id given")
+	}
+
+	res, err := agents.Read(ctx, &c2.ReadAgentRequest{
+		Agent:   &pb.Agent{Id: id},
+		Filters: &c2.AgentFilters{MaxResults: 1},
+	})
+	if err != nil {
+		return aims.CheckError(err)
+	}
+
+	match := findAgentByIDPrefix(res.GetAgents(), id)
+	if match == nil {
+		return fmt.Errorf("bring: no agent found with id %q (use the full id — short-id resolution is pending the agents List RPC)", id)
+	}
+	return writePayload(w, agentContextFromPB(match))
+}
+
+// findAgentByIDPrefix returns the first agent whose id starts with the given (already-trimmed)
+// value, mirroring how `agents show` resolves a possibly-shortened id. It is the resolver bring
+// will reuse unchanged once a List RPC returns the full agent set.
+func findAgentByIDPrefix(agents []*pb.Agent, id string) *pb.Agent {
+	for _, a := range agents {
+		if a != nil && strings.HasPrefix(a.GetId(), id) {
+			return a
+		}
+	}
+	return nil
+}
+
+// agentContextFromPB maps a c2 agent into the flat context bring carries into the shell.
+// writePayload sanitizes the values; only the id is authoritative (used for dispatch).
+func agentContextFromPB(a *pb.Agent) agentContext {
+	return agentContext{
+		id:   a.GetId(),
+		name: a.GetName(),
+		tool: a.GetTool(),
+		cwd:  a.GetWorkingDirectory(),
+	}
 }

@@ -329,10 +329,17 @@ The injection surface is one table row.
     test that sources the output, applies a context, and — with `setopt prompt_subst` +
     `${(%)PROMPT}` forcing a hostile prompt render — shows command-substitution and break-out
     agent names stay inert (no file created), plus payload/escaper/sanitize unit tests.
-  - **Pending:** the agent lookup (`runBring` in `generate.go`) is deliberately stubbed — it is the
-    *only* coupling to the c2 agents data model, which is still in flux. Last mile: `Agents.Read` →
-    map `pb.Agent` → `agentContext` → `writePayload`. Also: `aims init bash|fish` (error cleanly
-    today) and live id completion (deferred with `runBring`).
+  - **Agent lookup wired (exact id).** `runBring` (`generate.go`) reads the agent via a narrow
+    `agentReader` interface (`con.Agents.Read`), maps `pb.Agent` → `agentContext` → `writePayload`.
+    Tested with generated mock agents (full-id resolve, `pb.Agent` mapping, hostile-name
+    sanitization, not-found, read-error propagation).
+  - **Known agents-API limit:** the client exposes only `Read` (one exact record server-side; no
+    `List`), so lookup is **exact-id only** — a shortened id cannot be prefix-resolved yet. The
+    prefix resolver (`findAgentByIDPrefix`) is already written and tested; when the agents service
+    gains a `List` RPC, switch the request to it and short ids resolve with no other change.
+  - **Pending:** `aims init bash|fish` (error cleanly today); live id completion (kept deferred —
+    the small-id candidates it inserts can't be resolved until prefix/List lands, so enabling it now
+    would only mislead).
 - **P2 — nesting/stack.** Parallel-array stack, depth in the prompt, `leave` pops.
 - **P3 — scoped completions.** carapace completions for `aimsi` (remote files/procs/tasks),
   live-queried by `AIMS_AGENT_ID`; consider tag-groups per the CLAUDE.md completion preference.
