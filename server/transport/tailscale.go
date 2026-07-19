@@ -1,3 +1,5 @@
+//go:build tailscale
+
 package transport
 
 /*
@@ -32,13 +34,13 @@ import (
 )
 
 // tailscaleTeamserver is unexported since we only need it as
-// a reeflective/team/server.Listener interface implementation.
+// a reeflective/team/server.Handler interface implementation.
 type tailscaleTeamserver struct {
 	*teamserver
 }
 
 // newTeamserverTailScale returns an AIMS teamserver backend using Tailscale.
-func newTeamserverTailScale(opts ...grpc.ServerOption) server.Listener {
+func newTeamserverTailScale(opts ...grpc.ServerOption) server.Handler {
 	core := newTeamserverTLS(opts...)
 
 	return &tailscaleTeamserver{core}
@@ -71,11 +73,11 @@ func (ts *tailscaleTeamserver) Listen(addr string) (ln net.Listener, err error) 
 		}
 	}
 
-	tsNetLog.Infof("Starting gRPC/tsnet listener on %s:%s", hostname, port)
+	tsNetLog.Info("Starting gRPC/tsnet listener", "hostname", hostname, "port", port)
 
 	authKey := os.Getenv("TS_AUTHKEY")
 	if authKey == "" {
-		tsNetLog.Errorf("TS_AUTHKEY not set")
+		tsNetLog.Error("TS_AUTHKEY not set")
 		return nil, fmt.Errorf("TS_AUTHKEY not set")
 	}
 
@@ -87,8 +89,12 @@ func (ts *tailscaleTeamserver) Listen(addr string) (ln net.Listener, err error) 
 	tsNetServer := &tsnet.Server{
 		Hostname: hostname,
 		Dir:      tsnetDir,
-		Logf:     tsNetLog.Debugf,
-		AuthKey:  authKey,
+		// tsnet expects a printf-style Logf; bridge it onto the slog logger
+		// (team's NamedLogger now returns *slog.Logger, which has no Debugf).
+		Logf: func(format string, args ...any) {
+			tsNetLog.Debug(fmt.Sprintf(format, args...))
+		},
+		AuthKey: authKey,
 	}
 
 	ln, err = tsNetServer.Listen("tcp", fmt.Sprintf(":%s", port))

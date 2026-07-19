@@ -58,8 +58,8 @@ func NewTeamserver() (team *server.Server, clientOpts []grpc.DialOption, err err
 	serverOpts = append(serverOpts,
 		// Network options/stacks
 		server.WithDefaultPort(31448),
-		server.WithListener(tlsListener),       // Our legacy TCP+MTLS gRPC stack.
-		server.WithListener(tailscaleListener), // And our new Tailscale variant.
+		server.WithHandler(tlsListener),       // Our legacy TCP+MTLS gRPC stack.
+		server.WithHandler(tailscaleListener), // And our new Tailscale variant (nil = skipped).
 	)
 
 	// Create the application teamserver.
@@ -107,19 +107,19 @@ func (h *teamserver) serve(ln net.Listener) {
 	// Teamserver/AIMS services
 	aims.New(grpcServer, aims.WithDatabase(h.Database()))
 
-	rpcLog.Infof("Serving gRPC teamserver on %s", ln.Addr())
+	rpcLog.Info("Serving gRPC teamserver", "address", ln.Addr().String())
 
 	// Start serving the listener
 	go func() {
 		panicked := true
 		defer func() {
 			if panicked {
-				rpcLog.Errorf("stacktrace from panic: %s", string(debug.Stack()))
+				rpcLog.Error("stacktrace from panic", "stack", string(debug.Stack()))
 			}
 		}()
 
 		if err := grpcServer.Serve(ln); err != nil {
-			rpcLog.Errorf("gRPC server exited with error: %v", err)
+			rpcLog.Error("gRPC server exited with error", "error", err)
 		} else {
 			panicked = false
 		}

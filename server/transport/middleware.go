@@ -21,13 +21,13 @@ package transport
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
+	"time"
 
 	"github.com/reeflective/team/server"
 
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	grpc_tags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -73,26 +73,16 @@ func logMiddlewareOptions(s *server.Server) ([]grpc.ServerOption, error) {
 		grpc_tags.StreamServerInterceptor(grpc_tags.WithFieldExtractor(grpc_tags.CodeGenRequestFieldExtractor)),
 	)
 
-	// Logging interceptors
-	logrusEntry := s.NamedLogger("transport", "grpc")
-	logrusOpts := []grpc_logrus.Option{
-		grpc_logrus.WithLevels(codeToLevel),
-	}
-
-	grpc_logrus.ReplaceGrpcLogger(logrusEntry)
+	// Logging interceptors: log the outcome of every call at a level derived
+	// from its gRPC code, optionally dumping payloads when configured.
+	logger := s.NamedLogger("transport", "grpc")
 
 	requestOpts = append(requestOpts,
-		grpc_logrus.UnaryServerInterceptor(logrusEntry, logrusOpts...),
-		grpc_logrus.PayloadUnaryServerInterceptor(logrusEntry, func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
-			return cfg.Log.GRPCUnaryPayloads
-		}),
+		logUnaryServerInterceptor(logger, cfg.Log.GRPCUnaryPayloads),
 	)
 
 	streamOpts = append(streamOpts,
-		grpc_logrus.StreamServerInterceptor(logrusEntry, logrusOpts...),
-		grpc_logrus.PayloadStreamServerInterceptor(logrusEntry, func(ctx context.Context, fullMethodName string, servingObject interface{}) bool {
-			return cfg.Log.GRPCStreamPayloads
-		}),
+		logStreamServerInterceptor(logger, cfg.Log.GRPCStreamPayloads),
 	)
 
 	return []grpc.ServerOption{
@@ -168,24 +158,24 @@ func serverAuthFunc(ctx context.Context) (context.Context, error) {
 // tokenAuthFunc uses the core reeflective/team/server to authenticate user requests.
 func (ts *teamserver) tokenAuthFunc(ctx context.Context) (context.Context, error) {
 	log := ts.NamedLogger("transport", "grpc")
-	log.Debugf("Auth interceptor checking user token ...")
+	log.Debug("Auth interceptor checking user token")
 
 	rawToken, err := grpc_auth.AuthFromMD(ctx, "Bearer")
 	if err != nil {
-		log.Errorf("Authentication failure: %s", err)
+		log.Error("Authentication failure", "error", err)
 		return nil, status.Error(codes.Unauthenticated, "Authentication failure")
 	}
 
 	// Let our core teamserver driver authenticate the user.
 	// The teamserver has its credentials, tokens and everything in database.
-	user, authorized, err := ts.UserAuthenticate(rawToken)
-	if err != nil || !authorized || user == "" {
-		log.Errorf("Authentication failure: %s", err)
+	user, err := ts.Authenticate(rawToken)
+	if err != nil || user == nil || user.Name == "" {
+		log.Error("Authentication failure", "error", err)
 		return nil, status.Error(codes.Unauthenticated, "Authentication failure")
 	}
 
 	newCtx := context.WithValue(ctx, Transport, "mtls")
-	newCtx = context.WithValue(newCtx, Operator, user)
+	newCtx = context.WithValue(newCtx, Operator, user.Name)
 
 	return newCtx, nil
 }
@@ -199,17 +189,17 @@ type auditUnaryLogMsg struct {
 	User     string `json:"user"`
 }
 
-func auditLogUnaryServerInterceptor(ts *server.Server, auditLog *logrus.Logger) grpc.UnaryServerInterceptor {
+func auditLogUnaryServerInterceptor(ts *server.Server, auditLog *slog.Logger) grpc.UnaryServerInterceptor {
 	log := ts.NamedLogger("grpc", "audit")
 
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (_ interface{}, err error) {
 		rawRequest, err := json.Marshal(req)
 		if err != nil {
-			log.Errorf("Failed to serialize %s", err)
+			log.Error("Failed to serialize request", "error", err)
 			return
 		}
 
-		log.Debugf("Raw request: %s", string(rawRequest))
+		log.Debug("Raw request", "payload", string(rawRequest))
 
 		p, _ := peer.FromContext(ctx)
 
@@ -244,44 +234,78 @@ func getUser(client *peer.Peer) string {
 	return ""
 }
 
-// Maps a grpc response code to a logging level
-func codeToLevel(code codes.Code) logrus.Level {
+// logUnaryServerInterceptor logs the outcome of each unary call at a level
+// derived from its gRPC status code, optionally dumping the request payload.
+func logUnaryServerInterceptor(logger *slog.Logger, logPayloads bool) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if logPayloads {
+			if raw, err := json.Marshal(req); err == nil {
+				logger.Debug("Received payload", "method", info.FullMethod, "payload", string(raw))
+			}
+		}
+
+		start := time.Now()
+		resp, err := handler(ctx, req)
+
+		logger.Log(ctx, codeToLevel(status.Code(err)), "unary call",
+			"method", info.FullMethod, "duration", time.Since(start).String(), "error", err)
+
+		return resp, err
+	}
+}
+
+// logStreamServerInterceptor logs the outcome of each streaming call at a level
+// derived from its gRPC status code.
+func logStreamServerInterceptor(logger *slog.Logger, logPayloads bool) grpc.StreamServerInterceptor {
+	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
+		err := handler(srv, stream)
+
+		logger.Log(stream.Context(), codeToLevel(status.Code(err)), "stream call",
+			"method", info.FullMethod, "duration", time.Since(start).String(), "error", err)
+
+		return err
+	}
+}
+
+// codeToLevel maps a grpc response code to an slog logging level.
+func codeToLevel(code codes.Code) slog.Level {
 	switch code {
 	case codes.OK:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.Canceled:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.Unknown:
-		return logrus.ErrorLevel
+		return slog.LevelError
 	case codes.InvalidArgument:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.DeadlineExceeded:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.NotFound:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.AlreadyExists:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.PermissionDenied:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.Unauthenticated:
-		return logrus.InfoLevel
+		return slog.LevelInfo
 	case codes.ResourceExhausted:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.FailedPrecondition:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.Aborted:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.OutOfRange:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.Unimplemented:
-		return logrus.ErrorLevel
+		return slog.LevelError
 	case codes.Internal:
-		return logrus.ErrorLevel
+		return slog.LevelError
 	case codes.Unavailable:
-		return logrus.WarnLevel
+		return slog.LevelWarn
 	case codes.DataLoss:
-		return logrus.ErrorLevel
+		return slog.LevelError
 	default:
-		return logrus.ErrorLevel
+		return slog.LevelError
 	}
 }

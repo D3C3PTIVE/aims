@@ -68,7 +68,7 @@ func New(opts ...grpc.DialOption) (con *Client, err error) {
 	// Create a new reeflective/team.Client, which is in charge of selecting,
 	// and connecting with, remote Sliver teamserver configurations, etc.
 	// Includes client backend logging, authentication, core teamclient methods...
-	con.Teamclient, err = client.New("aims", con, clientOpts...)
+	con.Teamclient, err = client.New("aims", clientOpts...)
 	if err != nil {
 		return nil, err
 	}

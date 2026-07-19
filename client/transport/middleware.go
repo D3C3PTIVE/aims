@@ -24,9 +24,7 @@ import (
 	"errors"
 	"time"
 
-	grpc_logrus "github.com/grpc-ecosystem/go-grpc-middleware/logging/logrus"
 	"github.com/reeflective/team/client"
-	"github.com/reeflective/team/example/transports/grpc/common"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -55,29 +53,23 @@ type TokenAuth string
 // This function uses the core teamclient loggers to log the gRPC stack/requests events.
 // The Teamclient of this package uses them by default.
 func LogMiddlewareOptions(cli *client.Client) []grpc.DialOption {
-	logrusEntry := cli.NamedLogger("transport", "grpc")
-	logrusOpts := []grpc_logrus.Option{
-		grpc_logrus.WithLevels(common.CodeToLevel),
-	}
-
-	grpc_logrus.ReplaceGrpcLogger(logrusEntry)
+	logger := cli.NamedLogger("transport", "grpc")
 
 	// Intercepting client requests.
 	requestIntercept := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		rawRequest, err := json.Marshal(req)
 		if err != nil {
-			logrusEntry.Errorf("Failed to serialize: %s", err)
+			logger.Error("Failed to serialize request", "error", err)
 			return invoker(ctx, method, req, reply, cc, opts...)
 		}
 
-		logrusEntry.Debugf("Raw request: %s", string(rawRequest))
+		logger.Debug("Raw request", "request", string(rawRequest))
 
 		return invoker(ctx, method, req, reply, cc, opts...)
 	}
 
 	options := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithUnaryInterceptor(grpc_logrus.UnaryClientInterceptor(logrusEntry, logrusOpts...)),
 		grpc.WithUnaryInterceptor(requestIntercept),
 	}
 
