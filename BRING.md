@@ -177,6 +177,126 @@ aims bring <agent-id>       # the generator: emits the context snippet for one a
 Generator internals: connect → `c2.Agents.Read(id)` → render shell-escaped, dialect-aware
 template → stdout.
 
+## Architecture
+
+> Added 2026-07-19 after grounding in the real command tree, the c2 client, and the carapace
+> wiring. This is the concrete build design; the sketch above is the intent.
+
+### The trust split (the crux)
+
+The whole design turns on **keeping attacker-controlled agent data out of executed shell code**.
+So the machinery is split into two halves with opposite trust levels:
+
+- **Fixed, trusted code** — the `bring()` / `leave()` shell functions, the prompt logic, the
+  `aimsi` alias, the completion registration. This is *our* code, contains **no agent data**,
+  is audited once, and is emitted by `aims shell-init <shell>` (sourced once from the rc file,
+  exactly like `carapace <bin> <shell>`).
+- **Per-agent payload** — emitted by `aims bring <id>`. This contains agent-derived values
+  (name, id, tool, cwd) and is the *only* injection surface. It is therefore reduced to
+  **escaped scalar values, never logic**.
+
+> **Prime rule: `aims bring` emits data, `shell-init` emits code.** Agent strings cross into the
+> shell as the *contents of variables the trusted functions assign*, never as snippet text that
+> is sourced/eval'd. An implant named `web01"; rm -rf ~; #` becomes the literal value of
+> `$AIMS_AGENT_NAME`; it is never in a position to execute.
+
+Concretely, `bring()` **captures** `aims bring` output and parses it as data (a `read` loop over
+a strict `KEY<TAB>VALUE`-per-line, or NUL-delimited, format), rather than `source`-ing it. That
+way no agent byte is ever evaluated as code. (The simpler `source <(aims bring …)` form is the
+fallback if a shell can't do the capture cleanly — but then every emitted value MUST go through
+the quoter below, and that path is strictly weaker. Prefer capture-as-data.)
+
+### Package layout
+
+```
+cmd/bring/
+  bring.go        # Commands(con) *cobra.Command → the `bring` and `shell-init` subcommands
+  generate.go     # generator: connect → Agents.Read(id) → assemble Context → emit payload
+  context.go      # type Context: the flat, escaped view of a pb.Agent (id, name, tool, cwd…)
+  shell/
+    shell.go      # type Shell (bash|zsh|fish); Detect(); Quote(Shell, string) string  ← audited
+    init.go       # renders the fixed bring()/leave()/alias/completion machinery per shell
+    payload.go    # renders the per-agent data payload per shell
+    templates/    # embed.FS: bash.tmpl, zsh.tmpl, fish.tmpl for both init and payload
+```
+
+`shell.Quote` is the single escaping boundary — a ~15-line, unit-tested, per-dialect quoter
+(POSIX single-quote wrapping with `'\''` splicing for bash/zsh; fish's own rules). Every agent
+value routed through `text/template` uses a FuncMap that forces it through `Quote`; templates
+can't interpolate a raw value even by mistake.
+
+### Command wiring
+
+`bring` is an operator/shell meta-command, not a database or c2-object command. Bind it
+top-level in `cmd/aims/commands.go` (its own group, e.g. `"shell"`, or a bare `AddCommand`),
+alongside where the teamserver commands attach:
+
+- `aims bring <agent-id>` — **connects** (needs the server to read the agent). Give it the
+  `ConnectRun` pre-run (via `bindRunners`, same as every leaf that talks to the server) and an
+  arg completion that reuses `c2.CompleteByID`.
+- `aims shell-init <bash|zsh|fish>` — **offline**; pure code generation, no server. Must be
+  excluded from the connect pre-run (like the teamclient `import` commands in
+  `client.isOffline`).
+
+### Generator flow (`aims bring <id>`)
+
+1. `client.ConnectComplete`-style connect (reuse the existing connect path).
+2. `con.Agents.Read(ctx, &c2.ReadAgentRequest{Agent: &pb.Agent{Id: id}, Filters: &c2.AgentFilters{MaxResults: 1}})`.
+3. Build `Context` from the returned `pb.Agent` (`Id`, `Name`, `Tool`, `WorkingDirectory`, …).
+4. Render the per-shell **payload** template (escaped scalars only) to stdout.
+   The trusted `bring()` function (from `shell-init`) consumes it and applies stack + prompt.
+
+### Shell state model (nesting)
+
+Managed entirely by the trusted functions — no agent data in the logic:
+
+- A parallel-array stack in the shell: `_aims_stack_id`, `_aims_stack_name`, `_aims_stack_prompt`
+  (the saved prior `PROMPT`). `AIMS_CONTEXT_DEPTH` = stack length.
+- `bring()`: push current (id/name/prompt) → set new `AIMS_AGENT_ID/NAME` from the parsed
+  payload → rebuild the prompt segment from `$AIMS_AGENT_NAME` + depth → (re)assert the `aimsi`
+  alias + completions.
+- `leave()`: pop → restore the saved prompt/vars → at depth 0, unset vars, `unalias aimsi`,
+  deregister completions.
+- Prompt segment reads `$AIMS_AGENT_NAME` as a value (safe); note zsh may interpret `%` in the
+  name as a prompt escape — cosmetic only, sanitize `%`→`%%` in the zsh payload if it bothers.
+
+### What stays fixed vs. per-agent (injection surface at a glance)
+
+| Piece | Emitted by | Contains agent data? |
+|-------|-----------|:---:|
+| `bring()` / `leave()` functions | `shell-init` | no |
+| prompt-segment logic | `shell-init` | no (reads a var) |
+| `aimsi` alias | `shell-init` | no (uses `$AIMS_AGENT_ID`) |
+| completion registration | `shell-init` | no |
+| `AIMS_AGENT_ID/NAME`, tool, cwd values | `bring` | **yes → escaped scalars only** |
+
+The injection surface is one table row.
+
+### Phased implementation plan
+
+- **P0 — skeleton.** `cmd/bring` package, `shell.Shell`/`Detect`/`Quote` with unit tests
+  (adversarial names: quotes, `;`, `$()`, backticks, newlines), templates embedded, both
+  subcommands wired into the tree (return stubs). Builds with `GOWORK=off go build ./...`.
+- **P1 — single agent, no stack.** `aims bring` connects + reads + emits the payload; `shell-init`
+  emits `bring()`/`leave()` for one active agent (env + prompt segment + `aimsi`), no nesting.
+  End-to-end: `source <(aims shell-init zsh)` then `bring <id>` changes the prompt and `aimsi
+  exec id` tasks the agent; `leave` restores. Manual + a Go test asserting emitted payload is
+  correctly escaped for adversarial names.
+- **P2 — nesting/stack.** Parallel-array stack, depth in the prompt, `leave` pops.
+- **P3 — scoped completions.** carapace completions for `aimsi` (remote files/procs/tasks),
+  live-queried by `AIMS_AGENT_ID`; consider tag-groups per the CLAUDE.md completion preference.
+- **P4 — `Agent.Tool` dispatch.** `aimsi` (or a sibling) resolves the agent's `Tool` and hands
+  off to the native controller with the agent pre-selected.
+
+### Recommended resolutions to the open decisions
+
+1. **Where `bring`/`leave` live** → the trust-split above: `aims shell-init` emits the trusted
+   functions; `aims bring` emits only escaped data. This is the load-bearing decision and it
+   settles the rest.
+2. **Alias root** → `aimsi` for P1; trivially renamed since it's defined in one fixed template.
+3. **AIMS-subcommand vs `Agent.Tool` shim** → start `aimsi = aims c2 task <id>` (P1), add
+   Tool-dispatch in P4. Staged, not either/or.
+
 ## Open decisions
 
 1. **Alias root name** — `aimsi`, or another short token. It becomes muscle memory, so worth
