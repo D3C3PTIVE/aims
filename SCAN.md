@@ -61,12 +61,41 @@ production-grade; the verbs (ingest-anything, target, stream, fold, diff) are th
 |---|---|---|
 | Parse nmap XML → `Run` | ✅ works | `scan/nmap/nmap.go` `FromXML` = one `xml.Unmarshal`; the `xml:"…"` tags do all the mapping |
 | Store / read a Run (with host dedup) | ✅ works | `server/scan/scan.go` Create/Read; `db.FilterNew` + `AreScansIdentical` / `AreHostsIdentical` |
-| **Fold results/hosts into a Run** | ✅ built (non-destructive merge) | `scan/fold.go` — `Run.AddResult` (feeder) + `Run.AddHosts` (bulk/import) → scoped keyed match + field-class merge; tested in `scan/fold_test.go`. Wired into `server/scan` Create (replaced the host-dropping `FilterNew`). Cross-run/DB host-row unification still latent. |
+| **Fold results/hosts into a Run** (in-memory) | ✅ built + tested | `scan/fold.go` — `Run.AddResult` (feeder) + `Run.AddHosts` (bulk/import) → scoped keyed match + field-class merge; `scan/fold_test.go`. |
+| **Fold *against persisted rows*** (DB-level idempotence) | ❌ **not realized — see gap below** | the fold is in-memory only; the persist paths still duplicate against existing DB rows |
 | **Targets-from-DB (hosts-as-targets)** | ❌ absent | `scan.Target` type exists; no bridge from stored `Host`/`Service` → `Target` |
 | **Any scanner other than nmap** | ❌ absent | no adapter interface; `Result.Data`'s *"add a branch case in the Go scan package"* (`result.proto:31-36`) was never written |
 | Live / streaming scans | ❌ absent | `Scans` service is unary-only; yet `scan.go` `getTasks` already splits *running* vs *done* tasks for display |
 | Run-to-run diff | ❌ absent | but Runs are timestamped + hosts dedup, so it is a query away |
 | Upsert / Delete / List RPC | ❌ stub | `server/scan/scan.go:149-159` |
+
+### Known gap — the fold is in-memory only; persistence still duplicates
+
+`scan/fold.go` merges an **in-memory batch** and is wired into `server/scan.Create` for
+*intra-run* dedup (a single scan's own duplicate host observations collapse). It does **not**
+yet dedup against rows already in the DB, so the *"additive & idempotent against persisted
+rows"* prime directive (DEDUP.md §0) is **not realized**. Current behaviour:
+
+- **scan import:** re-importing the *identical* nmap XML is idempotent — `AreScansIdentical`
+  is `RawXML`-keyed and drops the whole duplicate run. But an *overlapping* re-scan of known
+  hosts creates a new Run with **new host rows** (duplication). Asymmetry-correct (no data
+  loss), but not host-level idempotent yet.
+- **`server/host.Create` (separate, pre-existing, worse):** `dbHosts` is an empty literal that
+  is **never `.Find`-ed** (`server/host/host.go:82`), so `FilterNew` compares each incoming
+  host against nothing → every re-import duplicates. And `FilterNew` is drop-not-merge
+  (DEDUP.md §1). This path does **not** use the fold at all, and `Upsert` is still stubbed
+  (`server/host/host.go:124`) — no non-destructive entry point exists there.
+
+**To realize it (the DB-level fold, both server paths):** load candidate rows by natural key
+(the same `sameHost`/`sharesAddress` address/hostname keys) → `ToPB` → `AddHosts` the incoming
+batch into that set → `ToORM` → `Save` with `FullSaveAssociations`, replacing `FilterNew`+`Create`.
+
+**Architecture decision:** promote the host-tree merge (`mergeHostInto`/`sameHost`/`samePort`,
+currently in `scan/fold.go`) to a canonical host-domain primitive — `host.MergeHost` /
+`host.SameHost` / `host.SamePort` in `host/merge.go` — so the scan-import path and the host
+gRPC CRUD share **one** merge (avoids `server/host` importing `scan`). The Run-level fold stays
+in `scan`. Server persistence wiring is the CRUD-agent's lane; the merge primitive is the
+scan-agent's to provide.
 
 ### The object catalog (for reference)
 
