@@ -164,7 +164,7 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 
 | Service | Read/List | Create | Update/Delete/Upsert | Notes |
 |---------|:---------:|:------:|:--------------------:|-------|
-| host (Hosts) | ✅ | ✅ (dedup) | ❌ stub | reference impl. Fold merge (`scan/fold.go`) built but **not yet wired into `server/host`** — Create still match-then-drops |
+| host (Hosts) | ✅ | ✅ (dedup) | Upsert ✅ | reference impl. Ingest now wired to the shared `host.MergeHost`/`SameHost` fold: Create is additive+idempotent (skip-if-identical), Upsert merges by field-class. Delete still stubbed; deep in-place child enrichment is a follow-up (`server/host/host.go`) |
 | host Users | ❌ | ❌ | ❌ | all methods stubbed |
 | network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; server CRUD still stubbed |
 | credential Credentials | ✅ | ✅ | Upsert ✅ | full slice done (merge, display, completions, CLI) |
@@ -193,11 +193,12 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 
 ### Suggested re-entry points if resuming
 
-1. **Wire the `scan/fold.go` merge into `server/host` ingest** — `Create` still uses the
-   destructive `db.FilterNew` match-then-drop (and never loads existing DB rows to compare
-   against). This is the live top priority; see STATE.md / DEDUP.md §1.
+1. **Deep in-place child enrichment for `server/host` ingest** — Upsert now merges via the shared
+   fold and persists *new* children additively (`server/host/host.go`, tested in `host_test.go`),
+   but enrichment landing *inside* an already-persisted child (a new NSE script on a known port,
+   a filled `Service.Product`) is not yet written back. See the `saveMergedHost` note + [[aims-gorm-pb-orm-fk-loss]].
 2. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services (credential
-   Upsert is the worked example to copy; host is the reference for the rest).
+   Upsert and now host Upsert are the worked examples; host Delete is still a stub).
 3. Untangle the **c2 file/type naming** before building further on agents/channels.
 4. Complete the **Users/Logins** services (both fully stubbed).
 5. Decide the **`maxlandon/gondor`** dependency's fate as part of the org migration.

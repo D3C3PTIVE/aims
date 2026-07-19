@@ -351,3 +351,21 @@ into a `host.MergeHost` that walks Host→Ports→Scripts; (3) wire `MergeHost` 
 `server/host` Create/Upsert replacing the match-then-drop `FilterNew`; (4) the §9 tests. The
 `services` **display** slice (grouped list, real column weights, redesigned `info`) is
 independent of all that and can land first without touching the ingest path.
+
+### F. Status: `server/host` ingest is wired (2026-07-19, CRUD/CLI agent)
+
+Steps (1)–(3) above are done. `host.MergeHost`/`host.SameHost` (`host/merge.go`) are the shared
+keyed merge; `server/host` `Create` is now additive+idempotent (loads existing, skips
+`SameHost` matches — no more empty-`dbHosts` bug, no match-then-drop) and `Upsert` is the
+non-destructive merge path. Covered by `server/host/host_test.go` (sqlite): Create/Upsert
+idempotence, top-level enrichment (new port/hostname on a known host, address not duplicated),
+and unmatched-host insert — the §9 idempotence/union/no-false-merge invariants in miniature.
+
+**One caveat, deferred:** persistence is currently additive at the *top level only* — newly-merged
+whole children (a new port/hostname/address) are appended, but enrichment landing *inside* an
+already-persisted child (a new script on an existing port, a filled `Service.Product`) is not yet
+written back. Root cause: the merge works on `*pb.Host`, and the PB↔ORM roundtrip drops the
+ORM-only child foreign keys (`HostId`, `PortId`, …), so a blanket `FullSaveAssociations` Save
+re-inserts every existing child as a duplicate. `saveMergedHost` sidesteps that by appending only
+ID-less (new) children. A full fix wants either an ORM-level merge (as credential's `MergeCore`
+does — no roundtrip) or FK reconstruction before save. See [[aims-gorm-pb-orm-fk-loss]].
