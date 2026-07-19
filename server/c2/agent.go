@@ -18,7 +18,7 @@ type server struct {
 }
 
 func New(db *gorm.DB) *server {
-	return &server{db: db}
+	return &server{db: db, UnimplementedAgentsServer: &c2.UnimplementedAgentsServer{}}
 }
 
 func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.CreateAgentResponse, error) {
@@ -114,6 +114,11 @@ func Preloads(database *gorm.DB, filters *c2.AgentFilters) *gorm.DB {
 
 	filts := map[string]bool{
 		"Channels": true,
+		// Nested associations bring's prompt route summary reads: the agent's host, its
+		// traceroute hops and its hop distance. clause.Associations only preloads the agent's
+		// top-level relations (Host included), so the Host.* chain must be named explicitly.
+		"Host.Trace.Hops": true,
+		"Host.Distance":   true,
 	}
 
 	preloaded := database.Preload(clause.Associations)

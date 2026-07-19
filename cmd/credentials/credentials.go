@@ -35,6 +35,7 @@ import (
 	cred "github.com/d3c3ptive/aims/credential"
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	"github.com/d3c3ptive/aims/credential/pb/rpc"
+	provenance "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // Commands returns a command tree to manage and display credentials.
@@ -63,7 +64,7 @@ func importCredentials(con *client.Client) func(cmd *cobra.Command, arg string, 
 	return func(cmd *cobra.Command, arg string, data []byte) error {
 		creds, err := export.ImportJSON[*credential.Core](data, arg)
 		if err != nil {
-			return fmt.Errorf("JSON: %s", err)
+			return fmt.Errorf("JSON: %w", err)
 		}
 		if len(creds) == 0 {
 			return nil
@@ -158,7 +159,7 @@ func addCommand(con *client.Client) *cobra.Command {
 		Use:   "add",
 		Short: "Add (or enrich) a credential in the database",
 		RunE: func(command *cobra.Command, args []string) error {
-			core := &credential.Core{Origin: &credential.Origin{Type: credential.OriginType_Manual}}
+			core := &credential.Core{Sources: []*provenance.Source{{Type: provenance.SourceType_Manual}}}
 
 			if username != "" {
 				core.Public = &credential.Public{Type: credential.PublicType_Username, Username: username}

@@ -23,30 +23,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// FilterNew accepts to objects of the same type and compares it with a user-provided equality tester.
-func FilterNew[object any](newTypes, existingTypes []object, cmp func(a, b object) bool) (filtered []object) {
-    if cmp == nil {
-        return newTypes
-    }
-
-	for _, newHost := range newTypes {
-		isIdentical := false
-		for _, existingHost := range existingTypes {
-			if cmp(newHost, existingHost) {
-				isIdentical = true
-				break
-			}
-		}
-
-		// If no identical host was found in the existing hosts, add the new host to the filtered list
-		if !isIdentical {
-			filtered = append(filtered, newHost)
-		}
-	}
-
-	return filtered
-}
-
 // Preload loads a given database with preload hosts association clauses before querying.
 func Preload(database *gorm.DB, filts map[string]bool) *gorm.DB {
 	preloaded := database.Preload(clause.Associations)

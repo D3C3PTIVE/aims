@@ -34,11 +34,11 @@ import (
 // path — the scan-import fold (scan.Run.AddHosts / AddResult) and the host/scan gRPC
 // CRUD servers — so identity and merge semantics never diverge between them.
 //
-// It is the value-typed (`*pb.Host`) counterpart to AreHostsIdentical (which scores
-// `*pb.HostORM`), and it follows the contract in DEDUP.md:
+// It is the value-typed (`*pb.Host`) identity+merge primitive, and it follows the
+// contract in DEDUP.md:
 //
 //   - match ≠ merge: a matched record is merged field-by-field, never discarded
-//     whole (contrast db.FilterNew's match-then-drop) — DEDUP.md §1.
+//     whole (a match-then-drop filter would lose data) — DEDUP.md §1.
 //   - keyed-first, always scoped: a port is only matched within its matched host,
 //     a script within its matched port — DEDUP.md §2/§3.
 //   - the no-false-merge asymmetry: when identity is uncertain we split (keep both)
@@ -51,7 +51,7 @@ import (
 // writes (idempotent re-import issues zero updates).
 
 //
-// Identity — keyed, PB-level (mirrors the strong keys of AreHostsIdentical) --------
+// Identity — keyed, PB-level --------
 //
 
 // SameHost reports whether two in-memory hosts denote the same machine, using natural

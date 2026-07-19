@@ -104,12 +104,12 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 	scanCmd.AddCommand(showCmd)
 
 	showComps := carapace.Gen(showCmd)
-	showComps.PositionalAnyCompletion(CompleteByID(con))
+	showComps.PositionalAnyCompletion(CompleteChannelByID(con))
 
 	return scanCmd
 }
 
-// CompleteByID returns hosts completions with their smallened IDs as keys.
+// CompleteChannelByID returns channel completions with their smallened IDs as keys.
 func CompleteChannelByID(client *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
@@ -129,6 +129,6 @@ func CompleteChannelByID(client *client.Client) carapace.Action {
 
 		results := display.Completions(res.Channels, core.DisplayFieldsChannel, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("agents ")
+		return carapace.ActionValuesDescribed(results...).Tag("channels ")
 	})
 }

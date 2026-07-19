@@ -91,15 +91,16 @@ gondor/maltego/entity.go: undefined: getNamePlural
 | credential **Credentials** | ✅ | ❌ stub | ❌ stub | |
 | credential **Logins** | ❌ | ❌ | ❌ | all methods stubbed |
 | scan **Scans** | ✅ | ✅ | ❌ stub | |
-| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | file/type swap, see below |
+| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | type-name asymmetry, see below |
 
 ## Known rough edges / gotchas
 
 - **gondor Maltego dep is broken** — see Build status. Root blocker.
-- **c2 file↔content swap:** `server/c2/channel.go` implements the **Agent** server
-  (`type server`, `CreateAgentRequest`); `server/c2/agent.go` implements the **Channel**
-  server (`type channelServer`, `CreateChannelRequest`). Filenames are inverted vs contents;
-  their `Unimplemented` messages are mislabeled too.
+- **c2 server type-name asymmetry (minor):** filenames match contents — `agent.go` is the
+  **Agents** server (`type server`, `CreateAgentRequest`), `channel.go` the **Channels** server
+  (`type channelServer`, `CreateChannelRequest`). Only wart: the Agents type is the generic
+  `server` vs the specific `channelServer`; an optional `server`→`agentServer` rename squares it.
+  (The old "file↔content swap" gotcha was stale and has been removed.)
 - **Empty CLI handlers:** several command `RunE`s just `return nil` (e.g. `hosts add`,
   `hosts rm`) — command tree/completions exist but the actions are no-ops.
 - **Debug leftovers in display path:** `println(c.Type)` in `host/host.go` (`Purpose`);

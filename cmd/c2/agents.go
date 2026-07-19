@@ -21,7 +21,6 @@ package c2
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/carapace-sh/carapace"
@@ -139,11 +138,7 @@ func CompleteByID(client *client.Client) carapace.Action {
 	})
 }
 
-const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
-
-var re = regexp.MustCompile(ansi)
-
-// Strip removes all ANSI escaped color sequences in a string.
+// strip removes all ANSI escaped color sequences in a string.
 func strip(str string) string {
-	return re.ReplaceAllString(str, "")
+	return display.StripANSI(str)
 }

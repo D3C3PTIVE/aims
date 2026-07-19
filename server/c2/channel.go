@@ -17,7 +17,7 @@ type channelServer struct {
 }
 
 func NewChannelServer(db *gorm.DB) *channelServer {
-	return &channelServer{db: db}
+	return &channelServer{db: db, UnimplementedChannelsServer: &c2.UnimplementedChannelsServer{}}
 }
 
 func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest) (*c2.CreateChannelResponse, error) {
@@ -28,11 +28,10 @@ func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest
 		channelsORM = append(channelsORM, horm)
 	}
 
-	// Filter channels to add according to AIMS criteria first.
-	dbChans := []*pb.ChannelORM{}
-	s.db.Find(&dbChans)
-
-	err := s.db.Create(&dbChans).Error
+	// TODO: filter channels to add according to AIMS criteria first (dedup on
+	// insert, as the host/credential ingest paths do). For now this is a plain
+	// additive insert of the incoming channels.
+	err := s.db.Create(&channelsORM).Error
 
 	var chanspb []*pb.Channel
 	for _, horm := range channelsORM {

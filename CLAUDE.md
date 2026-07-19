@@ -177,14 +177,17 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 | credential Credentials | ✅ | ✅ | Upsert ✅ | full slice done (merge, display, completions, CLI) |
 | credential Logins | ❌ | ❌ | ❌ | all methods stubbed |
 | scan Scans | ✅ | ✅ | ❌ stub | in-memory ingest fold done; CLI slice in progress |
-| c2 Agents/Channels | ✅ | ✅ | ❌ stub | see swap quirk below |
+| c2 Agents/Channels | ✅ | ✅ | ❌ stub | see type-name note below |
 
 ### Known rough edges / gotchas
 
-- **c2 file↔content swap:** `server/c2/channel.go` actually implements the **Agent** server
-  (`type server`, `CreateAgentRequest`); `server/c2/agent.go` implements the **Channel**
-  server (`type channelServer`, `CreateChannelRequest`). The filenames are inverted vs. their
-  contents — confusing but functional. Their `Unimplemented` messages are likewise mislabeled.
+- **c2 server type-name asymmetry (minor):** filenames now match contents —
+  `server/c2/agent.go` implements the **Agents** server (`type server`, `UnimplementedAgentsServer`,
+  `CreateAgentRequest`) and `server/c2/channel.go` the **Channels** server (`type channelServer`,
+  `UnimplementedChannelsServer`, `CreateChannelRequest`). The only residual wart is that the Agents
+  type is the generic `server` while the Channels type is the specific `channelServer`; an optional
+  `server`→`agentServer` rename would make them symmetric. (The old "file↔content swap" gotcha was
+  stale and has been removed.)
 - **Empty CLI handlers:** some command `RunE`s are still stubs (e.g. `hosts add`, `hosts rm`);
   the command tree/completions exist but the action does nothing yet.
 - **`credential/core.go`** scope helpers (`WhereLoggedInHost`, `WhereOriginIs`, …) are empty
@@ -206,7 +209,8 @@ that is filling out domain by domain.** Read paths work broadly; mutation
    a filled `Service.Product`) is not yet written back. See the `saveMergedHost` note + [[aims-gorm-pb-orm-fk-loss]].
 2. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services (credential
    Upsert and now host Upsert are the worked examples; host Delete is still a stub).
-3. Untangle the **c2 file/type naming** before building further on agents/channels.
+3. Optionally rename the c2 Agents server `type server`→`agentServer` for symmetry with
+   `channelServer` (filenames already match contents; this is cosmetic, not a blocker).
 4. Complete the **Users/Logins** services (both fully stubbed).
 5. Decide the **`maxlandon/gondor`** dependency's fate as part of the org migration.
 
