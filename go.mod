@@ -24,6 +24,13 @@ require (
 )
 
 require (
+	github.com/iafan/cwalk v0.0.0-20210125030640-586a8832a711 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/muesli/termenv v0.11.0 // indirect
+	github.com/reeflective/flags v0.0.0-20220328141227-d494ab8b63e9 // indirect
+)
+
+require (
 	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/AlecAivazis/survey/v2 v2.3.7 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -78,6 +85,7 @@ require (
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/mattn/go-sqlite3 v1.14.17 // indirect
+	github.com/maxlandon/nmap v0.0.0-00010101000000-000000000000
 	github.com/mdlayher/genetlink v1.3.2 // indirect
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/sdnotify v1.0.0 // indirect
@@ -124,3 +132,5 @@ require (
 	lukechampine.com/adiantum v1.1.1 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
+
+replace github.com/maxlandon/nmap => ../nmap
