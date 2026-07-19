@@ -19,24 +19,20 @@ package bring
 */
 
 import (
-	"errors"
-
 	"github.com/rsteube/carapace"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
 	"github.com/d3c3ptive/aims/cmd/bring/shell"
-	"github.com/d3c3ptive/aims/cmd/c2"
 )
 
 // groupID places both commands under a dedicated "shell" help group.
 const groupID = "shell"
 
-// BringCommand returns the `aims bring <agent-id>` command. It emits a per-agent shell payload
-// (escaped data only) that the trusted bring() function — installed by ShellInitCommand — sources
-// to make the current shell "about" the given c2 agent: prompt segment, the aimsi alias root and
-// scoped completions. It reads the agent from the server, so it takes the connect pre-run that
-// bindRunners attaches to online leaf commands.
+// BringCommand returns the `aims bring <agent-id>` command. It reads the agent from the server and
+// writes a per-agent context payload — inert key<TAB>value data, display fields sanitized — that
+// the trusted bring() shell function (installed by `aims init`) consumes to make the current shell
+// "about" that c2 agent. It takes the connect pre-run bindRunners attaches to online leaves.
 func BringCommand(con *client.Client) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "bring <agent-id>",
@@ -44,34 +40,36 @@ func BringCommand(con *client.Client) *cobra.Command {
 		GroupID: groupID,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			return errors.New("bring: not implemented yet (P1)")
+			return runBring(con, command, args)
 		},
 	}
 
-	// The agent id argument completes against the live agents in the database, reusing the c2
-	// completion so the candidate list matches `aims agents show`.
-	carapace.Gen(cmd).PositionalCompletion(c2.CompleteByID(con))
+	// TODO: once the c2 agents API settles, complete the id against live agents (reuse the c2
+	// completion so candidates match `aims agents show`). Deferred with runBring — the only two
+	// spots that touch the agents data model.
+	carapace.Gen(cmd).PositionalCompletion(carapace.ActionMessage("agent id (live completion pending the c2 agents API)"))
 
 	return cmd
 }
 
-// ShellInitCommand returns the `aims shell-init <bash|zsh|fish>` command. It emits the fixed,
-// trusted shell integration — the bring()/leave() functions, the prompt logic, the aimsi alias
-// and completion registration — to be sourced once from the operator's shell rc. This half
-// carries no agent data. It needs no server connection: a benign PreRunE keeps bindRunners from
-// attaching the connect pre-run, so `aims shell-init` works fully offline.
-func ShellInitCommand(con *client.Client) *cobra.Command {
+// InitCommand returns the `aims init <bash|zsh|fish>` command. It emits the fixed, trusted shell
+// integration — the bring()/leave() functions and helpers — to be sourced once from the operator's
+// shell rc (`source <(aims init zsh)`). This half carries no agent data. It needs no server
+// connection: a benign PreRunE keeps bindRunners from attaching the connect pre-run, so it runs
+// fully offline.
+func InitCommand(con *client.Client) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "shell-init <bash|zsh|fish>",
+		Use:     "init <bash|zsh|fish>",
 		Short:   "Emit the shell integration for `bring` (source once in your shell rc)",
 		GroupID: groupID,
 		Args:    cobra.ExactArgs(1),
 		PreRunE: func(*cobra.Command, []string) error { return nil }, // offline: no server connection
 		RunE: func(command *cobra.Command, args []string) error {
-			if _, err := shell.Parse(args[0]); err != nil {
+			sh, err := shell.Parse(args[0])
+			if err != nil {
 				return err
 			}
-			return errors.New("shell-init: not implemented yet (P1)")
+			return shell.Init(command.OutOrStdout(), sh)
 		},
 	}
 

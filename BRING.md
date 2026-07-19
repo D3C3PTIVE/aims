@@ -315,14 +315,24 @@ The injection surface is one table row.
 
 ### Phased implementation plan
 
-- **P0 — skeleton.** `cmd/bring` package, `shell.Shell`/`Detect`/`Quote` with unit tests
-  (adversarial names: quotes, `;`, `$()`, backticks, newlines), templates embedded, both
-  subcommands wired into the tree (return stubs). Builds with `GOWORK=off go build ./...`.
-- **P1 — single agent, no stack.** `aims bring` connects + reads + emits the payload; `shell-init`
-  emits `bring()`/`leave()` for one active agent (env + prompt segment + `aimsi`), no nesting.
-  End-to-end: `source <(aims shell-init zsh)` then `bring <id>` changes the prompt and `aimsi
-  exec id` tasks the agent; `leave` restores. Manual + a Go test asserting emitted payload is
-  correctly escaped for adversarial names.
+- **P0 — skeleton. ✅ done.** `cmd/bring` package, `shell.Shell`/`Detect`/`Quote` with adversarial
+  unit tests (quotes, `;`, `$()`, backticks, newlines round-tripped through a real POSIX shell),
+  both subcommands (`bring`, `init`) wired into the tree.
+- **P1 — single agent, no stack. 🟡 zsh done; agent lookup + bash/fish pending.** The command is
+  renamed `aims init <shell>` (not `shell-init`). Mechanism decided: **capture-as-data, no eval** —
+  `aims bring` emits inert `key<TAB>value` lines with display fields sanitized
+  (`shell.SanitizeDisplay` strips `$` `` ` `` `%` and control bytes), and the generated `bring()`
+  parses them with `read -r` into variables, so agent bytes are never executed (honors the trust
+  split; `Quote` remains the boundary for any future code-embedding path).
+  - **Done:** `aims init zsh` emits the trusted `bring()`/`leave()`/prompt/`aimsi` integration;
+    `shell.SanitizeDisplay`; the `writePayload` wire contract. Proven by a real-`zsh` integration
+    test that sources the output, applies a context, and — with `setopt prompt_subst` +
+    `${(%)PROMPT}` forcing a hostile prompt render — shows command-substitution and break-out
+    agent names stay inert (no file created), plus payload/escaper/sanitize unit tests.
+  - **Pending:** the agent lookup (`runBring` in `generate.go`) is deliberately stubbed — it is the
+    *only* coupling to the c2 agents data model, which is still in flux. Last mile: `Agents.Read` →
+    map `pb.Agent` → `agentContext` → `writePayload`. Also: `aims init bash|fish` (error cleanly
+    today) and live id completion (deferred with `runBring`).
 - **P2 — nesting/stack.** Parallel-array stack, depth in the prompt, `leave` pops.
 - **P3 — scoped completions.** carapace completions for `aimsi` (remote files/procs/tasks),
   live-queried by `AIMS_AGENT_ID`; consider tag-groups per the CLAUDE.md completion preference.
