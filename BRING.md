@@ -74,6 +74,13 @@ Everything richer (Tool backend, WorkingDirectory, check-in state) is a **live q
 `AIMS_AGENT_ID`**, not an env var. This is the orthogonality: identity vs. display vs. stack are
 three separate axes; live agent state is a fourth thing that simply isn't env's job.
 
+> **Refinement from prior art (see below).** The operator's real `sliver_local.zsh` also exports a
+> couple of display props (user, hostname) captured at bring-time. That stays orthogonal as long
+> as they are understood as a **point-in-time display snapshot** (for the prompt/banner), never
+> authoritative and never used for dispatch. So the practical set is *identity + a small
+> presentation snapshot + stack*; dispatch keys strictly off `AIMS_AGENT_ID`. Optional add-ons:
+> `AIMS_AGENT_USER`, `AIMS_AGENT_HOST` — display-only, escaped like every other value.
+
 ### PROMPT segment
 
 Prepend the agent to the prompt like a venv's `(venv)` or kubectx — e.g. `[web01] ⇕2 $`. Two
@@ -176,6 +183,40 @@ aims bring <agent-id>       # the generator: emits the context snippet for one a
 
 Generator internals: connect → `c2.Agents.Read(id)` → render shell-escaped, dialect-aware
 template → stdout.
+
+## Prior art — the operator's `sliver_local.zsh`
+
+The design is validated by a real, in-use script (`sliver_local.zsh`) that does this for Sliver.
+What it confirms, and what AIMS improves:
+
+**Confirms the core.** It sources carapace the same way (`source <(sliver-client _carapace zsh)`),
+carries the active implant in an exported id (`SLIVER_SOURCE`, our `AIMS_AGENT_ID`), and defines a
+single agent-bound alias root `sli="sliver-client implant --use $SLIVER_SOURCE"` (our `aimsi`).
+It also `unalias`es conflicting local aliases (`ls`, `mkdir`, `history`) rather than shadowing
+root commands — exactly the single-root stance we chose.
+
+**Refines the env question.** In practice it exports more than an id: `SLIVER_NAME`, `SLIVER_TYPE`
+(beacon/session), `SLIVER_USER`, `SLIVER_HOSTNAME`, captured once at source-time. That is fine and
+stays orthogonal *if framed correctly*: env carries **identity (`AIMS_AGENT_ID`, for dispatch) plus
+a small point-in-time snapshot of display props** (name/user/host, for the prompt and banners) —
+the snapshot is display-only and explicitly not authoritative. Volatile state (cwd, last check-in)
+is still a live query, never env. So the earlier "identity + stack only" line relaxes to "identity
++ presentation snapshot + stack", with dispatch keyed strictly off the id.
+
+**AIMS's concrete advantage: structured, not scraped.** The script derives those props by
+grepping `sliver-client info` text output and stripping ANSI with `sed` (`sliver_prop`). AIMS emits
+the payload from the structured `pb.Agent` returned by `Agents.Read` — no text-scraping, no ANSI
+regex, no fragility. This is a real reason for `aims bring` to exist over a hand-rolled script.
+
+**Niceties beyond completions (future scope).** The script binds keys to fzf-driven history search
+scoped to the implant (`^S` all-users, `^[c` user, via zsh `zle` widgets that insert `sli …` into
+the buffer). That's a richer interactive layer than tab-completion — worth a later phase: `bring`
+could install shell keybindings for implant history/search, backed by the agent's `Tasks`. Noted
+for post-P3.
+
+**Gaps AIMS closes.** The script has **no teardown** (once sourced, the context is sticky) and **no
+nesting** (a single global `SLIVER_SOURCE`; re-sourcing overwrites). Our `leave` + stack model are
+the deliberate improvements — and `leave` should also restore any aliases the context `unalias`ed.
 
 ## Architecture
 

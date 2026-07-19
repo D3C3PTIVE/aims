@@ -23,6 +23,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	"github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/bring"
 	"github.com/d3c3ptive/aims/cmd/c2"
 	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/hosts"
@@ -42,6 +43,11 @@ func bindCommands(rootCmd *cobra.Command, con *client.Client) {
 	cmd.BindGroup("command & control", rootCmd, con,
 		c2.AgentsCommands,
 		c2.ChannelsCommands,
+	)
+
+	cmd.BindGroup("shell", rootCmd, con,
+		bring.BringCommand,
+		bring.ShellInitCommand,
 	)
 }
 // bindRunners is used to register specific pre/post-runs for a given command/tree.
