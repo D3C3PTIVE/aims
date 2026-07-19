@@ -44,7 +44,7 @@ func DisplayHeadersChannel() (headers []display.Options) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
 
-	add("#", 1)
+	add("Order", 1)
 	add("ID", 1)
 	add("Connection", 1)
 	add("Try/Fails", 1)
@@ -63,16 +63,18 @@ func DisplayDetailsChannel() []display.Options {
 	}
 
 	// Core
+	add("Order", 1)
 	add("ID", 1)
-	add("Status", 1)
+	add("Connection", 1)
+	add("Protocol", 1)
 
-	// Network
-	add("Remote Address", 3)
-	add("Hops", 3)
+	// Health & cadence
+	add("Try/Fails", 2)
+	add("Beaconing", 2)
+	add("Last/Next Check-in", 2)
 
-	// Tools
-	add("Comment", 4)
-	add("Host scripts", 5)
+	// Routing
+	add("Proxy", 3)
 
 	return headers
 }
@@ -86,8 +88,8 @@ func CompletionsChannel() []display.Options {
 	}
 
 	add("ID", 1)
-	add("Remote Address", 1)
-	add("State", 1)
+	add("Connection", 1)
+	add("Protocol", 1)
 
 	return headers
 }
@@ -109,7 +111,7 @@ var DisplayFieldsChannel = map[string]func(h *c2.Channel) string{
 	},
 	"Connection": func(h *c2.Channel) string {
 		direction := ""
-		if strings.ToLower(h.Direction) == "Bind" {
+		if strings.ToLower(h.Direction) == "bind" {
 			direction = "==>"
 		} else {
 			direction = "<=="
@@ -130,7 +132,7 @@ var DisplayFieldsChannel = map[string]func(h *c2.Channel) string{
 			return color.HiBlackString("none")
 		}
 
-		stats := fmt.Sprintf("%s (+/-%s)", h.Interval, time.Duration(h.Jitter).String())
+		stats := fmt.Sprintf("%s (+/-%s)", time.Duration(h.Interval).String(), time.Duration(h.Jitter).String())
 		return stats
 	},
 	"Last/Next Check-in": func(h *c2.Channel) string {

@@ -75,14 +75,9 @@ func displayGroup[T any](value T, headers []string, fields map[string]func(T) st
 	for _, head := range headers {
 		var val string
 		if fieldFunc, ok := fields[head]; ok {
-			if head == "Purpose" {
-			}
 			val = fieldFunc(value)
 		}
 
-		if head == "Purpose" {
-			fmt.Println(val)
-		}
 		if strings.TrimSpace(val) == "" {
 			continue
 		}

@@ -87,7 +87,7 @@ func CompleteByID(client *client.Client) carapace.Action {
 
 		results := display.Completions(res.Scans, scan.DisplayFields, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("scans").FilterArgs()
+		return carapace.ActionValuesDescribed(results...).Tag("scans").Filter(c.Args)
 	})
 }
 

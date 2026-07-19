@@ -38,22 +38,9 @@ var (
 
 func init() {
 	stdoutTerm = os.Stdout
-	stdoutTerm = os.Stderr
-	stderrTerm = os.Stdin
+	stdinTerm = os.Stdin
+	stderrTerm = os.Stderr
 }
-
-const (
-	// Table.
-	ColorIDYellow = "\033"
-	ColorIDRed    = "\033"
-	ColorIDOrange = "\033"
-
-	// Details.
-	detailsSection = "\033"
-
-	// All.
-	ColorHintsDim = "\033"
-)
 
 const (
 	Reset      = "\x1b[0m"
@@ -255,36 +242,30 @@ var (
 )
 
 func adaptTableSize(headers []string, rows [][]string, maxWeight int, options *opts) ([]string, [][]string) {
-	var maxed []string
-	maxRows := make([][]string, len(rows))
-
-	all := options.headers
 	allW := options.weights
 
-	weighted := 0
-	real := 0
+	// Keep every column whose weight is within the allowed maximum,
+	// regardless of the order in which headers were declared.
+	var keep []int
+	var maxed []string
 
-	for _, r := range headers {
-		real++
-		for _, head := range all {
-			if head == r {
-				break
-			}
-			weighted++
+	for i, header := range headers {
+		if allW[header] > maxWeight {
+			continue
 		}
-
-		if allW[r] > maxWeight {
-			break
-		}
+		keep = append(keep, i)
+		maxed = append(maxed, header)
 	}
 
-	headers = headers[:real]
-
-	for _, header := range headers {
-		maxed = append(maxed, header)
-		for i := range rows {
-			maxRows[i] = rows[i][:real]
+	maxRows := make([][]string, len(rows))
+	for i, row := range rows {
+		var kept []string
+		for _, idx := range keep {
+			if idx < len(row) {
+				kept = append(kept, row[idx])
+			}
 		}
+		maxRows[i] = kept
 	}
 
 	return maxed, maxRows

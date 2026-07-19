@@ -76,7 +76,7 @@ func DisplayDetails() []display.Options {
 
 	// Tasks
 	add("Last/Next Check-in", 2)
-	add("Tasks ", 2)
+	add("Tasks", 2)
 
 	// Network
 	add("Channel Details", 3)
@@ -135,7 +135,7 @@ var DisplayFields = map[string]func(h *c2.Agent) string{
 		if h.Host == nil {
 			return "No host"
 		}
-		return display.FormatSmallID(h.Id)
+		return display.FormatSmallID(h.Host.Id)
 	},
 	"User/Hostname": func(h *c2.Agent) string {
 		user, host := "", ""
@@ -143,7 +143,7 @@ var DisplayFields = map[string]func(h *c2.Agent) string{
 			user = h.User.Name
 		}
 		// Find first host name
-		if len(h.Host.Hostnames) > 0 {
+		if h.Host != nil && len(h.Host.Hostnames) > 0 {
 			for _, hostname := range h.Host.Hostnames {
 				if hostname.Name == "localhost" {
 					continue
@@ -169,13 +169,13 @@ var DisplayFields = map[string]func(h *c2.Agent) string{
 			return "No process information"
 		}
 
-		process := fmt.Sprintf("%d", h.Process.Id)
+		process := fmt.Sprintf("%d", h.Process.Pid)
 		if h.Process.Owner != nil && h.Process.Owner.Name != "" {
-			process += fmt.Sprintf("- %s -", h.Process.Owner)
+			process += fmt.Sprintf(" - %s -", h.Process.Owner.Name)
 		}
 
 		if h.Process.Ppid != 0 {
-			process += color.HiBlackString(fmt.Sprintf("(P )", h.Process.Ppid))
+			process += color.HiBlackString(fmt.Sprintf("(P %d)", h.Process.Ppid))
 		}
 		if len(h.Process.CmdLine) != 0 {
 			process += fmt.Sprintf("[%s]", strings.Join(h.Process.CmdLine, " "))
@@ -211,7 +211,7 @@ var DisplayFields = map[string]func(h *c2.Agent) string{
 			}
 
 			direction := ""
-			if strings.ToLower(channel.Direction) == "Bind" {
+			if strings.ToLower(channel.Direction) == "bind" {
 				direction = "==>"
 			} else {
 				direction = "<=="

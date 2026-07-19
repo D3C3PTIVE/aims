@@ -64,10 +64,6 @@ func populate(rows [][]string, options *opts) *table.Table {
 		headers, rows = removeEmptyColumns()(headers, rows)
 	}
 
-	if len(options.weights) != 0 {
-		headers, rows = withWeight(options.weights)(headers, rows)
-	}
-
 	// Adapt to terminal size.
 	// The index of the value range obtained also gives the
 	// maximum weight allowed for the table.
@@ -136,12 +132,5 @@ func removeEmptyColumns() columnCleaner {
 		}
 
 		return filteredHeaders, filteredRows
-	}
-}
-
-// withWeight applies filters some columns depending on terminal size ranges.
-func withWeight(headers map[string]int) columnCleaner {
-	return func(raw []string, rows [][]string) (headers []string, cleaned [][]string) {
-		return raw, rows
 	}
 }

@@ -87,7 +87,7 @@ func DisplayDetails() []display.Options {
 
 	// Tools
 	add("Comment", 4)
-	add("Hosts scripts", 4)
+	add("Scripts", 4)
 
 	return headers
 }
@@ -140,7 +140,17 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 		return strings.Join(addresses, "\n")
 	},
 	"Status": func(h *pb.Host) string {
-		return ""
+		if h.Status == nil {
+			return ""
+		}
+		switch h.Status.State {
+		case "up":
+			return color.HiGreenString(h.Status.State)
+		case "down":
+			return color.HiRedString(h.Status.State)
+		default:
+			return h.Status.State
+		}
 	},
 	"Hops": func(h *pb.Host) string {
 		if h.Trace == nil {
@@ -173,7 +183,6 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 
 		for _, m := range h.OS.Matches {
 			for _, c := range m.Classes {
-				println(c.Type)
 				if c.Type != "" {
 					times[c.Type]++
 				}
@@ -211,6 +220,12 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 	"Scripts": func(h *pb.Host) string {
 		return ""
 	},
+	"Virtual Host": func(h *pb.Host) string {
+		return h.VirtualHost
+	},
+	"Comment": func(h *pb.Host) string {
+		return h.Comment
+	},
 }
 
 // GetOperatingSystem returns the operating system of the host based on potential
@@ -220,10 +235,10 @@ func GetOperatingSystem(h *pb.Host) (osName, osFamily string) {
 	if h.OSFamily != "" {
 		osFamily = h.OSFamily
 	}
-	if h.OSName == "" {
+	if h.OSName != "" {
 		osName = h.OSName
 	}
-	if h.OSFlavor == "" {
+	if h.OSFlavor != "" {
 		osName += " " + h.OSFlavor
 	}
 

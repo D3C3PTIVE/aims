@@ -239,7 +239,10 @@ var DisplayFields = map[string]func(h *scan.Run) string{
 		return targetsDisplay.String()
 	},
 	"Finished": func(h *scan.Run) string {
-		return ""
+		if h.Stats != nil && h.Stats.Finished != nil {
+			return color.HiGreenString("true")
+		}
+		return color.HiYellowString("false")
 	},
 	"Hosts": func(h *scan.Run) string {
 		var hosts string

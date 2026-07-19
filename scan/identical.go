@@ -171,7 +171,7 @@ func compareTaskProgressORMs(a, b *scan.TaskProgressORM) bool {
 
 // generateTaskProgressKey generates a unique key for a TaskProgressORM based on non-ID fields.
 func generateTaskProgressKey(task *scan.TaskProgressORM) string {
-	return string(task.Etc) + "|" + fmt.Sprintf("%d", task.Percent) + "|" + string(task.Remaining) + "|" + task.Task + "|" + string(task.Time)
+	return fmt.Sprintf("%d|%g|%d|%s|%d", task.Etc, task.Percent, task.Remaining, task.Task, task.Time)
 }
 
 // compareScanTaskORMs compares two ScanTaskORM objects for equality based on non-ID fields.
@@ -187,7 +187,7 @@ func compareScanTaskORMs(a, b *scan.ScanTaskORM) bool {
 
 // generateTaskKey generates a unique key for a ScanTaskORM based on non-ID fields.
 func generateTaskKey(task *scan.ScanTaskORM) string {
-	return task.ExtraInfo + "|" + task.Task + "|" + string(task.Time)
+	return fmt.Sprintf("%s|%s|%d", task.ExtraInfo, task.Task, task.Time)
 }
 
 // compareScriptORMs compares two slices of ScriptORM for equality.
