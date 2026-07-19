@@ -21,7 +21,6 @@ package scan
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/carapace-sh/carapace"
@@ -236,14 +235,14 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 	if asNmap, _ := command.Flags().GetBool("nmap"); asNmap {
 		nmapScans, err := importNmap(data, arg)
 		if err != nil {
-			return scanList, fmt.Errorf("Nmap: %s", err.Error())
+			return scanList, fmt.Errorf("Nmap: %w", err)
 		}
 		scanList = append(scanList, nmapScans...)
 
 	} else {
 		jsonScans, err := export.ImportJSON[*pb.Run](data, arg)
 		if err != nil {
-			return scanList, fmt.Errorf("JSON: %s", err.Error())
+			return scanList, fmt.Errorf("JSON: %w", err)
 		}
 		scanList = append(scanList, jsonScans...)
 	}
@@ -256,7 +255,7 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 func importNmap(data []byte, arg string) (scanList []*pb.Run, err error) {
 	genericScan, err := nmap.FromXML(data)
 	if err != nil || genericScan == nil {
-		return nil, fmt.Errorf("Error parsing Nmap scan XML file: %s", err)
+		return nil, fmt.Errorf("Error parsing Nmap scan XML file: %w", err)
 	}
 
 	scanList = append(scanList, genericScan.ToPB())
@@ -312,11 +311,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 	return exportRunE
 }
 
-const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
-
-var re = regexp.MustCompile(ansi)
-
-// Strip removes all ANSI escaped color sequences in a string.
+// strip removes all ANSI escaped color sequences in a string.
 func strip(str string) string {
-	return re.ReplaceAllString(str, "")
+	return display.StripANSI(str)
 }
