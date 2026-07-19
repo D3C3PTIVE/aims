@@ -31,6 +31,7 @@ import (
 // agents data model is still settling — only the mapping in generate.go touches the pb type.
 type agentContext struct {
 	id, name, tool, cwd string
+	pending             string // count of not-yet-completed tasks, as a decimal string
 }
 
 // writePayload emits the agent context as inert key<TAB>value lines for the trusted bring() shell
@@ -43,6 +44,7 @@ func writePayload(w io.Writer, c agentContext) error {
 		{shell.KeyName, shell.SanitizeDisplay(c.name)},
 		{shell.KeyTool, shell.SanitizeDisplay(c.tool)},
 		{shell.KeyCWD, shell.SanitizeDisplay(c.cwd)},
+		{shell.KeyPending, shell.SanitizeDisplay(c.pending)},
 	} {
 		if _, err := fmt.Fprintf(w, "%s\t%s\n", kv.k, kv.v); err != nil {
 			return err

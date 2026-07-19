@@ -50,5 +50,5 @@ func Init(w io.Writer, sh Shell) error {
 	if err != nil {
 		return err
 	}
-	return t.Execute(w, initData{ID: KeyID, Name: KeyName, Tool: KeyTool, CWD: KeyCWD})
+	return t.Execute(w, initData{ID: KeyID, Name: KeyName, Tool: KeyTool, CWD: KeyCWD, Pending: KeyPending})
 }

@@ -30,10 +30,11 @@ import (
 func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 	var b strings.Builder
 	err := writePayload(&b, agentContext{
-		id:   "1234-uuid",
-		name: "$(touch OWNED)", // hostile name
-		tool: "sliver",
-		cwd:  "/root/work",
+		id:      "1234-uuid",
+		name:    "$(touch OWNED)", // hostile name
+		tool:    "sliver",
+		cwd:     "/root/work",
+		pending: "2",
 	})
 	if err != nil {
 		t.Fatalf("writePayload: %v", err)
@@ -41,8 +42,8 @@ func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 	out := b.String()
 
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("payload has %d lines, want 4:\n%q", len(lines), out)
+	if len(lines) != 5 {
+		t.Fatalf("payload has %d lines, want 5:\n%q", len(lines), out)
 	}
 
 	got := map[string]string{}
@@ -62,6 +63,9 @@ func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 	}
 	if got[shell.KeyTool] != "sliver" {
 		t.Errorf("tool = %q, want %q", got[shell.KeyTool], "sliver")
+	}
+	if got[shell.KeyPending] != "2" {
+		t.Errorf("pending = %q, want %q", got[shell.KeyPending], "2")
 	}
 	if strings.Contains(out, "$(") || strings.Contains(out, "`") {
 		t.Errorf("payload still carries shell-substitution syntax:\n%s", out)

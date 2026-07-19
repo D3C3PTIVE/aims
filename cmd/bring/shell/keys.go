@@ -24,10 +24,11 @@ import "strings"
 // templates must agree on these exact strings; the templates receive them via initData so the two
 // sides cannot drift apart.
 const (
-	KeyID   = "id"
-	KeyName = "name"
-	KeyTool = "tool"
-	KeyCWD  = "cwd"
+	KeyID      = "id"
+	KeyName    = "name"
+	KeyTool    = "tool"
+	KeyCWD     = "cwd"
+	KeyPending = "pending"
 )
 
 // maxDisplayRunes caps a display value so a hostile, oversized agent name cannot blow up the
@@ -37,7 +38,7 @@ const maxDisplayRunes = 64
 // initData carries the payload key names into the init templates, so the shell-side parser and the
 // Go-side emitter share one definition of the wire format.
 type initData struct {
-	ID, Name, Tool, CWD string
+	ID, Name, Tool, CWD, Pending string
 }
 
 // SanitizeDisplay hardens an agent-derived value before it is carried into the shell. It removes:

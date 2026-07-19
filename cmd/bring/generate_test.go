@@ -59,7 +59,7 @@ func (m *mockAgents) Read(ctx context.Context, in *c2.ReadAgentRequest, opts ...
 // injection attempt, to prove the payload stays inert.
 func mockAgentData() []*pb.Agent {
 	return []*pb.Agent{
-		{Id: "aaaaaaaa-1111-4aaa-8aaa-web0100000001", Name: "web01", Tool: "sliver", WorkingDirectory: "/var/www"},
+		{Id: "aaaaaaaa-1111-4aaa-8aaa-web0100000001", Name: "web01", Tool: "sliver", WorkingDirectory: "/var/www", TasksCount: 5, TasksCountCompleted: 3},
 		{Id: "bbbbbbbb-2222-4bbb-8bbb-db0100000002", Name: "db01", Tool: "sliver", WorkingDirectory: "/root"},
 		{Id: "cccccccc-3333-4ccc-8ccc-evil00000003", Name: "$(touch OWNED)", Tool: "mythic", WorkingDirectory: "/tmp"},
 	}
@@ -102,6 +102,9 @@ func TestEmitAgentPayloadByFullID(t *testing.T) {
 	}
 	if got[shell.KeyCWD] != "/var/www" {
 		t.Errorf("cwd = %q, want /var/www", got[shell.KeyCWD])
+	}
+	if got[shell.KeyPending] != "2" { // 5 tasks - 3 completed
+		t.Errorf("pending = %q, want 2 (5 total - 3 completed)", got[shell.KeyPending])
 	}
 	// The request must carry the id so the server can resolve it exactly.
 	if m.gotReq.GetAgent().GetId() == "" {

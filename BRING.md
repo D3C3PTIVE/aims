@@ -121,6 +121,11 @@ functions hang off it (or off `AIMS_AGENT_ID`) under this single short prefix, r
 polluting/overriding the root command namespace. The exact name (`aimsi` or another short token)
 is still open.
 
+> **Implemented as a function, not an alias (P2).** `aimsi() { aims c2 task "$AIMS_AGENT_ID" "$@" }`
+> — a function forwards arguments cleanly and can carry a `compdef`, which an alias cannot. Note its
+> target `aims c2 task` does not exist yet (see P3, blocked); `aimsi` is correct-in-form and ready
+> for when that command lands.
+
 **Dispatch to other tools — this is what `Agent.Tool` is for.** `aimsi` can resolve the agent's
 `Tool` (via a live query by ID) and hand off to whatever actually controls that implant
 (sliver, mythic, a custom binary), agent pre-selected. AIMS stays the shared catalog; the tools
@@ -350,9 +355,19 @@ The injection surface is one table row.
   - **Pending:** `aims init bash|fish` (error cleanly today); live id completion (kept deferred —
     the small-id candidates it inserts can't be resolved until prefix/List lands, so enabling it now
     would only mislead).
-- **P2 — nesting/stack.** Parallel-array stack, depth in the prompt, `leave` pops.
-- **P3 — scoped completions.** carapace completions for `aimsi` (remote files/procs/tasks),
-  live-queried by `AIMS_AGENT_ID`; consider tag-groups per the CLAUDE.md completion preference.
+- **P2 — nesting/stack. ✅ done (zsh).** Parallel-array context stack in the trusted zsh code;
+  a nested `bring` stacks the current context, `leave` pops back to it and the last `leave` fully
+  restores the pre-bring prompt. `AIMS_CONTEXT_DEPTH` tracks depth and shows in the prompt when >1.
+  The prompt also surfaces the agent's **pending-task count** (`⚑N`, `TasksCount −
+  TasksCountCompleted`, a point-in-time snapshot; pending only — done omitted as clutter). `aimsi`
+  is now a **function** (`aims c2 task "$AIMS_AGENT_ID" "$@"`) rather than an alias, so it forwards
+  args and can carry completion. Proven by a real-`zsh` nesting integration test.
+- **P3 — scoped completions. 🔴 blocked on the c2 task command.** There is no `aims c2 task`
+  command (nor any task RPC on the client), so `aimsi`'s target does not exist yet and there is
+  nothing for completions to complete against. The down-payment is done (`aimsi` is a function,
+  completion-ready); the rest waits on that command. When it lands: carapace completions for
+  `aimsi` (remote files/procs/tasks) live-queried by `AIMS_AGENT_ID`, with tag-groups per the
+  CLAUDE.md completion preference.
 - **P4 — `Agent.Tool` dispatch.** `aimsi` (or a sibling) resolves the agent's `Tool` and hands
   off to the native controller with the agent pre-selected.
 

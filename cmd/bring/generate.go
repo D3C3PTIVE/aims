@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -88,12 +89,19 @@ func findAgentByIDPrefix(agents []*pb.Agent, id string) *pb.Agent {
 }
 
 // agentContextFromPB maps a c2 agent into the flat context bring carries into the shell.
-// writePayload sanitizes the values; only the id is authoritative (used for dispatch).
+// writePayload sanitizes the values; only the id is authoritative (used for dispatch). The pending
+// count is a point-in-time snapshot (like the other display fields) — it goes stale as tasks
+// complete; a live figure would need a re-query.
 func agentContextFromPB(a *pb.Agent) agentContext {
+	pending := a.GetTasksCount() - a.GetTasksCountCompleted()
+	if pending < 0 {
+		pending = 0
+	}
 	return agentContext{
-		id:   a.GetId(),
-		name: a.GetName(),
-		tool: a.GetTool(),
-		cwd:  a.GetWorkingDirectory(),
+		id:      a.GetId(),
+		name:    a.GetName(),
+		tool:    a.GetTool(),
+		cwd:     a.GetWorkingDirectory(),
+		pending: strconv.FormatInt(pending, 10),
 	}
 }
