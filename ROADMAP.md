@@ -125,9 +125,27 @@ The command tree, flags, and completions exist, but several handlers are no-ops.
   (good). When the GitHub repo moves: verify `buf.gen-*.yaml` `go_package_prefix` (already
   `d3c3ptive`), and resolve the **`maxlandon/gondor`** dependency (fork to `d3c3ptive/gondor`
   or drop) so no `maxlandon` trace remains — this dovetails with Phase 0 option (B).
-- **Testing.** There are essentially no tests. Add, in priority order: (1) a build/`go vet`
-  gate, (2) round-trip `ToORM`/`ToPB` tests per domain, (3) dedup (`AreXIdentical`) tests,
-  (4) the nmap-XML → Host unmarshal path (the interoperability contract).
+- **Testing.** Growing from a small base. Done so far: the host ingest tests
+  (`server/host/host_test.go`, Create/Upsert dedup+merge against the server struct) and an
+  end-to-end transport test (`cmd/aims/roundtrip_test.go`) that boots the real in-memory
+  reeflective/team teamserver + AIMS client over bufconn and round-trips Hosts/Scans through
+  the teamclient — proving commands reach the DB only through the team client. Still to add, in
+  priority order: (1) a build/`go vet` gate, (2) round-trip `ToORM`/`ToPB` tests per domain,
+  (3) dedup (`AreXIdentical`) tests, (4) the nmap-XML → Host unmarshal path (the
+  interoperability contract).
+- **Benchmarks (scale + responsiveness).** AIMS is meant to be a *responsive* CLI over a
+  possibly large object store; add `Benchmark*` tests to prove it scales with heavy data.
+  Cover the hot paths: ingest dedup/merge (`host.MergeHost`/`SameHost` and the server
+  `Create`/`Upsert` fold — these load every existing host per call, an O(n²) shape worth
+  measuring), the `Read`→`ToPB` preload path on a large host table, and the `cmd/display`
+  table/completion rendering at high row counts. Seed a big sqlite DB fixture and track
+  latency/allocs so regressions in "feels instant" are caught.
+- **Refactoring & cleanup sweep.** Do a repo-wide pass for reuse/simplification/dead-code:
+  the known crossed `server/c2` file↔type naming, stubbed handlers returning `nil`, the empty
+  `credential/core.go` scope helpers, the dead `Client.conn` field and unchecked `client.New`
+  error in `cmd/aims/root.go`, duplicated PB↔ORM boilerplate across `server/<domain>`, and the
+  commented-out blocks left in `server/host/host.go` `Delete`. Fold shared shapes into helpers
+  where the domains have diverged only cosmetically.
 - **Doc drift.** Update `README.md`: no `vendor/` (module cache), generated code sits next to
   each `.proto` (not `proto/gen/`), codegen files are at repo root. Keep `CLAUDE.md`/`STATE.md`
   current as the source of truth.

@@ -105,6 +105,21 @@ render a well-delimited, replaceable segment**, not assume a fixed prompt string
 > rendering in `host.DisplayFields`). Show nothing when no trace exists. Keep it terse — a prompt is
 > not a table. Ties into the display snapshot (point-in-time, display-only), not dispatch.
 
+> **Idea — more agent prompt fields: active port-forwards.** Fold the agent's live
+> **port-forwards** into the segment — ideally the source `addr:port` → target `addr:port` (at least a
+> count when space is tight), so the operator sees the tunnels they're standing up through the box
+> without a command. Point-in-time display snapshot like the other fields (needs a forwards field on
+> the c2 agent model / payload; render terse, show nothing when none).
+
+> **Idea — a server-global prompt (agentless context).** Separate from the per-agent segment, render a
+> **server-wide status line** — running scans, overall task counts, and any other global things worth a
+> glance — placed either *below* the main prompt or on the *far side* of the terminal (RPROMPT). Two
+> wins: (1) it surfaces session-wide state the operator would otherwise have to poll for, and (2) it
+> gives a **clear visual sign that `aims init <shell>` has been sourced in a terminal even when no agent
+> is brought** — today an agentless shell looks untouched. This is a second, always-on prompt element
+> that coexists with (and is independent of) the agent segment; it queries server-global state, so it
+> waits on the relevant list/stats RPCs (scans, tasks) the same way the agent fields wait on the c2 API.
+
 ### Alias root — `aimsi`, not shadowed root commands
 
 Do **not** define top-level aliases like `ls`/`ps` that shadow real commands. Instead define one

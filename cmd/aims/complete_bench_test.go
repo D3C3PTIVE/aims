@@ -50,12 +50,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/carapace-sh/carapace"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/d3c3ptive/aims/client"
 	"github.com/d3c3ptive/aims/cmd/display"
+	cmdhosts "github.com/d3c3ptive/aims/cmd/hosts"
 	"github.com/d3c3ptive/aims/host"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
@@ -134,6 +139,39 @@ func runCompletion(tb testing.TB, con *client.Client) (candidates, wireBytes int
 	return len(results) / 2, proto.Size(res)
 }
 
+// setXDGCacheHome points XDG_CACHE_HOME at dir for the benchmark, restoring it after.
+// It uses os.Setenv rather than b.Setenv because the testing framework forbids
+// b.Setenv inside a benchmark (it may run the function several times to size b.N).
+func setXDGCacheHome(b *testing.B, dir string) {
+	b.Helper()
+	prev, had := os.LookupEnv("XDG_CACHE_HOME")
+	if err := os.Setenv("XDG_CACHE_HOME", dir); err != nil {
+		b.Fatalf("set XDG_CACHE_HOME: %v", err)
+	}
+	b.Cleanup(func() {
+		if had {
+			os.Setenv("XDG_CACHE_HOME", prev)
+		} else {
+			os.Unsetenv("XDG_CACHE_HOME")
+		}
+	})
+}
+
+// dirBytes sums the size of every file under dir — used to report the on-disk size of
+// the cached completion payload served on a hit.
+func dirBytes(dir string) (total int64) {
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, err := d.Info(); err == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
+}
+
 func BenchmarkCompleteHosts(b *testing.B) {
 	for _, n := range benchSizes {
 		n := n
@@ -176,6 +214,52 @@ func BenchmarkCompleteHosts(b *testing.B) {
 			b.StopTimer()
 			b.ReportMetric(float64(cands), "candidates/op")
 			b.ReportMetric(float64(wire), "wirebytes/op")
+		})
+	}
+}
+
+// BenchmarkCompleteHostsCacheHit measures the third mode: a warm on-disk cache hit.
+//
+// It drives the REAL wired completion — cmdhosts.CompleteByHostnameOrIP, wrapped in
+// cmd.CacheCompletion — through carapace's Invoke, so the cache path is exercised end
+// to end. The cache is warmed once (a miss: connect + whole-DB Read + format, then a
+// disk write), then the timed loop invokes only cache hits: no ConnectComplete, no
+// gRPC, no format — just load + deserialize the cached candidate set from disk. This
+// is what every Tab after the first (within CompletionCacheTTL) actually costs, and
+// the number to compare against the warm/cold query costs in BENCH_COMPLETIONS.md.
+//
+// XDG_CACHE_HOME is redirected to a temp dir (carapace reads it lazily, so this
+// isolates the cache) — otherwise a stale hit from a previous run could serve the
+// wrong N. b.N * benchtime stays well under the 10s TTL, so every timed iteration is
+// a genuine hit.
+func BenchmarkCompleteHostsCacheHit(b *testing.B) {
+	for _, n := range benchSizes {
+		n := n
+
+		b.Run(fmt.Sprintf("N=%d/hit", n), func(b *testing.B) {
+			cacheHome := b.TempDir()
+			setXDGCacheHome(b, cacheHome) // isolate carapace's on-disk cache
+
+			con := newInMemoryStack(b)
+			seedHosts(b, con, n)
+
+			// Candidate count for reporting (same Read+format the completion caches).
+			cands, _ := runCompletion(b, con)
+
+			action := cmdhosts.CompleteByHostnameOrIP(con)
+			ctx := carapace.Context{}
+			action.Invoke(ctx) // warm: miss -> query + write cache
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				action.Invoke(ctx) // hit: served from disk, no query
+			}
+
+			b.StopTimer()
+			b.ReportMetric(float64(cands), "candidates/op")
+			b.ReportMetric(float64(dirBytes(cacheHome)), "cachebytes/op")
 		})
 	}
 }

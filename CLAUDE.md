@@ -44,6 +44,13 @@ client/server/CLI layer built on top — see State below.)
   - Other tools contribute their own idioms where relevant.
 - **One shared database, many contributors.** Any tool can push objects in and read objects
   out over a common gRPC API + SQL store, working with the *same* object instances.
+- **Per-tool scoping in the code API (wanted).** Because many tools share one store, a tool
+  consuming AIMS *as a library* should still be able to easily scope a query to **its own**
+  data — query objects (and/or their children) *by the tool that contributed them* — so a tool
+  that only cares about what it produced can get just that without hand-filtering the whole
+  world. The code-level query API should make "give me only my objects" a first-class,
+  low-friction option (a provenance/tool filter threaded through the domain query helpers),
+  alongside the default cross-tool shared view.
 - **One set of CLI/code utilities around these objects** — to consult them, and to use them
   as **"targets"** of other tools (the `scan/target.go` notion, hosts-as-targets, etc.).
 - **Interoperable technology-wise.** Protobuf is the source of truth (good multi-language
@@ -285,6 +292,17 @@ leaf commands (so completions/commands lazily connect to the teamserver only whe
 > CLI-layer state note: the *design/engine* is solid and reusable, and the credential/services
 > slices exercise it fully (grouped tables, `Banner`+`Columns`+`KVLines` detail views, styled
 > completions). Some per-command handlers are still stubs (`hosts add`/`rm` `RunE` return `nil`).
+
+> **Design intent — sub-categorized completions (wanted, not yet built).** When completing
+> some objects, we want the candidate list to convey *sub-categories* rather than one flat
+> set — e.g. "close" objects vs. atypical ones (local targets/private IPs, loopback), recently
+> seen vs. stale, on-subnet vs. off-subnet. Convey this either via carapace **tag groups**
+> (`carapace.ActionValues(...).Tag("local targets")`, so candidates render under labelled
+> headings) or via **deliberate list ordering** (most-relevant first). This is a standing
+> preference: whenever you touch or are asked to write a completion function (the
+> `CompleteBy*` `ActionCallback`s that feed `display.Completions`), consider whether its
+> candidates split into meaningful sub-groups and reflect that in tags/order. Not a task to
+> chase down proactively — apply it opportunistically when a completion is already in hand.
 
 ## Conventions
 

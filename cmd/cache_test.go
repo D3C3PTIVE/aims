@@ -65,6 +65,39 @@ func TestCacheCompletionSkipsCallbackOnHit(t *testing.T) {
 	}
 }
 
+// TestCacheCompletionInvalidatedByEpochBump proves the mutation sentinel works:
+// after a cache is populated, InvalidateCompletionCache (called by add/import
+// handlers) bumps the epoch so the next invocation is a miss and re-runs the query,
+// rather than serving stale candidates until CompletionCacheTTL lapses.
+func TestCacheCompletionInvalidatedByEpochBump(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	con := &client.Client{}
+	ctx := carapace.Context{}
+
+	var calls int
+	action := CacheCompletion(con, "test:invalidate", carapace.ActionCallback(
+		func(carapace.Context) carapace.Action {
+			calls++
+			return carapace.ActionValues("x")
+		}))
+
+	action.Invoke(ctx) // miss: calls=1, cached
+	action.Invoke(ctx) // hit: calls=1
+	if calls != 1 {
+		t.Fatalf("expected one query before invalidation, got %d", calls)
+	}
+
+	if err := InvalidateCompletionCache(); err != nil {
+		t.Fatalf("InvalidateCompletionCache: %v", err)
+	}
+
+	action.Invoke(ctx) // epoch bumped -> miss: calls=2
+	if calls != 2 {
+		t.Fatalf("expected invalidation to force a re-query, got %d calls", calls)
+	}
+}
+
 // TestCacheCompletionScopesByName proves distinct completions sharing the
 // CacheCompletion call site do not collide: different names key to different
 // cache files, so each still runs its own callback once.

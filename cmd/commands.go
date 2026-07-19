@@ -20,38 +20,14 @@ package cmd
 
 import (
 	"errors"
-	"time"
 
 	"github.com/carapace-sh/carapace"
-	"github.com/carapace-sh/carapace/pkg/cache/key"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc/status"
 
 	"github.com/d3c3ptive/aims/client"
 )
-
-// CompletionCacheTTL bounds how long a live-DB completion result is reused from
-// carapace's on-disk cache before the teamclient is queried again. Deliberately
-// short: it collapses the per-keystroke query storm of exec-once CLI mode — where
-// every Tab reconnects and re-fetches (and re-formats) the whole object set with
-// no server-side prefix match or cap (see cmd/aims/BENCH_COMPLETIONS.md) — into
-// roughly one query per typing burst, while keeping candidates fresh. The cached
-// snapshot is client-side, so a change made by another operator, or by a
-// server-side scan, is invisible until the TTL lapses.
-const CompletionCacheTTL = 10 * time.Second
-
-// CacheCompletion wraps a live-DB completion action with carapace's on-disk cache.
-// carapace still filters the cached full candidate set against what the user typed,
-// so caching the whole set (which these completions already fetch) is correct: fetch
-// once, filter many. The cache is namespaced by the teamserver scope (so a multiplayer
-// client never crosses servers — see Client.CompletionScope) and by name (so distinct
-// completions don't collide, since they share this wrapper's call site). Only callback
-// actions are cached; a failed connection returns an ActionMessage and is not cached.
-func CacheCompletion(con *client.Client, name string, action carapace.Action) carapace.Action {
-	scope := key.Key(func() (string, error) { return con.CompletionScope(), nil })
-	return action.Cache(CompletionCacheTTL, scope, key.String(name))
-}
 
 // BindGroup is a helper used to bind a list of root commands to a given menu, for a given "command help group".
 // @group - Name of the group under which the command should be shown. Preferably use a string in the constants package.

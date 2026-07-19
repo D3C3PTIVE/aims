@@ -73,6 +73,7 @@ func importCredentials(con *client.Client) func(cmd *cobra.Command, arg string, 
 		if err = aims.CheckError(err); err != nil {
 			return err
 		}
+		aims.InvalidateCompletionCache() // credentials changed: next Tab re-queries
 
 		fmt.Printf("Imported %d credential(s) from %s.\n", len(res.GetCredentials()), arg)
 		return nil
@@ -186,6 +187,7 @@ func addCommand(con *client.Client) *cobra.Command {
 			if err = aims.CheckError(err); err != nil {
 				return err
 			}
+			aims.InvalidateCompletionCache() // credential added: next Tab re-queries
 
 			cred.Reveal = true
 			for _, c := range res.GetCredentials() {
