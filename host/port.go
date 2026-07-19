@@ -22,8 +22,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	host "github.com/d3c3ptive/aims/host/pb"
 )
 
@@ -44,11 +42,6 @@ func (p *Port) ToORM(ctx context.Context) (host.PortORM, error) {
 // ToPB - Get the Protobuf object for the Port.
 func (p *Port) ToPB() *host.Port {
 	return (*host.Port)(p)
-}
-
-// AsEntity - Returns the Port as a valid Maltego Entity.
-func (p *Port) AsEntity() maltego.Entity {
-	return maltego.Entity{}
 }
 
 // FilterIdenticalPort returns a list of portsfrom which have been removed all ports that are

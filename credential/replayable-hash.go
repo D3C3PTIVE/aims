@@ -21,8 +21,6 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
@@ -51,13 +49,4 @@ func (h *ReplayableHash) ToORM(ctx context.Context) (credential.PrivateORM, erro
 func (h *ReplayableHash) ToPB() *credential.Private {
 	h.Type = credential.PrivateType_ReplayableHash
 	return (*PasswordHash)(h).ToPB()
-}
-
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (h *ReplayableHash) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(h)
 }

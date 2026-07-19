@@ -85,8 +85,9 @@ func NewLogin(core *Core, opts *LoginOptions) (*Core, *Login, error) {
 // If it does exists, we then appropriately set the status to one of our failure statuses.
 //
 // @param: The template that you pass as argument must be populated with several fields,
-//         each of them in turn checking some of its own required fields. Please refer
-//         to the InvalidateLoginOpts documentation for a list of each of those required.
+//
+//	each of them in turn checking some of its own required fields. Please refer
+//	to the InvalidateLoginOpts documentation for a list of each of those required.
 //
 // Raises an error if any of the above options are missing
 func InvalidateLogin(opts *LoginOptions) (err error) {

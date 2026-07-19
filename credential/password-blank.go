@@ -21,8 +21,6 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
@@ -58,13 +56,4 @@ func (p *BlankPassword) ToPB() *credential.Private {
 	p.Type = credential.PrivateType_BlankPassword
 	p.Data = ""
 	return (*Private)(p).ToPB()
-}
-
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *BlankPassword) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }

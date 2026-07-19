@@ -21,8 +21,6 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	host "github.com/d3c3ptive/aims/host/pb"
 )
 
@@ -42,9 +40,4 @@ func (u *User) ToORM(ctx context.Context) (host.UserORM, error) {
 // ToPB - Get the Protobuf object for the User.
 func (u *User) ToPB() *host.User {
 	return (*host.User)(u)
-}
-
-// AsEntity - Returns the User as a valid Maltego Entity.
-func (u *User) AsEntity() maltego.Entity {
-	return maltego.Entity{}
 }

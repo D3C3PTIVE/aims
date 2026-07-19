@@ -22,8 +22,6 @@ import (
 	"context"
 	"crypto/x509"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
@@ -45,15 +43,6 @@ func (p *Certificate) ToORM(ctx context.Context) (credential.PublicORM, error) {
 func (p *Certificate) ToPB() *credential.Public {
 	p.Type = credential.PublicType_Certificate
 	return (*Public)(p).ToPB()
-}
-
-// AsEntity - Returns the Certificate as a valid Maltego Entity.
-func (p *Certificate) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }
 
 // AsX509 - Returns the Certificate as a Go native x509 certificate.

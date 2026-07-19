@@ -25,7 +25,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 
-	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/ssh"
 
 	credential "github.com/d3c3ptive/aims/credential/pb"
@@ -57,15 +56,6 @@ func (p *PrivateKey) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 func (p *PrivateKey) ToPB() *credential.Private {
 	p.Type = credential.PrivateType_Key
 	return (*Private)(p).ToPB()
-}
-
-// AsEntity - Returns the PrivateKey as a valid Maltego Entity.
-func (p *PrivateKey) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }
 
 //

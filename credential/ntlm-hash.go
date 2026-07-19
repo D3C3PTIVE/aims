@@ -26,11 +26,15 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/md4"
 
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
+
+// lanManagerMaxChars is the maximum plaintext password length handled by the
+// LanManager hash. Passwords longer than this are treated as empty for the LM
+// hash calculation (see LMHexDigestFromPassword).
+const lanManagerMaxChars = 14
 
 // NTLMHash - A credential.Private password hash that can be credential.ReplayableHash replayed
 // to authenticate to SMB.  It is composed of two hash hex digests (where the hash bytes are
@@ -58,15 +62,6 @@ func (h *NTLMHash) ToPB() *credential.Private {
 	return (*Private)(h).ToPB()
 }
 
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (h *NTLMHash) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(h)
-}
-
 //
 // Type-Specific functions
 //
@@ -86,7 +81,7 @@ func (h *NTLMHash) HexDigest(hash []byte) (digest string) {
 // @return  a 32 character hexadecimal string
 func (h *NTLMHash) LMHexDigestFromPassword(password string) (digest string) {
 	effectiveData := password
-	if len(password) > credential.LanManagerHexCharacters {
+	if len(password) > lanManagerMaxChars {
 		effectiveData = ""
 	}
 

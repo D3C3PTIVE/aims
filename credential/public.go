@@ -21,8 +21,6 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
@@ -43,9 +41,4 @@ func (p *Public) ToORM(ctx context.Context) (credential.PublicORM, error) {
 // ToPB - Get the Protobuf object for the Public credential.
 func (p *Public) ToPB() *credential.Public {
 	return (*credential.Public)(p)
-}
-
-// AsEntity - Returns the Public as a valid Maltego Entity.
-func (p *Public) AsEntity() maltego.Entity {
-	return maltego.NewEntity(p)
 }

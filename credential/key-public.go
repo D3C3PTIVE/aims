@@ -26,7 +26,6 @@ import (
 	"encoding/base64"
 	"errors"
 
-	"github.com/maxlandon/gondor/maltego"
 	"golang.org/x/crypto/ssh"
 
 	credential "github.com/d3c3ptive/aims/credential/pb"
@@ -60,15 +59,6 @@ func (p *PublicKey) ToORM(ctx context.Context) (credential.PublicORM, error) {
 func (p *PublicKey) ToPB() *credential.Public {
 	p.Type = credential.PublicType_PublicKey
 	return (*Public)(p).ToPB()
-}
-
-// AsEntity - Returns the PublicKey as a valid Maltego Entity.
-func (p *PublicKey) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }
 
 //

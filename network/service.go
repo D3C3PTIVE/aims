@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/maxlandon/gondor/maltego"
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	host "github.com/d3c3ptive/aims/host/pb"
@@ -50,11 +49,6 @@ func (s *Service) ToORM(ctx context.Context) (network.ServiceORM, error) {
 // ToPB - Get the Protobuf object for the Service.
 func (s *Service) ToPB() *network.Service {
 	return (*network.Service)(s)
-}
-
-// AsEntity - Returns the Service as a valid Maltego Entity.
-func (s *Service) AsEntity() maltego.Entity {
-	return maltego.Entity{}
 }
 
 // TableHeaders returns all weighted table headers for a table of services/ports.

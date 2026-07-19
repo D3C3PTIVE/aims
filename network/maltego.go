@@ -1,4 +1,4 @@
-package network
+//go:build maltego
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
@@ -18,27 +18,25 @@ package network
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import (
-	"context"
+package network
 
-	network "github.com/d3c3ptive/aims/network/pb"
+// Maltego entity conversions for the network domain.
+//
+// These are isolated behind the `maltego` build tag because they depend on
+// github.com/maxlandon/gondor/maltego, which is currently broken at its pinned
+// version. Default builds omit this file (and the dependency) entirely; build
+// with `-tags maltego` once the gondor dependency is repaired/replaced.
+
+import (
+	"github.com/maxlandon/gondor/maltego"
 )
 
-// Address - An address somewhere on a network, or on a host.
-// Can be an IPv4/v6 address, a MAC address, or else.
-// This type has fields that are compliant with Nmap scan schemas.
-type Address network.Address
-
-//
-// General Functions
-//
-
-// ToORM - Get the SQL object for the Host.
-func (a *Address) ToORM(ctx context.Context) (network.AddressORM, error) {
-	return (*network.Address)(a).ToORM(ctx)
+// AsEntity - Returns the Address as a valid Maltego Entity.
+func (a *Address) AsEntity() maltego.Entity {
+	return maltego.Entity{}
 }
 
-// ToPB - Get the Protobuf object for the Host.
-func (a *Address) ToPB() *network.Address {
-	return (*network.Address)(a)
+// AsEntity - Returns the Service as a valid Maltego Entity.
+func (s *Service) AsEntity() maltego.Entity {
+	return maltego.Entity{}
 }
