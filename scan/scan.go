@@ -29,6 +29,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/d3c3ptive/aims/cmd/display"
+	hostmerge "github.com/d3c3ptive/aims/host"
 	host "github.com/d3c3ptive/aims/host/pb"
 	scan "github.com/d3c3ptive/aims/scan/pb"
 	"github.com/d3c3ptive/aims/scan/pb/nmap"
@@ -142,7 +143,7 @@ func hasAddress(h *host.Host, addr string) bool {
 
 func hasPort(h *host.Host, p *host.Port) bool {
 	for _, existing := range h.Ports {
-		if samePort(existing, p) {
+		if hostmerge.SamePort(existing, p) {
 			return true
 		}
 	}
