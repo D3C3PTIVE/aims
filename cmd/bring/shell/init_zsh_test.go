@@ -132,6 +132,7 @@ print -r -- "ID=$AIMS_AGENT_ID"
 print -r -- "NAME=$AIMS_AGENT_NAME"
 print -r -- "TOOL=$AIMS_AGENT_TOOL"
 print -r -- "CWD=$AIMS_AGENT_CWD"
+print -r -- "ROUTE=$AIMS_AGENT_ROUTE"
 print -r -- "PENDING=$AIMS_AGENT_PENDING"
 print -r -- "DEPTH=$AIMS_CONTEXT_DEPTH"
 print -r -- "PROMPT=$PROMPT"
@@ -191,6 +192,24 @@ func TestZshBringShowsPendingTasks(t *testing.T) {
 	}
 }
 
+// TestZshBringShowsRoute checks the network-path prompt element appears when the agent context
+// carries a route summary.
+func TestZshBringShowsRoute(t *testing.T) {
+	payload := payloadLine(KeyID, "testid") +
+		payloadLine(KeyName, "web01") +
+		payloadLine(KeyRoute, "3h·gw01") +
+		payloadLine(KeyPending, "0")
+
+	r, _ := runZshScript(t, map[string]string{"agent": payload}, singleBringRunner)
+
+	if r["ROUTE"] != "3h·gw01" {
+		t.Errorf("AIMS_AGENT_ROUTE = %q, want 3h·gw01", r["ROUTE"])
+	}
+	if !strings.Contains(r["PROMPT"], "⤳3h·gw01") {
+		t.Errorf("PROMPT = %q, want it to surface the route ⤳3h·gw01", r["PROMPT"])
+	}
+}
+
 // TestZshBringDoesNotExecuteHostileValues feeds attacker-controlled agent strings and asserts they
 // are handled as inert data: a command-substitution name is defeated by sanitization, and a
 // quote/semicolon break-out is defeated by capture-as-data (read -r never evals). Nothing runs.
@@ -223,11 +242,13 @@ print -r -- "D1_DEPTH=$AIMS_CONTEXT_DEPTH"
 bring two
 print -r -- "D2_ID=$AIMS_AGENT_ID"
 print -r -- "D2_NAME=$AIMS_AGENT_NAME"
+print -r -- "D2_ROUTE=$AIMS_AGENT_ROUTE"
 print -r -- "D2_DEPTH=$AIMS_CONTEXT_DEPTH"
 print -r -- "D2_PROMPT=$PROMPT"
 leave
 print -r -- "P1_ID=$AIMS_AGENT_ID"
 print -r -- "P1_NAME=$AIMS_AGENT_NAME"
+print -r -- "P1_ROUTE=$AIMS_AGENT_ROUTE"
 print -r -- "P1_DEPTH=$AIMS_CONTEXT_DEPTH"
 leave
 print -r -- "P0_ID=$AIMS_AGENT_ID"
@@ -238,8 +259,8 @@ print -r -- "P0_PROMPT=$PROMPT"
 // TestZshBringNesting verifies the P2 context stack: a second bring stacks the first, the depth
 // tracks, and each leave pops back — the last one fully restoring the original prompt.
 func TestZshBringNesting(t *testing.T) {
-	one := payloadLine(KeyID, "one-id") + payloadLine(KeyName, "alpha") + payloadLine(KeyPending, "0")
-	two := payloadLine(KeyID, "two-id") + payloadLine(KeyName, "beta") + payloadLine(KeyPending, "0")
+	one := payloadLine(KeyID, "one-id") + payloadLine(KeyName, "alpha") + payloadLine(KeyRoute, "2h·gwA") + payloadLine(KeyPending, "0")
+	two := payloadLine(KeyID, "two-id") + payloadLine(KeyName, "beta") + payloadLine(KeyRoute, "5h·gwB") + payloadLine(KeyPending, "0")
 
 	r, dir := runZshScript(t, map[string]string{"one": one, "two": two}, nestingRunner)
 
@@ -251,12 +272,18 @@ func TestZshBringNesting(t *testing.T) {
 	if r["D2_ID"] != "two-id" || r["D2_NAME"] != "beta" || r["D2_DEPTH"] != "2" {
 		t.Errorf("after bring two: id=%q name=%q depth=%q, want two-id / beta / 2", r["D2_ID"], r["D2_NAME"], r["D2_DEPTH"])
 	}
+	if r["D2_ROUTE"] != "5h·gwB" {
+		t.Errorf("after bring two: route=%q, want 5h·gwB", r["D2_ROUTE"])
+	}
 	if !strings.Contains(r["D2_PROMPT"], "beta") {
 		t.Errorf("nested prompt = %q, want it to show the current agent beta", r["D2_PROMPT"])
 	}
-	// First leave pops back to 'one'.
+	// First leave pops back to 'one' — including its route, restored from the stack.
 	if r["P1_ID"] != "one-id" || r["P1_NAME"] != "alpha" || r["P1_DEPTH"] != "1" {
 		t.Errorf("after first leave: id=%q name=%q depth=%q, want one-id / alpha / 1", r["P1_ID"], r["P1_NAME"], r["P1_DEPTH"])
+	}
+	if r["P1_ROUTE"] != "2h·gwA" {
+		t.Errorf("after first leave: route=%q, want 2h·gwA (restored from stack)", r["P1_ROUTE"])
 	}
 	// Second leave fully tears down and restores the base prompt.
 	if r["P0_ID"] != "" || r["P0_DEPTH"] != "" {

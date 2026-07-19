@@ -28,6 +28,7 @@ const (
 	KeyName    = "name"
 	KeyTool    = "tool"
 	KeyCWD     = "cwd"
+	KeyRoute   = "route"
 	KeyPending = "pending"
 )
 
@@ -38,7 +39,7 @@ const maxDisplayRunes = 64
 // initData carries the payload key names into the init templates, so the shell-side parser and the
 // Go-side emitter share one definition of the wire format.
 type initData struct {
-	ID, Name, Tool, CWD, Pending string
+	ID, Name, Tool, CWD, Route, Pending string
 }
 
 // SanitizeDisplay hardens an agent-derived value before it is carried into the shell. It removes:

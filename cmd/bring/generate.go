@@ -32,6 +32,8 @@ import (
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	hostpb "github.com/d3c3ptive/aims/host/pb"
+	networkpb "github.com/d3c3ptive/aims/network/pb"
 )
 
 // agentReader is the narrow slice of c2.AgentsClient that bring needs. Depending on this one method
@@ -90,8 +92,8 @@ func findAgentByIDPrefix(agents []*pb.Agent, id string) *pb.Agent {
 
 // agentContextFromPB maps a c2 agent into the flat context bring carries into the shell.
 // writePayload sanitizes the values; only the id is authoritative (used for dispatch). The pending
-// count is a point-in-time snapshot (like the other display fields) — it goes stale as tasks
-// complete; a live figure would need a re-query.
+// count and route are point-in-time snapshots (like the other display fields) — they go stale as
+// tasks complete or the network path changes; a live figure would need a re-query.
 func agentContextFromPB(a *pb.Agent) agentContext {
 	pending := a.GetTasksCount() - a.GetTasksCountCompleted()
 	if pending < 0 {
@@ -103,5 +105,49 @@ func agentContextFromPB(a *pb.Agent) agentContext {
 		tool:    a.GetTool(),
 		cwd:     a.GetWorkingDirectory(),
 		pending: strconv.FormatInt(pending, 10),
+		route:   compactRoute(a.GetHost()),
 	}
+}
+
+// compactRoute renders a terse, prompt-sized summary of the network path to the agent's host: the
+// hop distance and the last gateway before the target — e.g. "3h·10.0.0.1" (or "3h·gw01" when the
+// gateway resolves to a name). It reads the host's preloaded Trace/Distance, so the c2 Read must
+// preload Host.Trace.Hops and Host.Distance (see server/c2.Preloads); it returns "" when no route
+// information is available, so the prompt shows nothing rather than an empty marker. The result is
+// display data — writePayload sanitizes it like every other value.
+func compactRoute(h *hostpb.Host) string {
+	if h == nil {
+		return ""
+	}
+	hops := h.GetTrace().GetHops()
+
+	// Prefer nmap's reported distance; fall back to the number of recorded hops.
+	dist := int(h.GetDistance().GetValue())
+	if dist == 0 {
+		dist = len(hops)
+	}
+	if dist == 0 {
+		return "" // no trace and no distance — nothing useful to show
+	}
+
+	seg := strconv.Itoa(dist) + "h"
+	if gw := lastGateway(hops); gw != "" {
+		seg += "·" + gw
+	}
+	return seg
+}
+
+// lastGateway returns the hop just before the target — the final gateway on the path — preferring
+// its resolved host name over its IP. Hops are ordered nearest-to-target, so the target itself is
+// the last entry and the gateway is the penultimate one; a single-hop (directly adjacent) path has
+// no intermediate gateway and yields "".
+func lastGateway(hops []*networkpb.Hop) string {
+	if len(hops) < 2 {
+		return ""
+	}
+	gw := hops[len(hops)-2]
+	if name := gw.GetHost(); name != "" {
+		return name
+	}
+	return gw.GetIPAddr()
 }

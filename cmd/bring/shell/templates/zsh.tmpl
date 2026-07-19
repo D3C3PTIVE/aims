@@ -7,11 +7,15 @@
 # aims `bring` shell integration (zsh). Source once from your ~/.zshrc:
 #     source <(aims init zsh)
 
-# _aims_apply_prompt rebuilds the prompt segment for the current agent: the name, plus the context
-# stack depth when nested (>1) and the number of pending tasks when any. All values are sanitized
-# server-side, so the segment is inert even under PROMPT_SUBST.
+# _aims_apply_prompt rebuilds the prompt segment for the current agent: the name, plus a terse
+# network-path summary when a route is known, the context stack depth when nested (>1) and the
+# number of pending tasks when any. All values are sanitized server-side, so the segment is inert
+# even under PROMPT_SUBST.
 _aims_apply_prompt() {
     local seg="${AIMS_AGENT_NAME:-$AIMS_AGENT_ID}"
+    if [[ -n "$AIMS_AGENT_ROUTE" ]]; then
+        seg="$seg ⤳$AIMS_AGENT_ROUTE"
+    fi
     if [[ -n "$AIMS_CONTEXT_DEPTH" ]] && (( AIMS_CONTEXT_DEPTH > 1 )); then
         seg="$seg ⇕$AIMS_CONTEXT_DEPTH"
     fi
@@ -28,6 +32,7 @@ _aims_push() {
     _aims_stack_name+=("$AIMS_AGENT_NAME")
     _aims_stack_tool+=("$AIMS_AGENT_TOOL")
     _aims_stack_cwd+=("$AIMS_AGENT_CWD")
+    _aims_stack_route+=("$AIMS_AGENT_ROUTE")
     _aims_stack_pending+=("$AIMS_AGENT_PENDING")
 }
 
@@ -37,11 +42,13 @@ _aims_pop() {
     export AIMS_AGENT_NAME="${_aims_stack_name[-1]}"
     export AIMS_AGENT_TOOL="${_aims_stack_tool[-1]}"
     export AIMS_AGENT_CWD="${_aims_stack_cwd[-1]}"
+    export AIMS_AGENT_ROUTE="${_aims_stack_route[-1]}"
     export AIMS_AGENT_PENDING="${_aims_stack_pending[-1]}"
     _aims_stack_id=("${(@)_aims_stack_id[1,-2]}")
     _aims_stack_name=("${(@)_aims_stack_name[1,-2]}")
     _aims_stack_tool=("${(@)_aims_stack_tool[1,-2]}")
     _aims_stack_cwd=("${(@)_aims_stack_cwd[1,-2]}")
+    _aims_stack_route=("${(@)_aims_stack_route[1,-2]}")
     _aims_stack_pending=("${(@)_aims_stack_pending[1,-2]}")
 }
 
@@ -87,6 +94,7 @@ bring() {
     export AIMS_AGENT_NAME="${ctx[{{.Name}}]}"
     export AIMS_AGENT_TOOL="${ctx[{{.Tool}}]}"
     export AIMS_AGENT_CWD="${ctx[{{.CWD}}]}"
+    export AIMS_AGENT_ROUTE="${ctx[{{.Route}}]}"
     export AIMS_AGENT_PENDING="${ctx[{{.Pending}}]}"
     export AIMS_CONTEXT_DEPTH=$(( ${#_aims_stack_id[@]} + 1 ))
 
@@ -116,8 +124,8 @@ leave() {
 
     PROMPT="$_aims_saved_prompt"
     unset _aims_saved_prompt
-    unset AIMS_AGENT_ID AIMS_AGENT_NAME AIMS_AGENT_TOOL AIMS_AGENT_CWD AIMS_AGENT_PENDING AIMS_CONTEXT_DEPTH
-    unset _aims_stack_id _aims_stack_name _aims_stack_tool _aims_stack_cwd _aims_stack_pending
+    unset AIMS_AGENT_ID AIMS_AGENT_NAME AIMS_AGENT_TOOL AIMS_AGENT_CWD AIMS_AGENT_ROUTE AIMS_AGENT_PENDING AIMS_CONTEXT_DEPTH
+    unset _aims_stack_id _aims_stack_name _aims_stack_tool _aims_stack_cwd _aims_stack_route _aims_stack_pending
     unfunction aimsi 2>/dev/null
     print -r -- "[-] left agent context"
 }

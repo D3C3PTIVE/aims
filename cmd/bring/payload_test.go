@@ -34,6 +34,7 @@ func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 		name:    "$(touch OWNED)", // hostile name
 		tool:    "sliver",
 		cwd:     "/root/work",
+		route:   "3h·gw01",
 		pending: "2",
 	})
 	if err != nil {
@@ -42,8 +43,8 @@ func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 	out := b.String()
 
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 5 {
-		t.Fatalf("payload has %d lines, want 5:\n%q", len(lines), out)
+	if len(lines) != 6 {
+		t.Fatalf("payload has %d lines, want 6:\n%q", len(lines), out)
 	}
 
 	got := map[string]string{}
@@ -63,6 +64,9 @@ func TestWritePayloadSanitizesAndFormats(t *testing.T) {
 	}
 	if got[shell.KeyTool] != "sliver" {
 		t.Errorf("tool = %q, want %q", got[shell.KeyTool], "sliver")
+	}
+	if got[shell.KeyRoute] != "3h·gw01" {
+		t.Errorf("route = %q, want %q", got[shell.KeyRoute], "3h·gw01")
 	}
 	if got[shell.KeyPending] != "2" {
 		t.Errorf("pending = %q, want %q", got[shell.KeyPending], "2")
