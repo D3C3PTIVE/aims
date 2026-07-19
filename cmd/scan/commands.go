@@ -113,8 +113,11 @@ func listCommand(con *client.Client) *cobra.Command {
 				return nil
 			}
 
-			// Generate the table of hosts.
-			table := display.Table(res.GetScans(), scan.DisplayFields, scan.DisplayHeaders()...)
+			// Order running scans first (most actionable), then by recency, before rendering.
+			scans := res.GetScans()
+			scan.SortRuns(scans)
+
+			table := display.Table(scans, scan.DisplayFields, scan.DisplayHeaders()...)
 			fmt.Println(table.Render())
 
 			return nil
@@ -130,19 +133,12 @@ func showCommand(con *client.Client) *cobra.Command {
 		Short: "Show one ore more scan details",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			targets, _ := command.Flags().GetBool("targets")
 			tasks, _ := command.Flags().GetBool("tasks")
+			targets, _ := command.Flags().GetBool("targets")
+			showHosts, _ := command.Flags().GetBool("hosts")
 
-			options := scan.DisplayDetails()
-
-			if tasks {
-				options = append(options, display.WithHeader("Tasks Details", 3))
-			}
-			if targets {
-				options = append(options, display.WithHeader("Targets Details", 4))
-			}
-
-			// Request
+			// Request (hosts + ports preloaded so the shared-host insight and --hosts section
+			// have data to work with).
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
@@ -150,20 +146,34 @@ func showCommand(con *client.Client) *cobra.Command {
 					Ports: true,
 				},
 			})
-			err = aims.CheckError(err)
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
 
-			// Display
-			found := false
-			for _, h := range res.GetScans() {
+			all := res.GetScans()
+			opt := scan.DetailOpts{Tasks: tasks, Targets: targets, Hosts: showHosts}
+
+			// Display each matching run through the shared Detail renderer.
+			shown := 0
+			for _, r := range all {
+				matched := false
 				for _, arg := range args {
-					if len(res.GetScans()) > 1 && found {
-						fmt.Println()
+					if strings.HasPrefix(r.Id, strip(arg)) {
+						matched = true
+						break
 					}
-					if strings.HasPrefix(h.Id, strip(arg)) {
-						fmt.Println(display.Details(h, scan.DisplayFields, options...))
-					}
-					found = true
 				}
+				if !matched {
+					continue
+				}
+				if shown > 0 {
+					fmt.Println()
+				}
+				fmt.Println(scan.Detail(r, all, opt).Render(0))
+				shown++
+			}
+			if shown == 0 {
+				return fmt.Errorf("no matching scan")
 			}
 
 			return nil
@@ -171,10 +181,9 @@ func showCommand(con *client.Client) *cobra.Command {
 	}
 
 	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
+		f.BoolP("tasks", "t", false, "Show scan task status/progress (the live view)")
 		f.BoolP("targets", "T", false, "Show scan targets' details")
-	})
-	aims.BindFlags(showCmd.Name(), false, showCmd, func(f *pflag.FlagSet) {
-		f.BoolP("tasks", "t", false, "Show all scan tasks status/details")
+		f.BoolP("hosts", "H", false, "Show scanned hosts as a table")
 	})
 
 	carapace.Gen(showCmd).PositionalAnyCompletion(CompleteByID(con))

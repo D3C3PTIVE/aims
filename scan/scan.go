@@ -19,14 +19,15 @@ package scan
 */
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/fatih/color"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	hostmerge "github.com/d3c3ptive/aims/host"
@@ -151,54 +152,105 @@ func hasPort(h *host.Host, p *host.Port) bool {
 }
 
 //
+// [ Run State ] ----------------------------------------------------------
 //
-// Nmap-specific ------------------------------------------------------
-//
+// A Run is the one object in the catalog with a live axis — it exists before,
+// during and after execution. runState collapses that axis into a single value,
+// computed once, that drives every state-dependent bit of presentation (the ID
+// colour, the Status column, the detail banner badge). Mirrors how the credential
+// domain derives "loot" colouring from one predicate.
 
-//
-//
-//
+type runState int
 
-//
-// Zgrab-specific ------------------------------------------------------
-//
+const (
+	stateCreated runState = iota // no begin/progress and not finished yet
+	stateRunning                 // has progress/begin, no finished stats
+	stateDone                    // finished, clean exit
+	stateFailed                  // finished with a non-success exit or error
+)
 
-// DisplayHeaders returns all weighted table headers for a table of scans.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
+// stateOf classifies a run. Finished stats are authoritative for done/failed; a run with task
+// activity but no finished stats is still running; anything else is freshly created/queued.
+func stateOf(r *scan.Run) runState {
+	if fin := r.GetStats().GetFinished(); fin != nil && (fin.Time != 0 || fin.TimeStr != "" || fin.Elapsed != 0) {
+		if fin.ErrorMsg != "" || (fin.Exit != "" && fin.Exit != "success") {
+			return stateFailed
+		}
+		return stateDone
 	}
+	if len(r.GetProgress()) > 0 || len(r.GetBegin()) > 0 {
+		return stateRunning
+	}
+	return stateCreated
+}
+
+// runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
+func runPercent(r *scan.Run) float32 {
+	var max float32
+	for _, p := range r.GetProgress() {
+		if p.GetPercent() > max {
+			max = p.GetPercent()
+		}
+	}
+	return max
+}
+
+// stateToken is the coloured one-word status shown in the list and the detail banner.
+func stateToken(r *scan.Run) string {
+	switch stateOf(r) {
+	case stateDone:
+		return color.HiGreenString("✓ done")
+	case stateFailed:
+		return color.HiRedString("✗ failed")
+	case stateRunning:
+		if p := runPercent(r); p > 0 {
+			return color.HiYellowString("● %.0f%%", p)
+		}
+		return color.HiYellowString("● running")
+	default:
+		return color.HiBlackString("⋯ queued")
+	}
+}
+
+//
+// [ Display Contracts ] --------------------------------------------------
+//
+
+// DisplayHeaders returns all weighted table headers for a table of scans. Weight-1 columns are
+// the always-on signal (identity, scanner, live status, host outcome, recency); heavier columns
+// shed first on narrow terminals.
+func DisplayHeaders() (headers []display.Options) {
+	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
 
 	add("ID", 1)
 	add("Scanner", 1)
-	add("Name", 1)
-	add("Info", 1)
+	add("Status", 1)
 	add("Hosts", 1)
-	add("Begin/End", 1)
-	add("Tasks", 1)
-	add("Finished", 1)
+	add("When", 1)
 
-	add("Args", 2)
+	add("Name", 2)
 	add("Targets", 2)
+	add("Args", 2)
+
+	add("Info", 3)
+	add("Tasks", 3)
 
 	return headers
 }
 
-// DetailHeaders returns the headers for a detailed scan view.
-func DisplayDetails() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
+// DisplayDetails is retained only for the c2 agent/channel `show` placeholders, which reuse this
+// weighted header set against their own DisplayFields map. Scan's own `show` uses the richer
+// Detail renderer (banner + panes + insights + sections); prefer that. Deprecated: do not build on
+// this for the scan domain.
+func DisplayDetails() (headers []display.Options) {
+	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
 
-	// Core
 	add("ID", 1)
 	add("Scanner", 1)
 	add("Name", 1)
+	add("Status", 1)
 	add("Info", 1)
 	add("Hosts", 1)
-	add("Begin/End", 1)
-	add("Finished", 1)
 	add("Tasks", 1)
 	add("Targets", 1)
 	add("Args", 1)
@@ -206,296 +258,549 @@ func DisplayDetails() []display.Options {
 	return headers
 }
 
-// Completions returns some columns to be combined into
-// completion candidates and/or their descriptions.
-func Completions() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
+// Completions returns the columns combined into completion candidates and their descriptions.
+func Completions() (headers []display.Options) {
+	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
 
 	add("ID", 1)
 	add("Scanner", 1)
-	add("Name", 1)
-	add("Info", 1)
-	add("Tasks", 1)
-	add("Args", 1)
+	add("Status", 1)
+	add("Name", 2)
+	add("Info", 2)
+	add("Args", 3)
 
 	return headers
 }
 
-// Fields maps field names to their value generators.
-var DisplayFields = map[string]func(h *scan.Run) string{
-	// Table
-	"ID": func(h *scan.Run) string {
-		if len(h.Begin) > len(h.End) {
-			return color.HiGreenString(display.FormatSmallID(h.Id))
+// DisplayFields maps column names to per-run value generators — the single source of truth feeding
+// the table and completions. Every accessor is nil-safe (a partially observed run must never
+// panic the table), and state-dependent fields route through stateOf so the whole view agrees.
+var DisplayFields = map[string]func(r *scan.Run) string{
+	"ID": func(r *scan.Run) string {
+		id := display.FormatSmallID(r.GetId())
+		switch stateOf(r) {
+		case stateDone:
+			return color.HiGreenString(id)
+		case stateFailed:
+			return color.HiRedString(id)
+		case stateRunning:
+			return color.HiYellowString(id)
+		default:
+			return id
 		}
-		if len(h.End) == 0 && len(h.Progress) > 0 {
-			return color.HiYellowString(display.FormatSmallID(h.Id))
-		}
-
-		return display.FormatSmallID(h.Id)
 	},
-	"Scanner": func(h *scan.Run) string {
-		return h.Scanner
-	},
-	"Name": func(h *scan.Run) string {
-		return h.ProfileName
-	},
-	"Info": func(h *scan.Run) string {
-		info := h.Info.Protocol + "/" + h.Info.Type
-		return info
-	},
-	"Args": func(h *scan.Run) string {
-		return h.Args
-	},
-	"Begin/End": func(h *scan.Run) string {
-		if h.Stats == nil || h.Stats.Finished == nil {
+	"Scanner": func(r *scan.Run) string { return r.GetScanner() },
+	"Name":    func(r *scan.Run) string { return r.GetProfileName() },
+	"Status":  func(r *scan.Run) string { return stateToken(r) },
+	"Info": func(r *scan.Run) string {
+		info := r.GetInfo()
+		if info == nil {
 			return ""
 		}
-		done := h.Stats.Finished.TimeStr
-		return fmt.Sprintf("%s (%s)",
-			done,
-			time.Duration(int64(h.Stats.Finished.Elapsed)).String())
-	},
-	"Targets": func(h *scan.Run) string {
-		targetsDisplay := new(strings.Builder)
-
-		if h.Info.NumServices > 0 {
-			targetsDisplay.WriteString(fmt.Sprintf("Services (%d)   ", h.Info.NumServices))
+		var parts []string
+		if info.Protocol != "" {
+			parts = append(parts, info.Protocol)
 		}
-
-		if len(h.Targets) > 0 {
-			tgtRaw := fmt.Sprintf("Hosts (%d)", len(h.Targets))
-			targetsDisplay.WriteString(tgtRaw)
+		if info.Type != "" {
+			parts = append(parts, info.Type)
 		}
-
-		return strings.TrimSpace(targetsDisplay.String())
+		return strings.Join(parts, "/")
 	},
-	"Targets Details": func(h *scan.Run) string {
-		targetsDisplay := new(strings.Builder)
-
-		if h.Info.Services != "" {
-			targetsDisplay.WriteString(h.Info.Services)
-		}
-
-		for _, tgt := range h.Targets {
-			tgtRaw := fmt.Sprintf("%s:%d", tgt.Address, tgt.Port)
-			if tgt.Port == 0 {
-				tgtRaw = strings.TrimSuffix(tgtRaw, ":0")
-			}
-			tgtURL, err := url.Parse(tgtRaw)
-			if err != nil {
-				return tgtRaw
-			}
-
-			targetsDisplay.WriteString(fmt.Sprintln(tgtURL.String()))
-		}
-
-		return targetsDisplay.String()
-	},
-	"Finished": func(h *scan.Run) string {
-		if h.Stats != nil && h.Stats.Finished != nil {
-			return color.HiGreenString("true")
-		}
-		return color.HiYellowString("false")
-	},
-	"Hosts": func(h *scan.Run) string {
-		var hosts string
-
-		var hostsUp, hostsDown int32
-
-		if h.Stats != nil && h.Stats.Hosts != nil {
-			hostsUp = h.Stats.Hosts.Up
-			hostsDown = h.Stats.Hosts.Down
-
-		} else {
-			for _, h := range h.Hosts {
-				if h.Status.State == "up" {
-					hostsUp++
-				} else {
-					hostsDown++
-				}
-			}
-		}
-
-		hosts += color.HiGreenString(fmt.Sprint(hostsUp))
-		hosts += "/"
-		hosts += color.HiRedString(fmt.Sprint(hostsDown))
-
-		return hosts
-	},
-	"Tasks": func(h *scan.Run) string {
-		tasksDisplay := ""
-
-		running, done := getTasks(h)
-
-		if len(running) > 0 {
-			tasksDisplay += color.HiYellowString("%d", len(h.End))
-		} else {
-			tasksDisplay += fmt.Sprintf("%d", len(done))
-		}
-
-		tasksDisplay += fmt.Sprintf("/%d", len(done)+len(running))
-
-		return tasksDisplay
-	},
-	"Tasks Details": func(h *scan.Run) string {
-		return formatTasks(h)
-	},
+	"Args":    func(r *scan.Run) string { return r.GetArgs() },
+	"When":    func(r *scan.Run) string { return whenLabel(r) },
+	"Hosts":   func(r *scan.Run) string { return hostsUpDown(r) },
+	"Targets": func(r *scan.Run) string { return targetsSummary(r) },
+	"Tasks":   func(r *scan.Run) string { return tasksSummary(r) },
 }
 
-func tasksHeaders() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
+// SortRuns orders runs for listing: running scans first (most actionable), then queued, then the
+// rest — each group by most-recent activity. Stable, so equal keys keep their read order.
+func SortRuns(runs []*scan.Run) {
+	slices.SortStableFunc(runs, func(a, b *scan.Run) int {
+		if c := cmp.Compare(sortRank(a), sortRank(b)); c != 0 {
+			return c
+		}
+		return cmp.Compare(activityTime(b), activityTime(a)) // newer first
+	})
+}
+
+func sortRank(r *scan.Run) int {
+	switch stateOf(r) {
+	case stateRunning:
+		return 0
+	case stateCreated:
+		return 1
+	default:
+		return 2
 	}
-	add("Time", 1)
-	add("Name", 1)
-	add("Info", 1)
-
-	return headers
 }
 
-var tasksFields = map[string]func(h *scan.ScanTask) string{
-	"Time": func(taskEnd *scan.ScanTask) string {
-		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
-	},
-	"Name": func(h *scan.ScanTask) string {
-		return h.Task
-	},
-	"Info": func(h *scan.ScanTask) string {
-		return h.ExtraInfo
-	},
-}
-
-func tasksProgressHeaders() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
+// activityTime is the run's most-recent timestamp for recency sorting: finished, else started,
+// else created.
+func activityTime(r *scan.Run) int64 {
+	if fin := r.GetStats().GetFinished(); fin != nil && fin.Time != 0 {
+		return fin.Time
 	}
-
-	add("Time", 1)
-	add("Name", 1)
-	add("Percent", 1)
-
-	return headers
+	if r.GetStart() != 0 {
+		return r.GetStart()
+	}
+	if ts := r.GetCreatedAt(); ts != nil {
+		return ts.AsTime().Unix()
+	}
+	return 0
 }
 
-var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
-	"Name": func(h *scan.TaskProgress) string {
-		return h.Task
-	},
-	"Time": func(taskEnd *scan.TaskProgress) string {
-		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
-	},
-	"Percent": func(taskEnd *scan.TaskProgress) string {
-		return color.HiYellowString(fmt.Sprintf("%v%%", taskEnd.Percent))
-	},
+//
+// [ Detail View ] --------------------------------------------------------
+//
+
+// DetailOpts selects which trailing sections a detail view includes. They are flag-gated at the
+// CLI because each is verbose (task streams, full target lists, the shared-host table) and off by
+// default keeps `scan show` scannable.
+type DetailOpts struct {
+	Tasks   bool // the running/done task tables (the live view)
+	Targets bool // the full target list with per-target status/reason
+	Hosts   bool // the scanned hosts rendered as a compact table
 }
 
-func formatTasks(h *scan.Run) string {
-	tasksDisplay := ""
-	running, done := getTasks(h)
+// Detail assembles the full `show` view for a single run: the state banner, the side-by-side info
+// panes, derived insights (including the cross-run host-sharing count, which needs the whole set
+// `all` to compute), and any flag-selected trailing sections. It hands these to the shared
+// display.Detail renderer, so a run's detail view is laid out identically to every other domain's.
+func Detail(r *scan.Run, all []*scan.Run, opt DetailOpts) display.Detail {
+	return display.Detail{
+		Title:    bannerTitle(r),
+		Badges:   bannerBadges(r),
+		Panes:    infoPanes(r),
+		Insights: insights(r, all),
+		Sections: sections(r, opt),
+	}
+}
+
+// bannerTitle is "<scanner> · <profile|args>", bold scanner with a dim-separated qualifier.
+func bannerTitle(r *scan.Run) string {
+	name := r.GetScanner()
+	if name == "" {
+		name = "scan"
+	}
+	title := display.Bold + name + display.Reset
+	if p := r.GetProfileName(); p != "" {
+		title += display.Dim + " · " + display.Reset + p
+	} else if a := r.GetArgs(); a != "" {
+		title += display.Dim + " · " + display.Reset + shorten(a, 52)
+	}
+	return title
+}
+
+// bannerBadges are the run's status badges: live state, elapsed time, and the host up/down tally.
+func bannerBadges(r *scan.Run) (badges []string) {
+	badges = append(badges, stateToken(r))
+	if e := elapsedStr(r); e != "" {
+		badges = append(badges, color.HiBlackString(e))
+	}
+	if hs := r.GetStats().GetHosts(); hs != nil && (hs.Up > 0 || hs.Down > 0) {
+		badges = append(badges, color.HiGreenString("%d up", hs.Up)+color.HiBlackString("/")+color.HiRedString("%d down", hs.Down))
+	}
+	return badges
+}
+
+// infoPanes groups a run's detail into titled panes (Run / Timing / Scope / Results) for
+// side-by-side layout via display.Columns, mirroring the credential and service info views.
+func infoPanes(r *scan.Run) []display.Pane {
+	run := display.KVLines([][2]string{
+		{"Scanner", r.GetScanner()},
+		{"Version", r.GetVersion()},
+		{"Profile", r.GetProfileName()},
+		{"Args", r.GetArgs()},
+	})
+	timing := display.KVLines([][2]string{
+		{"Started", r.GetStartStr()},
+		{"Finished", finishedStr(r)},
+		{"Elapsed", elapsedStr(r)},
+		{"Exit", exitStr(r)},
+	})
+	info := r.GetInfo()
+	scope := display.KVLines([][2]string{
+		{"Protocol", info.GetProtocol()},
+		{"Type", info.GetType()},
+		{"Services", info.GetServices()},
+		{"Targets", targetsSummary(r)},
+	})
+	results := display.KVLines([][2]string{
+		{"Hosts", hostsTotal(r)},
+		{"ID", display.FormatSmallID(r.GetId())},
+		{"Updated", fmtTime(r.GetUpdatedAt())},
+	})
+
+	return []display.Pane{
+		{Title: "Run", Lines: run},
+		{Title: "Timing", Lines: timing},
+		{Title: "Scope", Lines: scope},
+		{Title: "Results", Lines: results},
+	}
+}
+
+// insights returns the cross-cutting observations for a single run: how many other runs share its
+// hosts (the payoff of cross-run unification), any scanner warnings/errors, the finished summary,
+// and — for a live run — the in-progress task tally. `all` is the set the run is viewed within;
+// host-sharing cannot be computed from one run alone.
+func insights(r *scan.Run, all []*scan.Run) (lines []string) {
+	if shared := sharedRunCount(r, all); shared > 0 {
+		lines = append(lines, fmt.Sprintf("shares host(s) with %d other run(s)", shared))
+	}
+	if stateOf(r) == stateRunning {
+		running, done := getTasks(r)
+		lines = append(lines, fmt.Sprintf("in progress — %d task(s) done, %d running", len(done), len(running)))
+	}
+	if fin := r.GetStats().GetFinished(); fin != nil {
+		if fin.ErrorMsg != "" {
+			lines = append(lines, color.HiRedString("✗ ")+fin.ErrorMsg)
+		} else if fin.Summary != "" {
+			lines = append(lines, color.HiBlackString(fin.Summary))
+		}
+	}
+	for _, e := range r.GetNmapErrors() {
+		if strings.TrimSpace(e) != "" {
+			lines = append(lines, color.HiYellowString("⚠ ")+e)
+		}
+	}
+	return lines
+}
+
+// sharedRunCount counts other runs in `all` that observed at least one of r's (persisted) hosts —
+// the cross-run host-row unification made visible. Requires the runs' Hosts to be loaded.
+func sharedRunCount(r *scan.Run, all []*scan.Run) int {
+	mine := map[string]bool{}
+	for _, h := range r.GetHosts() {
+		if h.GetId() != "" {
+			mine[h.GetId()] = true
+		}
+	}
+	if len(mine) == 0 {
+		return 0
+	}
+	count := 0
+	for _, other := range all {
+		if other.GetId() == r.GetId() {
+			continue
+		}
+		for _, h := range other.GetHosts() {
+			if mine[h.GetId()] {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
+// sections builds the flag-selected trailing blocks (empty ones drop out in display.Detail).
+func sections(r *scan.Run, opt DetailOpts) (out []display.Section) {
+	if opt.Tasks {
+		if body := formatTasks(r); strings.TrimSpace(body) != "" {
+			out = append(out, display.Section{Title: "Tasks", Body: body})
+		}
+	}
+	if opt.Targets {
+		if body := formatTargets(r); strings.TrimSpace(body) != "" {
+			out = append(out, display.Section{Title: "Targets", Body: body})
+		}
+	}
+	if opt.Hosts {
+		if body := formatHosts(r); strings.TrimSpace(body) != "" {
+			out = append(out, display.Section{Title: "Hosts", Body: body})
+		}
+	}
+	return out
+}
+
+//
+// [ Field Formatters ] ---------------------------------------------------
+//
+
+// whenLabel is the run's recency for the list: a live run shows running elapsed, others show a
+// relative "N ago" of their most-recent timestamp.
+func whenLabel(r *scan.Run) string {
+	if stateOf(r) == stateRunning && r.GetStart() != 0 {
+		return "running " + shortDur(time.Since(time.Unix(r.GetStart(), 0)))
+	}
+	if t := activityTime(r); t != 0 {
+		return relTime(time.Unix(t, 0))
+	}
+	return ""
+}
+
+// hostsUpDown is the coloured "up/down" tally for the list, from finished stats when present, else
+// counted from the loaded hosts.
+func hostsUpDown(r *scan.Run) string {
+	var up, down int32
+	if hs := r.GetStats().GetHosts(); hs != nil {
+		up, down = hs.Up, hs.Down
+	} else {
+		for _, h := range r.GetHosts() {
+			if h.GetStatus().GetState() == "up" {
+				up++
+			} else {
+				down++
+			}
+		}
+	}
+	if up == 0 && down == 0 {
+		return ""
+	}
+	return color.HiGreenString("%d", up) + "/" + color.HiRedString("%d", down)
+}
+
+// hostsTotal is the verbose up/down/total line for the detail Results pane.
+func hostsTotal(r *scan.Run) string {
+	if hs := r.GetStats().GetHosts(); hs != nil {
+		return fmt.Sprintf("%d up / %d down / %d total", hs.Up, hs.Down, hs.Total)
+	}
+	if n := len(r.GetHosts()); n > 0 {
+		return fmt.Sprintf("%d", n)
+	}
+	return ""
+}
+
+// targetsSummary is the compact "services(n) hosts(n)" scope shown in the list and Scope pane.
+func targetsSummary(r *scan.Run) string {
+	var b strings.Builder
+	if n := r.GetInfo().GetNumServices(); n > 0 {
+		fmt.Fprintf(&b, "services(%d) ", n)
+	}
+	if n := len(r.GetTargets()); n > 0 {
+		fmt.Fprintf(&b, "hosts(%d)", n)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// tasksSummary is the "done/total" task count for the list; the running count is highlighted when
+// a scan is still executing.
+func tasksSummary(r *scan.Run) string {
+	running, done := getTasks(r)
+	total := len(done) + len(running)
+	if total == 0 {
+		return ""
+	}
+	if len(running) > 0 {
+		return color.HiYellowString("%d", len(done)) + fmt.Sprintf("/%d", total)
+	}
+	return fmt.Sprintf("%d/%d", len(done), total)
+}
+
+func finishedStr(r *scan.Run) string {
+	if fin := r.GetStats().GetFinished(); fin != nil {
+		if fin.TimeStr != "" {
+			return fin.TimeStr
+		}
+		if fin.Time != 0 {
+			return time.Unix(fin.Time, 0).Format("2006-01-02 15:04")
+		}
+	}
+	return ""
+}
+
+func elapsedStr(r *scan.Run) string {
+	if fin := r.GetStats().GetFinished(); fin != nil && fin.Elapsed > 0 {
+		return shortDur(time.Duration(float64(fin.Elapsed) * float64(time.Second)))
+	}
+	return ""
+}
+
+func exitStr(r *scan.Run) string {
+	fin := r.GetStats().GetFinished()
+	if fin == nil {
+		return ""
+	}
+	if fin.ErrorMsg != "" {
+		return color.HiRedString("%s (%s)", fin.Exit, fin.ErrorMsg)
+	}
+	return fin.Exit
+}
+
+// shorten truncates s to at most max visible runes, adding an ellipsis.
+func shorten(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max-1]) + "…"
+}
+
+// shortDur renders a duration compactly: "42s", "3m07s", "1h05m".
+func shortDur(d time.Duration) string {
+	d = d.Round(time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+}
+
+// relTime renders a past time as a coarse "N ago".
+func relTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < 0:
+		return t.Format("2006-01-02 15:04")
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours())/24)
+	}
+}
+
+func fmtTime(t *timestamppb.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	tt := t.AsTime()
+	if tt.IsZero() {
+		return ""
+	}
+	return tt.Format("2006-01-02 15:04")
+}
+
+//
+// [ Section Bodies ] -----------------------------------------------------
+//
+
+// formatTargets renders the run's target list with each target's status/reason, for the Targets
+// section of the detail view.
+func formatTargets(r *scan.Run) string {
+	if len(r.GetTargets()) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, t := range r.GetTargets() {
+		spec := t.GetSpecification()
+		if spec == "" {
+			spec = t.GetAddress()
+		}
+		if spec == "" {
+			continue
+		}
+		line := "\n  " + spec
+		if t.GetPort() != 0 {
+			line += fmt.Sprintf(":%d", t.GetPort())
+		}
+		if st := t.GetStatus(); st != "" {
+			suffix := st
+			if rsn := t.GetReason(); rsn != "" {
+				suffix += ": " + rsn
+			}
+			line += " " + display.Dim + "[" + suffix + "]" + display.Reset
+		}
+		b.WriteString(line)
+	}
+	return b.String()
+}
+
+// formatHosts renders the run's scanned hosts as a compact table, reusing the host domain's own
+// display contract so the table matches `hosts list`.
+func formatHosts(r *scan.Run) string {
+	if len(r.GetHosts()) == 0 {
+		return ""
+	}
+	table := display.Table(r.GetHosts(), hostmerge.DisplayFields, hostmerge.DisplayHeaders()...)
+	return "\n" + table.Render()
+}
+
+// formatTasks renders the run's task streams as up to two tables — running (progress) and done —
+// for the Tasks section. This is the live view of an in-flight scan.
+func formatTasks(r *scan.Run) string {
+	var out string
+	running, done := getTasks(r)
 
 	if len(running) > 0 {
 		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
 		table.SetTitle("%s", "\n"+color.HiYellowString("Running tasks"))
-		tasksDisplay += table.Render()
+		out += table.Render()
 	}
-
 	if len(done) > 0 {
-
 		table := display.Table(done, tasksFields, tasksHeaders()...)
 		table.SetTitle("%s", "\n"+color.HiYellowString("Done tasks"))
-		tasksDisplay += table.Render()
+		out += table.Render()
 	}
-
-	return tasksDisplay
+	return out
 }
 
-func getTasks(h *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask) {
-	var runningRemain []*scan.TaskProgress
-	nonFinished := true
+// getTasks splits a run's task records into the still-running (latest progress per task, minus any
+// that have since ended) and the done (ended) tasks, each sorted by time.
+func getTasks(r *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask) {
+	done = append(done, r.GetEnd()...)
+	slices.SortFunc(done, func(a, b *scan.ScanTask) int {
+		return cmp.Compare(a.GetTime(), b.GetTime())
+	})
 
-	if len(h.Begin) > 0 {
-		for i := range h.Begin {
-			// Find the corresponding end if any.
-			// Or check the running tasks progress values.
-			if 0 <= i && i <= len(h.End) {
-				taskEnd := h.End[i]
-				done = append(done, taskEnd)
-				nonFinished = false
-				continue
-			}
+	// A task that has an End record is finished, even if it also has progress records.
+	ended := make(map[string]bool, len(done))
+	for _, t := range done {
+		ended[t.GetTask()] = true
+	}
 
-			nonFinished = false
+	// Keep only the furthest-along progress record per still-running task name.
+	latest := map[string]*scan.TaskProgress{}
+	for _, p := range r.GetProgress() {
+		if ended[p.GetTask()] {
+			continue
+		}
+		if cur, ok := latest[p.GetTask()]; !ok || p.GetPercent() >= cur.GetPercent() {
+			latest[p.GetTask()] = p
 		}
 	}
-
-	// Filter out duplicates in remain
-	if len(h.Progress) > 0 && nonFinished {
-		slices.SortFunc(h.Progress, func(a, b *scan.TaskProgress) int {
-			switch {
-			case a.Percent < b.Percent:
-				return -1
-			case a.Percent > b.Percent:
-				return +1
-			default:
-				return 0
-			}
-		})
-		var current *scan.TaskProgress
-		done := false
-
-		for i := len(h.Progress); i > 0; i-- {
-			task := h.Progress[i-1]
-
-			if current == nil {
-				runningRemain = append(runningRemain, task)
-				current = task
-				continue
-			}
-
-			if current.Task == task.Task {
-				continue
-			}
-
-			current = nil
-			done = true
-		}
-
-		if current != nil && done {
-			runningRemain = append(runningRemain, current)
-		}
+	for _, p := range latest {
+		running = append(running, p)
 	}
-	if len(done) > 0 {
-		slices.SortFunc(done, func(a, b *scan.ScanTask) int {
-			aTime := time.Unix(a.Time, 0)
-			bTime := time.Unix(b.Time, 0)
+	slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
+		return cmp.Compare(a.GetTime(), b.GetTime())
+	})
 
-			return aTime.Compare(bTime)
-		})
-	}
+	return running, done
+}
 
-	if len(runningRemain) > 0 {
-		slices.SortFunc(runningRemain, func(a, b *scan.TaskProgress) int {
-			aTime := time.Unix(a.Time, 0)
-			bTime := time.Unix(b.Time, 0)
+func tasksHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
+	add("Time", 1)
+	add("Name", 1)
+	add("Info", 1)
+	return headers
+}
 
-			return aTime.Compare(bTime)
-		})
-		running = append(running, runningRemain...)
-	}
+var tasksFields = map[string]func(h *scan.ScanTask) string{
+	"Time": func(t *scan.ScanTask) string {
+		return color.HiBlackString(time.Unix(t.GetTime(), 0).Format("15:04:05"))
+	},
+	"Name": func(t *scan.ScanTask) string { return t.GetTask() },
+	"Info": func(t *scan.ScanTask) string { return t.GetExtraInfo() },
+}
 
-	if len(running) > 0 {
-		slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
-			aTime := time.Unix(a.Time, 0)
-			bTime := time.Unix(b.Time, 0)
+func tasksProgressHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
+	add("Time", 1)
+	add("Name", 1)
+	add("Percent", 1)
+	return headers
+}
 
-			return aTime.Compare(bTime)
-		})
-	}
-	return
+var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
+	"Name": func(t *scan.TaskProgress) string { return t.GetTask() },
+	"Time": func(t *scan.TaskProgress) string {
+		return color.HiBlackString(time.Unix(t.GetTime(), 0).Format("15:04:05"))
+	},
+	"Percent": func(t *scan.TaskProgress) string {
+		return color.HiYellowString("%.0f%%", t.GetPercent())
+	},
 }
