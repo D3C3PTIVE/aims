@@ -19,7 +19,6 @@ package scan
 */
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -77,8 +76,10 @@ func runNmapCommand(con *client.Client) *cobra.Command {
 }
 
 func runNmap(command *cobra.Command, con *client.Client, args []string) error {
-	if len(args) == 0 {
-		return errors.New("no nmap arguments/targets provided (e.g. `-sT -p80 scanme.nmap.org`)")
+	// DisableFlagParsing means -h/--help would otherwise be forwarded to nmap; intercept the
+	// bare help/no-arg case and show this command's help instead (the least-surprising behaviour).
+	if len(args) == 0 || (len(args) == 1 && (args[0] == "-h" || args[0] == "--help")) {
+		return command.Help()
 	}
 
 	scanner, err := nmapscan.NewScanner(

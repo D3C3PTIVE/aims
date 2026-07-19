@@ -27,20 +27,26 @@ Solo project (Maxime Landon), 92 commits, reconstructed from git:
 **Left off at:** wiring the c2 Agent/Channel domain end-to-end and polishing display fields —
 the newest and least-finished area.
 
-## Build status (updated 2026-07-19 — core now compiles)
+## Build status (updated 2026-07-19 — the whole tree builds; the `aims` binary runs)
 
 The original gondor/maltego blocker (below) is resolved, along with a cascade of ~1-year
-dependency drift it was masking. Current state of `GOWORK=off go build ./...`:
+dependency drift it was masking, and the `reeflective/team` v0.3.2 migration is now done.
+Current state of `GOWORK=off go build ./...`:
 
-- ✅ **AIMS core compiles.** Every domain (`host`, `network`, `credential`, `scan/nmap`, `c2`),
-  the generated `pb` layer, all per-domain gRPC servers (`server/<domain>`), the aggregate
-  `server` package, the `client` (incl. `client/transport`), and every CLI package
-  (`cmd/<domain>`, `cmd/display`, `cmd/export`) build clean.
-- ❌ **`server/transport/` does not yet compile** — a `reeflective/team` **v0.3.2** API
-  migration: `NamedLogger` now returns `*slog.Logger` (no `Infof/Errorf/Debugf`); the
-  `grpc_logrus` middleware is gone; `server.Listener`/`WithListener` became
-  `server.Handler`/`WithHandler`; and `GetConfig`/`AuditLogger`/`UsersTLSConfig`/
-  `UserAuthenticate` signatures changed. `cmd/aims` (the binary) fails transitively.
+- ✅ **The whole tree builds — including `cmd/aims`.** Every domain (`host`, `network`,
+  `credential`, `scan/nmap`, `c2`), the generated `pb` layer, all per-domain gRPC servers, the
+  aggregate `server` package, `server/transport`, the `client`, every CLI package, and the
+  **`aims` binary** build clean.
+- ✅ **`server/transport/` compiles** — the `reeflective/team` **v0.3.2** API migration landed
+  in `7749329` (slog loggers, `WithHandler`, changed `GetConfig`/auth signatures; Tailscale
+  gated behind `-tags tailscale`). `cmd/aims` no longer fails transitively.
+- ✅ **The binary runs.** `aims --help` shows the full command tree (database + C2 groups +
+  `teamserver`); `aims scan run nmap …` executes and stores; its completions fire
+  (`aims __complete scan run nmap --script ""` returns the NSE catalog). The nmap fork
+  (`d3c3ptive/nmap`) is a real dependency via local `replace => ../nmap`.
+
+> First build of `./...` (or `cmd/aims`) is slow — it compiles the large teamserver/gRPC tree;
+> allow a few minutes. Subsequent builds are cached.
 
 ### What was fixed to unblock the core
 
