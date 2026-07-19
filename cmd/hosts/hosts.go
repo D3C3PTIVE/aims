@@ -153,7 +153,7 @@ func Commands(client *client.Client) *cobra.Command {
 
 // CompleteByID returns hosts completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	return aims.CacheCompletion(client, "hosts:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -172,13 +172,13 @@ func CompleteByID(client *client.Client) carapace.Action {
 		results := display.Completions(res.Hosts, host.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
-	})
+	}))
 }
 
 // CompleteByHostnameOrIP returns completions for all hostnames,
 // or if not found for some hosts, their corresponding addresses.
 func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	return aims.CacheCompletion(client, "hosts:hostname-or-ip", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -198,7 +198,7 @@ func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
 		results := display.Completions(res.Hosts, host.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
-	})
+	}))
 }
 
 func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {

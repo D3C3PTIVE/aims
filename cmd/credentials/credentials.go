@@ -293,7 +293,7 @@ func applyReveal(command *cobra.Command) {
 // candidate column is empty for a row), and turns the remaining columns into the aligned
 // description. `split` explodes a list-valued candidate column into several candidates.
 func completeCredentials(con *client.Client, candidate, fallback, tag, split string) carapace.Action {
-	return carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, "credentials:"+tag, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -326,7 +326,7 @@ func completeCredentials(con *client.Client, candidate, fallback, tag, split str
 		results := display.CompletionsStyled(res.GetCredentials(), cred.DisplayFields, styleOf, opts...)
 
 		return carapace.ActionStyledValuesDescribed(results...).Tag(tag)
-	})
+	}))
 }
 
 // CompleteByID completes credential IDs, described by their public/private/type/realm/origin.

@@ -20,6 +20,7 @@ package client
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/reeflective/team"
 	"github.com/reeflective/team/client"
@@ -217,6 +218,25 @@ func (con *Client) ConnectComplete() (carapace.Action, error) {
 	}
 
 	return carapace.ActionValues(), nil
+}
+
+// CompletionScope returns a stable identifier for the teamserver this client
+// talks to (user@host:port), used to namespace on-disk completion caches so a
+// multiplayer client never serves one server's objects when completing against
+// another. It returns "local" when no remote config is selected (the in-process
+// teamserver). Note: the remote config is only populated once Teamclient.Connect()
+// has run, so in exec-once CLI mode — where the scope is read before the per-Tab
+// connection — this falls back to "local"; segmentation is exact in the persistent
+// console. Resolving the selected config's host without a full connect is a follow-up.
+func (con *Client) CompletionScope() string {
+	if con.Teamclient == nil {
+		return "local"
+	}
+	cfg := con.Teamclient.Config()
+	if cfg == nil || cfg.Host == "" {
+		return "local"
+	}
+	return fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port)
 }
 
 // Disconnect disconnects the client from its Sliver server,

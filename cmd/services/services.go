@@ -233,7 +233,7 @@ func numColored(port *pb.Port) string {
 // CompleteByID completes services by their (short) ID, described by host / number / proto /
 // product / state, and colours each candidate by port state (open green, filtered yellow, else dim).
 func CompleteByID(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, "services:id", carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -296,7 +296,7 @@ func CompleteByID(con *client.Client) carapace.Action {
 		results := display.CompletionsStyled(rows, fields, styleOf, opts...)
 
 		return carapace.ActionStyledValuesDescribed(results...).Tag("services (by id)")
-	})
+	}))
 }
 
 //
