@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/carapace-sh/carapace"
+	"github.com/carapace-sh/carapace-bridge/pkg/actions/bridge"
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
@@ -52,14 +53,14 @@ import (
 // teamclient. (NSE names are read from the local nmap script.db; see completeNSEScripts.)
 //
 // SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we deliberately
-// do NOT mirror nmap's hundreds of flags as typed cobra flags. The flag completion below is a
-// small curated set (AIMS attaches descriptions the shell bridge can't); the full flag long-tail
-// is left to a carapace-bridge fallback as a follow-on (not yet a module dependency — see
-// nmapFlagGroups).
+// do NOT mirror nmap's hundreds of flags as typed cobra flags. The flag completion below stacks a
+// small curated set (AIMS attaches descriptions and grouping) on top of nmap's full flag long-tail,
+// which is bridged from the system's zsh `_nmap` completer via carapace-bridge (see
+// nmapFlagCompletions) — so passthrough stays complete without ever declaring the flags ourselves.
 func completeRunNmap(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 && c.Args[n-1] == "--script" {
-			return completeNSEScripts()
+			return completeNSEScripts(con)
 		}
 		if strings.HasPrefix(c.Value, "-") {
 			return nmapFlagCompletions()
@@ -184,14 +185,12 @@ type flagGroup struct {
 	flags []string
 }
 
-// nmapFlagGroups is the curated, described flag set offered while the operator is typing a `-flag`.
-// It is intentionally small: AIMS mirrors none of nmap's flags as typed cobra flags (SCAN.md), so
-// this is only the highest-value handful, grouped so the operator sees scan types apart from timing
-// apart from output. The exhaustive long-tail is a job for carapace-bridge (bridge.ActionZsh
-// /ActionBash over the system `_nmap` completer) — deliberately a follow-on, not wired here: it is
-// not yet a module dependency, it spawns a shell per completion, loses these descriptions, and
-// cannot complete DB targets. See SCAN.md "raw passthrough, plus completion only where AIMS adds
-// value".
+// nmapFlagGroups is the curated, described flag set offered on top while the operator is typing a
+// `-flag`. It is intentionally small: AIMS mirrors none of nmap's flags as typed cobra flags
+// (SCAN.md), so this is only the highest-value handful, grouped so the operator sees scan types
+// apart from timing apart from output — with AIMS-authored descriptions the bridge can't guarantee.
+// The exhaustive long-tail is supplied by carapace-bridge underneath (see nmapFlagCompletions), so
+// this curated set is a hand-tuned "most useful first" layer, not the whole surface.
 func nmapFlagGroups() []flagGroup {
 	return []flagGroup{
 		{tag: "scan type", flags: []string{
@@ -226,13 +225,34 @@ func nmapFlagGroups() []flagGroup {
 	}
 }
 
-// nmapFlagCompletions renders the curated flag set as sub-grouped, described carapace values.
+// nmapFlagCompletions renders the flag completion offered while typing a `-flag`: the curated,
+// sub-grouped, described set on top, then nmap's full flag long-tail underneath.
+//
+// The long-tail is bridged to the system's zsh `_nmap` completer (carapace-bridge). It is filtered
+// to drop the flags we already curate, so our authored descriptions and grouping win over the
+// bridge's plainer entries, and tagged as its own group so it sits below the curated set. The
+// bridge is best-effort: it spawns `zsh` per completion and needs nmap's `_nmap` zsh completion
+// present; if either is missing it yields nothing (or an error line) and the curated set still
+// stands. zsh is the chosen shell because nmap ships a rich `_nmap` (with descriptions, which
+// ActionZsh forwards) and this project's operators run zsh; ActionBash/ActionFish exist for other
+// shells if that assumption ever changes.
 func nmapFlagCompletions() carapace.Action {
 	groups := nmapFlagGroups()
-	actions := make([]carapace.Action, 0, len(groups))
+	actions := make([]carapace.Action, 0, len(groups)+1)
+
+	curated := make([]string, 0)
 	for _, g := range groups {
 		actions = append(actions, carapace.ActionValuesDescribed(g.flags...).Tag(g.tag))
+		for i := 0; i+1 < len(g.flags); i += 2 {
+			curated = append(curated, g.flags[i])
+		}
 	}
+
+	longTail := bridge.ActionZsh("nmap").
+		Filter(curated...).
+		Tag("nmap (full flag set)")
+	actions = append(actions, longTail)
+
 	return carapace.Batch(actions...).ToA()
 }
 
@@ -240,26 +260,43 @@ func nmapFlagCompletions() carapace.Action {
 // category selectors, parsed from the local script.db. `--script` takes a comma-separated
 // list (names, categories, wildcards), so completion is per comma-separated segment.
 //
+// The parse (findScriptDB + a regex over ~600 script.db lines) is wrapped in the shared
+// on-disk completion cache. This matters most in exec-once CLI mode, where every Tab is a
+// fresh process: an in-process memo would never hit, so only the on-disk cache collapses the
+// re-parse-per-keystroke storm. The ActionMultiParts shell stays *outside* the cache so the
+// per-segment comma handling is always recomputed against what was typed; the cached candidate
+// set is identical for every segment, so one cache entry (keyed by the Cache call site) serves
+// them all. A "no script.db" result is an ActionMessage, which carapace never caches, so
+// installing nmap later is picked up on the next Tab.
+//
+// The cache lives under the "local" scope — script.db is a local-machine resource, independent
+// of any teamserver, and CompletionScope() returns "local" without a connection. The teamserver
+// scope and DB-mutation epoch keys carapace mixes in are spurious for a local file (a remote
+// switch or a DB add/import needlessly drops this entry) but only ever cost a harmless re-parse,
+// and the short TTL bounds staleness against an nmap upgrade.
+//
 // Caveat: script.db is read from the *local* machine — the one running the CLI/completion —
 // while scans execute server-side (SCAN.md). The authoritative list is the server's; a
 // server-side NSE-list RPC is the correct long-term source. This local read is a good-enough
 // first cut (script names are stable across nmap installs) and degrades to a message if absent.
-func completeNSEScripts() carapace.Action {
-	scripts, categories := loadNSEScripts()
-	if len(scripts) == 0 && len(categories) == 0 {
-		return carapace.ActionMessage("no nmap script.db found (is nmap installed locally?)")
-	}
+func completeNSEScripts(con *client.Client) carapace.Action {
+	return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
+		return aims.CacheCompletion(con, "scan:nmap:nse", carapace.ActionCallback(func(carapace.Context) carapace.Action {
+			scripts, categories := loadNSEScripts()
+			if len(scripts) == 0 && len(categories) == 0 {
+				return carapace.ActionMessage("no nmap script.db found (is nmap installed locally?)")
+			}
 
-	described := make([]string, 0, (len(categories)+len(scripts))*2)
-	for _, cat := range categories { // categories first — coarse selectors
-		described = append(described, cat, "category")
-	}
-	for _, s := range scripts {
-		described = append(described, s[0], s[1])
-	}
+			described := make([]string, 0, (len(categories)+len(scripts))*2)
+			for _, cat := range categories { // categories first — coarse selectors
+				described = append(described, cat, "category")
+			}
+			for _, s := range scripts {
+				described = append(described, s[0], s[1])
+			}
 
-	return carapace.ActionMultiParts(",", func(c carapace.Context) carapace.Action {
-		return carapace.ActionValuesDescribed(described...)
+			return carapace.ActionValuesDescribed(described...)
+		}))
 	})
 }
 

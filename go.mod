@@ -3,6 +3,7 @@ module github.com/d3c3ptive/aims
 go 1.24
 
 require (
+	github.com/carapace-sh/carapace-bridge v1.6.2
 	github.com/fatih/color v1.15.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
