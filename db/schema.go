@@ -7,6 +7,7 @@ import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	host "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
+	provenance "github.com/d3c3ptive/aims/provenance/pb"
 	scan "github.com/d3c3ptive/aims/scan/pb"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
@@ -76,15 +77,19 @@ func Migrate(db *gorm.DB) error {
 		host.FileSystemORM{},
 		host.FileORM{},
 
+		// Provenance. The shared contribution record every merge-unit object joins to
+		// (many-to-many); registered before its owners so the join tables resolve.
+		provenance.SourceORM{},
+
 		// Credentials.
 		// Order matters for SQLite: cores.login_id references logins.id, and the
-		// public/private/realm/origin children reference cores.id — so logins → cores → children.
+		// public/private/realm children reference cores.id — so logins → cores → children.
+		// Provenance (the former Origin) is now a many-to-many via provenance.SourceORM.
 		credential.LoginORM{},
 		credential.CoreORM{},
 		credential.RealmORM{},
 		credential.PublicORM{},
 		credential.PrivateORM{},
-		credential.OriginORM{},
 
 		// Scans
 		scan.RunORM{},

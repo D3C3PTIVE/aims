@@ -3,6 +3,7 @@ package pb
 import (
 	context "context"
 	fmt "fmt"
+	pb "github.com/d3c3ptive/aims/provenance/pb"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
@@ -333,7 +334,8 @@ type TimesWithAfterToPB interface {
 type AddressORM struct {
 	Addr      string
 	CreatedAt *time.Time
-	Id        string `gorm:"type:uuid;primaryKey"`
+	Id        string          `gorm:"type:uuid;primaryKey"`
+	Sources   []*pb.SourceORM `gorm:"foreignKey:Id;references:Id;many2many:address_sources;joinForeignKey:AddressId;joinReferences:SourceId"`
 	Type      string
 	UpdatedAt *time.Time
 	Vendor    string
@@ -366,6 +368,17 @@ func (m *Address) ToORM(ctx context.Context) (AddressORM, error) {
 	to.Addr = m.Addr
 	to.Type = m.Type
 	to.Vendor = m.Vendor
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToORM(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(AddressWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -392,6 +405,17 @@ func (m *AddressORM) ToPB(ctx context.Context) (Address, error) {
 	to.Addr = m.Addr
 	to.Type = m.Type
 	to.Vendor = m.Vendor
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToPB(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(AddressWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
 	}
@@ -1986,6 +2010,10 @@ func DefaultStrictUpdateAddress(ctx context.Context, in *Address, db *gorm.DB) (
 			return nil, err
 		}
 	}
+	if err = db.Model(&ormObj).Association("Sources").Replace(ormObj.Sources); err != nil {
+		return nil, err
+	}
+	ormObj.Sources = nil
 	if hook, ok := interface{}(&ormObj).(AddressORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
 			return nil, err
@@ -2161,6 +2189,10 @@ func DefaultApplyFieldMaskAddress(ctx context.Context, patchee *Address, patcher
 		}
 		if f == prefix+"Vendor" {
 			patchee.Vendor = patcher.Vendor
+			continue
+		}
+		if f == prefix+"Sources" {
+			patchee.Sources = patcher.Sources
 			continue
 		}
 	}

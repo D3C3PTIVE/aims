@@ -3,6 +3,7 @@ package pb
 import (
 	context "context"
 	fmt "fmt"
+	pb "github.com/d3c3ptive/aims/provenance/pb"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
@@ -30,6 +31,7 @@ type ServiceORM struct {
 	Protocol      string
 	RPCNum        string
 	ServiceFP     string
+	Sources       []*pb.SourceORM `gorm:"foreignKey:Id;references:Id;many2many:service_sources;joinForeignKey:ServiceId;joinReferences:SourceId"`
 	Tunnel        string
 	UpdatedAt     *time.Time
 	Version       string
@@ -78,6 +80,17 @@ func (m *Service) ToORM(ctx context.Context) (ServiceORM, error) {
 	// Repeated type string is not an ORMable message type
 	to.Authenticated = m.Authenticated
 	// Repeated type AddedInfo is not an ORMable message type
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToORM(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(ServiceWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -120,6 +133,17 @@ func (m *ServiceORM) ToPB(ctx context.Context) (Service, error) {
 	// Repeated type string is not an ORMable message type
 	to.Authenticated = m.Authenticated
 	// Repeated type AddedInfo is not an ORMable message type
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToPB(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(ServiceWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
 	}
@@ -313,6 +337,10 @@ func DefaultStrictUpdateService(ctx context.Context, in *Service, db *gorm.DB) (
 			return nil, err
 		}
 	}
+	if err = db.Model(&ormObj).Association("Sources").Replace(ormObj.Sources); err != nil {
+		return nil, err
+	}
+	ormObj.Sources = nil
 	if hook, ok := interface{}(&ormObj).(ServiceORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
 			return nil, err
@@ -552,6 +580,10 @@ func DefaultApplyFieldMaskService(ctx context.Context, patchee *Service, patcher
 		}
 		if f == prefix+"AdditionalInfo" {
 			patchee.AdditionalInfo = patcher.AdditionalInfo
+			continue
+		}
+		if f == prefix+"Sources" {
+			patchee.Sources = patcher.Sources
 			continue
 		}
 	}

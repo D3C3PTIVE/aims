@@ -9,6 +9,7 @@ import "google/protobuf/timestamp.proto";
 import "host/pb/host.proto";
 import "scan/pb/nmap/nmap.proto";
 import "scan/pb/result.proto";
+import "provenance/pb/source.proto";
 
 
 // Run - Represents a scan before, after or while being run. 
@@ -69,6 +70,11 @@ message Run {
 
   repeated string NmapErrors = 28;
   string RawXML = 30;
+
+  // Source - The provenance record for this run (Tool=Scanner, Type=Scan, plus Args/
+  // Version/ProfileName/SessionId). Ingest stamps this same Source onto every host/port/
+  // service the run produces, so scan-produced objects carry provenance without a RunId FK.
+  provenance.Source Source = 41 [(gorm.field).belongs_to = {}];
 
   // Results - Generally, scans other than Nmap can produce 
   // asynchronous results, which has a few implications:

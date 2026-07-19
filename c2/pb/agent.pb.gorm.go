@@ -4,6 +4,7 @@ import (
 	context "context"
 	fmt "fmt"
 	pb "github.com/d3c3ptive/aims/host/pb"
+	pb1 "github.com/d3c3ptive/aims/provenance/pb"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
@@ -31,6 +32,8 @@ type AgentORM struct {
 	Process             *pb.ProcessORM `gorm:"foreignKey:ProcessId;references:Id"`
 	ProcessId           *string
 	Runtime             string
+	Source              *pb1.SourceORM `gorm:"foreignKey:SourceId;references:Id"`
+	SourceId            *string
 	Tasks               []*TaskORM `gorm:"foreignKey:AgentId;references:Id"`
 	TasksCount          int64
 	TasksCountCompleted int64
@@ -78,6 +81,13 @@ func (m *Agent) ToORM(ctx context.Context) (AgentORM, error) {
 	to.Burned = m.Burned
 	to.IsDead = m.IsDead
 	to.Arch = m.Arch
+	if m.Source != nil {
+		tempSource, err := m.Source.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Source = &tempSource
+	}
 	to.Locale = m.Locale
 	to.Filename = m.Filename
 	if m.User != nil {
@@ -158,6 +168,13 @@ func (m *AgentORM) ToPB(ctx context.Context) (Agent, error) {
 	to.Burned = m.Burned
 	to.IsDead = m.IsDead
 	to.Arch = m.Arch
+	if m.Source != nil {
+		tempSource, err := m.Source.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Source = &tempSource
+	}
 	to.Locale = m.Locale
 	to.Filename = m.Filename
 	if m.User != nil {
@@ -639,6 +656,7 @@ func DefaultApplyFieldMaskAgent(ctx context.Context, patchee *Agent, patcher *Ag
 	var updatedCreatedAt bool
 	var updatedUpdatedAt bool
 	var updatedHost bool
+	var updatedSource bool
 	var updatedUser bool
 	var updatedProcess bool
 	for i, f := range updateMask.Paths {
@@ -735,6 +753,27 @@ func DefaultApplyFieldMaskAgent(ctx context.Context, patchee *Agent, patcher *Ag
 		}
 		if f == prefix+"Arch" {
 			patchee.Arch = patcher.Arch
+			continue
+		}
+		if !updatedSource && strings.HasPrefix(f, prefix+"Source.") {
+			updatedSource = true
+			if patcher.Source == nil {
+				patchee.Source = nil
+				continue
+			}
+			if patchee.Source == nil {
+				patchee.Source = &pb1.Source{}
+			}
+			if o, err := pb1.DefaultApplyFieldMaskSource(ctx, patchee.Source, patcher.Source, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Source.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Source = o
+			}
+			continue
+		}
+		if f == prefix+"Source" {
+			updatedSource = true
+			patchee.Source = patcher.Source
 			continue
 		}
 		if f == prefix+"Locale" {

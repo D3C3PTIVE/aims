@@ -11,6 +11,7 @@ import "host/pb/host.proto";
 import "host/pb/user.proto";
 import "host/pb/process.proto";
 import "c2/pb/channel.proto";
+import "provenance/pb/source.proto";
 
 // Agent represents a C2 agent/implant program, irrespective
 // of the communication channels and behavior it makes use of.
@@ -31,6 +32,10 @@ message Agent {
   bool Burned = 13;
   bool IsDead = 14;
   string Arch = 15;
+
+  // Source - The provenance record for this agent (Tool=<C2 framework>, Type=C2). Stamped
+  // onto the host/user/process objects the agent contributes.
+  provenance.Source Source = 16 [(gorm.field).belongs_to = {}];
 
   // System
   string Locale = 30;

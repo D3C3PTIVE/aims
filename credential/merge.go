@@ -20,6 +20,7 @@ package credential
 
 import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	"github.com/d3c3ptive/aims/provenance"
 )
 
 // MergeCore folds `src` into `dst` in place using the four field-classes (see CREDENTIALS.md §3):
@@ -29,7 +30,9 @@ import (
 //     mean a different credential.
 //   - Enrichment fields (Public.Claims/Data, Private.JTRFormat) are fill-only: a known value is
 //     never clobbered by an empty one, but an empty value is filled from src.
-//   - Provenance (Origin) is first-wins: the original discovery origin is preserved.
+//   - Provenance (Sources) is UNION, not first-wins: every contributing tool a matched Core has
+//     been seen from is accumulated, so a second tool enriching a known credential adds its
+//     Source rather than being dropped (the former single Origin was first-wins).
 //   - LoginsCount is derived from the Logins table and never taken from the wire.
 //
 // It returns true if dst was actually changed, so callers can skip a no-op write.
@@ -49,9 +52,10 @@ func MergeCore(dst, src *credential.CoreORM) (changed bool) {
 		changed = fill(&dst.Private.JTRFormat, src.Private.JTRFormat) || changed
 	}
 
-	// Origin: first-wins — only adopt src's Origin if dst somehow has none.
-	if dst.Origin == nil && src.Origin != nil {
-		dst.Origin = src.Origin
+	// Sources: union — accumulate src's contributions that dst does not already carry, so
+	// provenance from multiple tools survives the merge instead of the first/last winning.
+	if merged, grew := provenance.MergeSourceORMs(dst.Sources, src.Sources); grew {
+		dst.Sources = merged
 		changed = true
 	}
 

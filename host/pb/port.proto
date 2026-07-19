@@ -8,6 +8,7 @@ import "options/gorm.proto";
 
 import "network/pb/service.proto";
 import "scan/pb/nmap/nmap.proto";
+import "provenance/pb/source.proto";
 
 // Port - A port on a host
 message Port {
@@ -38,6 +39,12 @@ message Port {
   int32 Count = 20;
   // @gotags: xml:"extrareasons"
   repeated Reason Reasons = 21;
+
+  // Sources - The provenance contributions that discovered/enriched this port. Two tools
+  // can contribute different ports to the same host, so provenance lives per-port here
+  // (unioned on merge), not only at the host level.
+  // @gotags: display:"Sources" xml:"-"
+  repeated provenance.Source Sources = 22 [(gorm.field).many_to_many = {}];
 }
 
 

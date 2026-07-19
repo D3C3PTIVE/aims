@@ -6,6 +6,7 @@ package network;
 import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
 
+import "provenance/pb/source.proto";
 
 // Service - A service running behind a port
 message Service {
@@ -66,5 +67,10 @@ message Service {
                 string Value = 2;
   }
   repeated AddedInfo AdditionalInfo = 40;
+
+  // Sources - The provenance contributions (service scan, interaction, import) that
+  // reported this service. Unioned on merge.
+  // @gotags: display:"Sources" xml:"-"
+  repeated provenance.Source Sources = 41 [(gorm.field).many_to_many = {}];
 }
 

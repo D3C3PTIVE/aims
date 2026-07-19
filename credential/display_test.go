@@ -27,6 +27,7 @@ import (
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	provpb "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // sampleCredentials returns a target NTLM credential (replayable, used in logins, imported) plus
@@ -40,7 +41,7 @@ func sampleCredentials() (target *credential.Core, all []*credential.Core) {
 		Public:      &credential.Public{Username: "administrator", Type: credential.PublicType_Username},
 		Private:     &credential.Private{Type: credential.PrivateType_NTLMHash, Data: ntlm},
 		Realm:       &credential.Realm{Value: "CORP"},
-		Origin:      &credential.Origin{Type: credential.OriginType_Import, Filename: "secretsdump.txt"},
+		Sources:     []*provpb.Source{{Type: provpb.SourceType_Import, Filename: "secretsdump.txt"}},
 		LoginsCount: 2,
 	}
 	other := &credential.Core{

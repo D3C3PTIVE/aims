@@ -27,6 +27,7 @@ import (
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	provpb "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // Reveal controls whether Private secrets are printed in clear text. It is off by default (list
@@ -116,8 +117,8 @@ var DisplayFields = map[string]func(c *credential.Core) string{
 		}
 		return ""
 	},
-	"Origin":     func(c *credential.Core) string { return originLabel(c.GetOrigin()) },
-	"Session":    func(c *credential.Core) string { return c.GetOrigin().GetSessionId() },
+	"Origin":     func(c *credential.Core) string { return originLabel(primarySource(c)) },
+	"Session":    func(c *credential.Core) string { return primarySource(c).GetSessionId() },
 	"Discovered": func(c *credential.Core) string { return fmtTime(c.GetCreatedAt()) },
 	"Updated":    func(c *credential.Core) string { return fmtTime(c.GetUpdatedAt()) },
 }
@@ -169,7 +170,7 @@ func Insights(target *credential.Core, all []*credential.Core) (lines []string) 
 	}
 
 	// Lineage: cracked from an originating credential.
-	if o := target.GetOrigin(); o != nil && o.Type == credential.OriginType_CrackedPassword {
+	if o := primarySource(target); o != nil && o.Type == provpb.SourceType_Cracked {
 		if o.Cracker != "" {
 			lines = append(lines, fmt.Sprintf("↳ cracked with %s", o.Cracker))
 		} else {
@@ -231,8 +232,8 @@ func InfoPanes(c *credential.Core) []display.Pane {
 		{"Realm", realmLabel(c.GetRealm())},
 	})
 	provenance := paneLines([]kvPair{
-		{"Origin", originLabel(c.GetOrigin())},
-		{"Session", c.GetOrigin().GetSessionId()},
+		{"Origin", originLabel(primarySource(c))},
+		{"Session", primarySource(c).GetSessionId()},
 		{"Discovered", fmtTime(c.GetCreatedAt())},
 	})
 	classification := paneLines([]kvPair{
@@ -373,30 +374,44 @@ func isReplayable(t credential.PrivateType) bool {
 	return false
 }
 
-func originLabel(o *credential.Origin) string {
+// primarySource is the single provenance.Source shown where the credential model used to
+// carry one Origin. A Core now holds a UNION of Sources (one per contributing tool); for the
+// compact "Origin" column and the detail Provenance pane we surface the first (primary) one.
+// Safe on a nil/childless Core — returns nil, and the generated getters no-op on nil.
+func primarySource(c *credential.Core) *provpb.Source {
+	if srcs := c.GetSources(); len(srcs) > 0 {
+		return srcs[0]
+	}
+	return nil
+}
+
+func originLabel(o *provpb.Source) string {
 	if o == nil {
 		return ""
 	}
 	switch o.Type {
-	case credential.OriginType_Import:
+	case provpb.SourceType_Import:
 		if o.Filename != "" {
 			return fmt.Sprintf("import (%s)", o.Filename)
 		}
 		return "import"
-	case credential.OriginType_CrackedPassword:
+	case provpb.SourceType_Cracked:
 		if o.Cracker != "" {
 			return fmt.Sprintf("cracked (%s)", o.Cracker)
 		}
 		return "cracked"
-	case credential.OriginType_Service:
-		if s := o.GetService(); s != nil {
-			name := s.Name
-			if name == "" {
-				name = s.Protocol
-			}
-			return fmt.Sprintf("service (%s)", name)
+	case provpb.SourceType_Service:
+		// The service is a soft ServiceId reference now (no embedded Service object), so the
+		// label can't resolve the service name without a lookup; show the tool if present.
+		if o.Tool != "" {
+			return fmt.Sprintf("service (%s)", o.Tool)
 		}
 		return "service"
+	case provpb.SourceType_Scan:
+		if o.Tool != "" {
+			return fmt.Sprintf("scan (%s)", o.Tool)
+		}
+		return "scan"
 	default:
 		return "manual"
 	}

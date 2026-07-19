@@ -4,6 +4,7 @@ import (
 	context "context"
 	fmt "fmt"
 	pb "github.com/d3c3ptive/aims/network/pb"
+	pb1 "github.com/d3c3ptive/aims/provenance/pb"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
@@ -26,7 +27,8 @@ type PortORM struct {
 	Scripts   []*nmap.ScriptORM `gorm:"foreignKey:Id;references:Id;many2many:port_scripts;joinForeignKey:PortId;joinReferences:ScriptId"`
 	Service   *pb.ServiceORM    `gorm:"foreignKey:ServiceId;references:Id"`
 	ServiceId *string
-	State     *StateORM `gorm:"foreignKey:PortId;references:Id"`
+	Sources   []*pb1.SourceORM `gorm:"foreignKey:Id;references:Id;many2many:port_sources;joinForeignKey:PortId;joinReferences:SourceId"`
+	State     *StateORM        `gorm:"foreignKey:PortId;references:Id"`
 	UpdatedAt *time.Time
 }
 
@@ -94,6 +96,17 @@ func (m *Port) ToORM(ctx context.Context) (PortORM, error) {
 			to.Reasons = append(to.Reasons, nil)
 		}
 	}
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToORM(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(PortWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -155,6 +168,17 @@ func (m *PortORM) ToPB(ctx context.Context) (Port, error) {
 			}
 		} else {
 			to.Reasons = append(to.Reasons, nil)
+		}
+	}
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToPB(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
 		}
 	}
 	if posthook, ok := interface{}(m).(PortWithAfterToPB); ok {
@@ -628,6 +652,10 @@ func DefaultStrictUpdatePort(ctx context.Context, in *Port, db *gorm.DB) (*Port,
 		return nil, err
 	}
 	ormObj.Scripts = nil
+	if err = db.Model(&ormObj).Association("Sources").Replace(ormObj.Sources); err != nil {
+		return nil, err
+	}
+	ormObj.Sources = nil
 	filterState := StateORM{}
 	if ormObj.Id == "" {
 		return nil, errors.EmptyIdError
@@ -868,6 +896,10 @@ func DefaultApplyFieldMaskPort(ctx context.Context, patchee *Port, patcher *Port
 		}
 		if f == prefix+"Reasons" {
 			patchee.Reasons = patcher.Reasons
+			continue
+		}
+		if f == prefix+"Sources" {
+			patchee.Sources = patcher.Sources
 			continue
 		}
 	}

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	provpb "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // Re-importing the identical credential changes nothing (idempotent merge).
@@ -55,16 +56,27 @@ func TestMergeCore_FillOnly(t *testing.T) {
 	}
 }
 
-// Provenance is first-wins: the original discovery Origin is preserved across merges.
-func TestMergeCore_OriginFirstWins(t *testing.T) {
+// Provenance is union: a second tool's contribution is accumulated, and the original
+// discovery Source is preserved (kept first), never overwritten.
+func TestMergeCore_SourcesUnion(t *testing.T) {
 	dst := core(user("admin"), pass("hunter2"), nil)
-	dst.Origin = &credential.OriginORM{Type: int32(credential.OriginType_CrackedPassword), Cracker: "john"}
+	dst.Sources = []*provpb.SourceORM{{Type: int32(provpb.SourceType_Cracked), Cracker: "john"}}
 
 	src := core(user("admin"), pass("hunter2"), nil)
-	src.Origin = &credential.OriginORM{Type: int32(credential.OriginType_Import), Filename: "later.txt"}
+	src.Sources = []*provpb.SourceORM{{Type: int32(provpb.SourceType_Import), Filename: "later.txt"}}
 
-	MergeCore(dst, src)
-	if credential.OriginType(dst.Origin.Type) != credential.OriginType_CrackedPassword || dst.Origin.Cracker != "john" {
-		t.Fatalf("discovery origin was overwritten: %+v", dst.Origin)
+	if !MergeCore(dst, src) {
+		t.Fatal("merging a new Source should report a change")
+	}
+	if len(dst.Sources) != 2 {
+		t.Fatalf("Sources were not unioned: want 2, got %d (%+v)", len(dst.Sources), dst.Sources)
+	}
+	if provpb.SourceType(dst.Sources[0].Type) != provpb.SourceType_Cracked || dst.Sources[0].Cracker != "john" {
+		t.Fatalf("discovery Source was not preserved first: %+v", dst.Sources[0])
+	}
+
+	// Union is idempotent: folding the same Source again adds nothing.
+	if MergeCore(dst, src) || len(dst.Sources) != 2 {
+		t.Fatalf("re-merging an identical Source changed dst: %+v", dst.Sources)
 	}
 }

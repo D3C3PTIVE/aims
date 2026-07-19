@@ -21,6 +21,7 @@ package credential
 import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	"github.com/d3c3ptive/aims/host"
+	provenance "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // Core - A wrapper around the credential.Core protobuf type. This is unexported
@@ -37,8 +38,9 @@ type Core credential.Core
 func WhereLoggedInHost() {
 }
 
-// WhereOriginIs - Returns a relation that is scoped to the given origin.
-func WhereOriginIs(o *credential.Origin) {
+// WhereOriginIs - Returns a relation that is scoped to the given provenance source (the
+// former credential.Origin, now the shared provenance.Source).
+func WhereOriginIs(o *provenance.Source) {
 }
 
 // WhereOriginServiceForHost - Finds credential.Cores that have an

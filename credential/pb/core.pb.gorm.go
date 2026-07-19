@@ -3,6 +3,7 @@ package pb
 import (
 	context "context"
 	fmt "fmt"
+	pb "github.com/d3c3ptive/aims/provenance/pb"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
@@ -17,10 +18,10 @@ type CoreORM struct {
 	Id          string `gorm:"type:uuid;primaryKey"`
 	LoginId     *string
 	LoginsCount int32
-	Origin      *OriginORM  `gorm:"not null;foreignKey:CoreId;references:Id"`
-	Private     *PrivateORM `gorm:"foreignKey:CoreId;references:Id"`
-	Public      *PublicORM  `gorm:"foreignKey:CoreId;references:Id"`
-	Realm       *RealmORM   `gorm:"foreignKey:CoreId;references:Id"`
+	Private     *PrivateORM     `gorm:"foreignKey:CoreId;references:Id"`
+	Public      *PublicORM      `gorm:"foreignKey:CoreId;references:Id"`
+	Realm       *RealmORM       `gorm:"foreignKey:CoreId;references:Id"`
+	Sources     []*pb.SourceORM `gorm:"foreignKey:Id;references:Id;many2many:core_sources;joinForeignKey:CoreId;joinReferences:SourceId"`
 	UpdatedAt   *time.Time
 }
 
@@ -48,12 +49,16 @@ func (m *Core) ToORM(ctx context.Context) (CoreORM, error) {
 		t := m.UpdatedAt.AsTime()
 		to.UpdatedAt = &t
 	}
-	if m.Origin != nil {
-		tempOrigin, err := m.Origin.ToORM(ctx)
-		if err != nil {
-			return to, err
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToORM(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
 		}
-		to.Origin = &tempOrigin
 	}
 	if m.Private != nil {
 		tempPrivate, err := m.Private.ToORM(ctx)
@@ -100,12 +105,16 @@ func (m *CoreORM) ToPB(ctx context.Context) (Core, error) {
 	if m.UpdatedAt != nil {
 		to.UpdatedAt = timestamppb.New(*m.UpdatedAt)
 	}
-	if m.Origin != nil {
-		tempOrigin, err := m.Origin.ToPB(ctx)
-		if err != nil {
-			return to, err
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToPB(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
 		}
-		to.Origin = &tempOrigin
 	}
 	if m.Private != nil {
 		tempPrivate, err := m.Private.ToPB(ctx)
@@ -322,15 +331,6 @@ func DefaultStrictUpdateCore(ctx context.Context, in *Core, db *gorm.DB) (*Core,
 			return nil, err
 		}
 	}
-	filterOrigin := OriginORM{}
-	if ormObj.Id == "" {
-		return nil, errors.EmptyIdError
-	}
-	filterOrigin.CoreId = new(string)
-	*filterOrigin.CoreId = ormObj.Id
-	if err = db.Where(filterOrigin).Delete(OriginORM{}).Error; err != nil {
-		return nil, err
-	}
 	filterPrivate := PrivateORM{}
 	if ormObj.Id == "" {
 		return nil, errors.EmptyIdError
@@ -358,6 +358,10 @@ func DefaultStrictUpdateCore(ctx context.Context, in *Core, db *gorm.DB) (*Core,
 	if err = db.Where(filterRealm).Delete(RealmORM{}).Error; err != nil {
 		return nil, err
 	}
+	if err = db.Model(&ormObj).Association("Sources").Replace(ormObj.Sources); err != nil {
+		return nil, err
+	}
+	ormObj.Sources = nil
 	if hook, ok := interface{}(&ormObj).(CoreORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
 			return nil, err
@@ -472,7 +476,6 @@ func DefaultApplyFieldMaskCore(ctx context.Context, patchee *Core, patcher *Core
 	var err error
 	var updatedCreatedAt bool
 	var updatedUpdatedAt bool
-	var updatedOrigin bool
 	var updatedPrivate bool
 	var updatedPublic bool
 	var updatedRealm bool
@@ -527,25 +530,8 @@ func DefaultApplyFieldMaskCore(ctx context.Context, patchee *Core, patcher *Core
 			patchee.UpdatedAt = patcher.UpdatedAt
 			continue
 		}
-		if !updatedOrigin && strings.HasPrefix(f, prefix+"Origin.") {
-			updatedOrigin = true
-			if patcher.Origin == nil {
-				patchee.Origin = nil
-				continue
-			}
-			if patchee.Origin == nil {
-				patchee.Origin = &Origin{}
-			}
-			if o, err := DefaultApplyFieldMaskOrigin(ctx, patchee.Origin, patcher.Origin, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Origin.", db); err != nil {
-				return nil, err
-			} else {
-				patchee.Origin = o
-			}
-			continue
-		}
-		if f == prefix+"Origin" {
-			updatedOrigin = true
-			patchee.Origin = patcher.Origin
+		if f == prefix+"Sources" {
+			patchee.Sources = patcher.Sources
 			continue
 		}
 		if !updatedPrivate && strings.HasPrefix(f, prefix+"Private.") {

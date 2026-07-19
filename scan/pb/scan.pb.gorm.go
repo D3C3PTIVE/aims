@@ -4,6 +4,7 @@ import (
 	context "context"
 	fmt "fmt"
 	pb "github.com/d3c3ptive/aims/host/pb"
+	pb1 "github.com/d3c3ptive/aims/provenance/pb"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
@@ -34,6 +35,8 @@ type RunORM struct {
 	Results          []*ResultORM `gorm:"foreignKey:Id;references:Id;many2many:run_results;joinForeignKey:RunId;joinReferences:ResultId"`
 	Scanner          string
 	SessionId        string
+	Source           *pb1.SourceORM `gorm:"foreignKey:SourceId;references:Id"`
+	SourceId         *string
 	Start            int64
 	StartStr         string
 	Stats            *StatsORM `gorm:"foreignKey:StatsId;references:Id"`
@@ -186,6 +189,13 @@ func (m *Run) ToORM(ctx context.Context) (RunORM, error) {
 	}
 	// Repeated type string is not an ORMable message type
 	to.RawXML = m.RawXML
+	if m.Source != nil {
+		tempSource, err := m.Source.ToORM(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Source = &tempSource
+	}
 	for _, v := range m.Results {
 		if v != nil {
 			if tempResults, cErr := v.ToORM(ctx); cErr == nil {
@@ -336,6 +346,13 @@ func (m *RunORM) ToPB(ctx context.Context) (Run, error) {
 	}
 	// Repeated type string is not an ORMable message type
 	to.RawXML = m.RawXML
+	if m.Source != nil {
+		tempSource, err := m.Source.ToPB(ctx)
+		if err != nil {
+			return to, err
+		}
+		to.Source = &tempSource
+	}
 	for _, v := range m.Results {
 		if v != nil {
 			if tempResults, cErr := v.ToPB(ctx); cErr == nil {
@@ -1409,6 +1426,7 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 	var updatedStats bool
 	var updatedInfo bool
 	var updatedVerbose bool
+	var updatedSource bool
 	for i, f := range updateMask.Paths {
 		if f == prefix+"Id" {
 			patchee.Id = patcher.Id
@@ -1614,6 +1632,27 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 		}
 		if f == prefix+"RawXML" {
 			patchee.RawXML = patcher.RawXML
+			continue
+		}
+		if !updatedSource && strings.HasPrefix(f, prefix+"Source.") {
+			updatedSource = true
+			if patcher.Source == nil {
+				patchee.Source = nil
+				continue
+			}
+			if patchee.Source == nil {
+				patchee.Source = &pb1.Source{}
+			}
+			if o, err := pb1.DefaultApplyFieldMaskSource(ctx, patchee.Source, patcher.Source, &field_mask.FieldMask{Paths: updateMask.Paths[i:]}, prefix+"Source.", db); err != nil {
+				return nil, err
+			} else {
+				patchee.Source = o
+			}
+			continue
+		}
+		if f == prefix+"Source" {
+			updatedSource = true
+			patchee.Source = patcher.Source
 			continue
 		}
 		if f == prefix+"Results" {

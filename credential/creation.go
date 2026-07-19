@@ -20,6 +20,7 @@ package credential
 
 import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	provenance "github.com/d3c3ptive/aims/provenance/pb"
 )
 
 // CreateOptions - A template holding the objects (either optional or required
@@ -41,11 +42,11 @@ type CreateOptions struct {
 	// .Data    - checked against the .PrivateType (required)
 	Private Private
 
-	// Origin - The origin of the credentials that we are submitting
-	// for creation: this also contains ALL elements for this origin:
-	// ports, services, tools and filenames we need depending on the
-	// proclaimed .Type attribute of the Origin.
-	Origin Origin
+	// Sources - The provenance of the credentials that we are submitting for creation (the
+	// former Origin, now the shared provenance.Source): the contributing tool, type, and any
+	// ports, services, filenames the SourceType calls for. A creation usually carries one,
+	// but the field is a slice because a credential can accrue contributions from many tools.
+	Sources []*provenance.Source
 
 	// Realm - The credential realm to which the Public/Private belong.
 	Realm credential.Realm

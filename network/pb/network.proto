@@ -6,6 +6,8 @@ package network;
 import "google/protobuf/timestamp.proto";
 import "options/gorm.proto";
 
+import "provenance/pb/source.proto";
+
 // Trace Represents the trace to a host, including the hops
 message Trace {
   option (gorm.opts).ormable = true;
@@ -72,5 +74,9 @@ message Address {
   // @gotags: xml:"addrtype,attr"
   string Type = 11;        
   // @gotags: xml:"vendor,attr"
-  string Vendor = 12;      
+  string Vendor = 12;
+
+  // Sources - The provenance contributions that reported this address. Unioned on merge.
+  // @gotags: display:"Sources" xml:"-"
+  repeated provenance.Source Sources = 13 [(gorm.field).many_to_many = {}];
 }

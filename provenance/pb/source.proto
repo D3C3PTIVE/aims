@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package provenance;
+
+// DB -----------
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// Source - A single contribution event: one tool (scanner, C2 framework, cracker,
+// manual entry, or file import) writing objects into the shared AIMS store. Every
+// merge-unit object — host.Host, host.Port, network.Service, network.Address,
+// credential.Core, credential.Login — is joined many-to-many to the Sources that
+// contributed or enriched it. This lets a tool that consumes AIMS as a library scope a
+// query to only the data it produced ("give me my objects"), and — crucially for the
+// "many tools, one object instance" thesis — lets provenance survive the merge fold as a
+// UNION of contributors rather than being overwritten by the last writer.
+//
+// Source generalizes credential.Origin (its Type / Cracker / Filename / SessionId /
+// Service fields are carried here) into one cross-domain provenance object. The rich
+// per-domain producers — scan.Run (Scanner/Args/Version/ProfileName) and c2.Agent (Tool)
+// — are specializations that own a Source; the enum SourceType folds credential.OriginType
+// together with the scan and c2 producer classes.
+message Source {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true}];
+  // @gotags: display:"Created at" readonly:"true"
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true"
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // Tool - The name of the contributing tool ("nmap", "metasploit", "sliver",
+  // "hashcat", ...). Empty for a manual/API contribution. This is the primary key a
+  // consuming tool filters on to scope a query to its own data.
+  // @gotags: display:"Tool"
+  string Tool = 10;
+
+  // Type - The class of contribution (manual, import, scan, cracked, service, c2).
+  // @gotags: display:"Type"
+  SourceType Type = 11;
+
+  // SessionId - The attacker-infrastructure session/operator the contribution ran under.
+  // (Carried over from credential.Origin.SessionId and scan.Run.SessionId.)
+  string SessionId = 12;
+
+  // Version - The version of the contributing tool. (From scan.Run.Version.)
+  // @gotags: display:"Version"
+  string Version = 13;
+
+  // Args - The full invocation/arguments that produced the contribution — e.g. the raw
+  // nmap args. (From scan.Run.Args.)
+  string Args = 14;
+
+  // ProfileName - A named profile/preset the tool ran under, if any. (From scan.Run.ProfileName.)
+  string ProfileName = 15;
+
+  // Filename - For imports: the basename of the file the objects were loaded from.
+  // Because only a basename is available, a Filename may recur across contributions.
+  // (Carried over from credential.Origin.Filename.)
+  // @gotags: display:"File"
+  string Filename = 20;
+
+  // Cracker - For cracked credentials: the name of the cracking tool.
+  // (Carried over from credential.Origin.Cracker.)
+  string Cracker = 30;
+
+  // ServiceId - Soft reference (uuid) to the network.Service the objects were gathered
+  // from, when applicable (mirrors credential.Origin.Service). Held as a plain id rather
+  // than a belongs_to relation on purpose: network.Service carries its own `Sources`
+  // m2m back to this type, and a real relation here would create a proto import cycle
+  // (provenance <-> network). Resolve it via a Service query when the full object is needed.
+  string ServiceId = 40 [(gorm.field).tag = {type:"uuid"}];
+}
+
+// SourceType - The class of a provenance Source. Generalizes credential.OriginType
+// (Manual / Import / CrackedPassword / Service) with the scan- and c2-oriented producers.
+enum SourceType {
+  // Manual - A manually added object (CLI arguments, API calls, hand entry).
+  Manual = 0;
+
+  // Import - Objects loaded from a file (nmap XML, a JSON/XML export, a credential dump).
+  Import = 1;
+
+  // Cracked - Credentials cracked from another credential.Core.
+  // (credential.OriginType.CrackedPassword.)
+  Cracked = 2;
+
+  // Service - Objects gathered by interacting with a live service
+  // (e.g. Metasploit auxiliary/exploit modules). (credential.OriginType.Service.)
+  Service = 3;
+
+  // Scan - Objects produced by a scanner run (scan.Run: nmap, sx, zgrab, ...).
+  Scan = 4;
+
+  // C2 - Objects produced by a command-and-control implant/framework (c2.Agent).
+  C2 = 5;
+}

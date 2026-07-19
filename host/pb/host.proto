@@ -18,6 +18,9 @@ import "network/pb/packet.proto";
 // Scanners
 import "scan/pb/nmap/nmap.proto";
 
+// Provenance
+import "provenance/pb/source.proto";
+
 // Host - Represents a remote computer host in DB
 message Host {
   option (gorm.opts).ormable = true;
@@ -102,6 +105,12 @@ message Host {
   repeated Port Ports = 46 [(gorm.field).belongs_to = {}];
   // @gotags: xml:"ports>extraports"
   repeated ExtraPort ExtraPorts = 47 [(gorm.field).belongs_to = {}];
+
+  // Sources - The provenance contributions (tools/imports/manual entries) that produced
+  // or enriched this host. Many-to-many: a single host row is co-owned by every tool that
+  // reported it, and the ingest merge fold UNIONs this set rather than overwriting it.
+  // @gotags: display:"Sources" xml:"-"
+  repeated provenance.Source Sources = 48 [(gorm.field).many_to_many = {}];
 }
 
 // A hostname for a host.

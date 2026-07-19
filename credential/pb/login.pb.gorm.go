@@ -4,6 +4,7 @@ import (
 	context "context"
 	fmt "fmt"
 	pb "github.com/d3c3ptive/aims/network/pb"
+	pb1 "github.com/d3c3ptive/aims/provenance/pb"
 	gorm1 "github.com/infobloxopen/atlas-app-toolkit/v2/gorm"
 	errors "github.com/infobloxopen/protoc-gen-gorm/errors"
 	field_mask "google.golang.org/genproto/protobuf/field_mask"
@@ -22,6 +23,7 @@ type LoginORM struct {
 	LastAttemptedAt *time.Time
 	Service         *pb.ServiceORM `gorm:"foreignKey:ServiceId;references:Id"`
 	ServiceId       *string
+	Sources         []*pb1.SourceORM `gorm:"foreignKey:Id;references:Id;many2many:login_sources;joinForeignKey:LoginId;joinReferences:SourceId"`
 	Status          int32
 	UpdatedAt       *time.Time
 }
@@ -71,6 +73,17 @@ func (m *Login) ToORM(ctx context.Context) (LoginORM, error) {
 		to.Service = &tempService
 	}
 	to.HostId = m.HostId
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToORM(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(LoginWithAfterToORM); ok {
 		err = posthook.AfterToORM(ctx, &to)
 	}
@@ -114,6 +127,17 @@ func (m *LoginORM) ToPB(ctx context.Context) (Login, error) {
 		to.Service = &tempService
 	}
 	to.HostId = m.HostId
+	for _, v := range m.Sources {
+		if v != nil {
+			if tempSources, cErr := v.ToPB(ctx); cErr == nil {
+				to.Sources = append(to.Sources, &tempSources)
+			} else {
+				return to, cErr
+			}
+		} else {
+			to.Sources = append(to.Sources, nil)
+		}
+	}
 	if posthook, ok := interface{}(m).(LoginWithAfterToPB); ok {
 		err = posthook.AfterToPB(ctx, &to)
 	}
@@ -316,6 +340,10 @@ func DefaultStrictUpdateLogin(ctx context.Context, in *Login, db *gorm.DB) (*Log
 	if err = db.Where(filterCore).Delete(CoreORM{}).Error; err != nil {
 		return nil, err
 	}
+	if err = db.Model(&ormObj).Association("Sources").Replace(ormObj.Sources); err != nil {
+		return nil, err
+	}
+	ormObj.Sources = nil
 	if hook, ok := interface{}(&ormObj).(LoginORMWithBeforeStrictUpdateSave); ok {
 		if db, err = hook.BeforeStrictUpdateSave(ctx, db); err != nil {
 			return nil, err
@@ -559,6 +587,10 @@ func DefaultApplyFieldMaskLogin(ctx context.Context, patchee *Login, patcher *Lo
 		}
 		if f == prefix+"HostId" {
 			patchee.HostId = patcher.HostId
+			continue
+		}
+		if f == prefix+"Sources" {
+			patchee.Sources = patcher.Sources
 			continue
 		}
 	}
