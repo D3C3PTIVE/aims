@@ -19,6 +19,7 @@ package scan
 */
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -28,7 +29,9 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/d3c3ptive/aims/cmd/display"
+	host "github.com/d3c3ptive/aims/host/pb"
 	scan "github.com/d3c3ptive/aims/scan/pb"
+	"github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 // Run - Represents a scan before, after or while being run.
@@ -75,22 +78,75 @@ func (r *Run) InitResult() *Result {
 	return &Result{}
 }
 
-// AddResult - Return a Result (which must be created with construtor: has mapped ID)
-// This function takes care of matching anything against DB, populates various fields,
-// and adds all of those into the Run object tree.
+// AddResult folds one feeder Result into the Run's host tree. The Result is the
+// universal adapter output (one {Host, Address, Port, Service, Data} tuple emitted by
+// any scanner); AddResult assembles it into a single-host subtree and merges that in
+// via the non-destructive fold (see fold.go / DEDUP.md). Calling it twice with the
+// same observation is idempotent — the second call merges into the row the first
+// created and changes nothing.
 //
-// Note that when you call this function, if your scan makes use of the Result.Data field
-// (used by custom/specific service scanner), we assume that it is correctly populated.
-// You however have access to a few functions to manage the types you can put in this .Data
-//
-// As for many other objects that you'll find as field in "request option structs", this
-// Result can hold a host, service, port, etc. It is always advised to pass objects that
-// are themselves coming from other tools/pipes, so as to keep track of them in complex workflows.
+// If the Result carries Data (a custom scanner's opaque payload), it is preserved as
+// a script observation on the port (or host) so nothing is lost; mapping structured
+// payloads into the recursive NSE Script/Table/Element tree (jsonToScript, SCAN.md §D)
+// is the richer, philosophy-true follow-on.
 func (r *Run) AddResult(res *Result) (err error) {
-	// if res.Id == "" || res.Id == uuid.Nil.String() {
-	// 	return errors.New("Result is not tied to any scan.Run")
-	// }
-	return
+	if res == nil {
+		return errors.New("nil result")
+	}
+
+	h := res.Host
+	if h == nil {
+		h = &host.Host{}
+	}
+
+	// Address: ensure the Result's address is on the host (identity anchor).
+	if res.Address != nil && res.Address.Addr != "" {
+		if !hasAddress(h, res.Address.Addr) {
+			h.Addresses = append(h.Addresses, res.Address)
+		}
+	}
+
+	// Port + Service: attach the service to the port, the port to the host.
+	if res.Port != nil {
+		if res.Service != nil && res.Port.Service == nil {
+			res.Port.Service = res.Service
+		}
+		if !hasPort(h, res.Port) {
+			h.Ports = append(h.Ports, res.Port)
+		}
+	}
+
+	// Opaque Data: keep it as a script observation rather than dropping it.
+	if res.Data != "" {
+		script := &nmap.Script{Name: "scan.data", Output: res.Data}
+		if res.Port != nil && hasPort(h, res.Port) {
+			res.Port.Scripts = append(res.Port.Scripts, script)
+		} else {
+			h.HostScripts = append(h.HostScripts, script)
+		}
+	}
+
+	r.foldHost(h)
+
+	return nil
+}
+
+func hasAddress(h *host.Host, addr string) bool {
+	for _, a := range h.Addresses {
+		if a != nil && a.Addr == addr {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPort(h *host.Host, p *host.Port) bool {
+	for _, existing := range h.Ports {
+		if samePort(existing, p) {
+			return true
+		}
+	}
+	return false
 }
 
 //

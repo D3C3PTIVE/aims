@@ -26,8 +26,6 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/d3c3ptive/aims/host"
-	hostpb "github.com/d3c3ptive/aims/host/pb"
 	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
 	"github.com/d3c3ptive/aims/scan"
@@ -50,34 +48,32 @@ func New(db *gorm.DB) *server {
 func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (*scanrpcpb.CreateScanResponse, error) {
 	var newScans []*scanpb.RunORM
 	dbScans := []*scanpb.RunORM{}
-	dbHosts := []*hostpb.HostORM{}
 
-	// Get scans to save
-	for _, h := range req.GetScans() {
-		scanORM, _ := h.ToORM(ctx)
+	// Get scans to save. Before persisting, fold each run's own hosts together via the
+	// non-destructive ingest fold (scan/fold.go): a scan that observed the same host
+	// across several results collapses to one host subtree — union of evidence, never
+	// duplicated and never dropped. This replaces the old per-host FilterNew, which
+	// *dropped* any incoming host that matched the DB and silently lost its new ports,
+	// scripts and OS guesses (the data-loss defect in DEDUP.md §1). Cross-run host-row
+	// unification (so one physical host is a single row shared by many runs) is the
+	// documented follow-on — it needs GORM association-merge, not a match-then-drop.
+	for _, run := range req.GetScans() {
+		folded := &scan.Run{}
+		folded.AddHosts(run.GetHosts()...)
+		run.Hosts = folded.Hosts
+
+		scanORM, _ := run.ToORM(ctx)
 		newScans = append(newScans, &scanORM)
 	}
 
-	// Filter scans to add according to AIMS criteria first.
-	// For each host, load services, and check that this host is not
-	// already existing in the database, if we can identify it with certainty.
+	// Load existing scans so an identical run is skipped wholesale (AreScansIdentical
+	// is RawXML-keyed): re-importing the exact same scan is an idempotent no-op.
 	filters := WithPreloads(&scanrpcpb.RunFilters{
 		Hosts: true,
 	})
 	database := db.Preload(s.db, filters)
 	database.Find(&dbScans)
 
-	for _, run := range newScans {
-		hostFilters := hosts.WithPreloads(&hostrpcpb.HostFilters{
-			Trace: true,
-			Ports: true,
-		})
-		hostsDatabase := db.Preload(s.db, hostFilters)
-		hostsDatabase.Find(&dbHosts)
-		run.Hosts = db.FilterNew(run.Hosts, dbHosts, host.AreHostsIdentical)
-	}
-
-	// Then, filter identical scans and write them to database.
 	filtered := db.FilterNew(newScans, dbScans, scan.AreScansIdentical)
 	if len(filtered) == 0 {
 		return nil, errors.New("Scans already exist in the database, skipping")
