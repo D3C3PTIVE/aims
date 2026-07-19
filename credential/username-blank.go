@@ -21,9 +21,7 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // BlankUsername - A public credential in the form of a Username.
@@ -55,13 +53,4 @@ func (u *BlankUsername) ToPB() *credential.Public {
 	u.Type = credential.PublicType_BlankUsername
 	u.Username = ""
 	return (*Public)(u).ToPB()
-}
-
-// AsEntity - Returns the Public as a valid Maltego Entity.
-func (u *BlankUsername) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Public)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(u)
 }

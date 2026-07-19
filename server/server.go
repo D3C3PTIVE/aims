@@ -22,12 +22,16 @@ import (
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/rpc/credentials"
-	"github.com/maxlandon/aims/proto/rpc/hosts"
-	"github.com/maxlandon/aims/proto/rpc/network"
-	"github.com/maxlandon/aims/server/credential"
-	"github.com/maxlandon/aims/server/host"
-	networkServer "github.com/maxlandon/aims/server/network"
+	c2pb "github.com/d3c3ptive/aims/c2/pb/rpc"
+	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
+	network "github.com/d3c3ptive/aims/network/pb/rpc"
+	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
+	"github.com/d3c3ptive/aims/server/c2"
+	"github.com/d3c3ptive/aims/server/credential"
+	"github.com/d3c3ptive/aims/server/host"
+	networkServer "github.com/d3c3ptive/aims/server/network"
+	"github.com/d3c3ptive/aims/server/scan"
 )
 
 // Options is used to setup the AIMS database service with specific things,
@@ -57,9 +61,17 @@ func New(conn *grpc.Server, opts ...Options) {
 		options = opt(options)
 	}
 
+	// Targets
 	hosts.RegisterHostsServer(conn, host.New(options.db))
 	hosts.RegisterUsersServer(conn, host.NewUsers(options.db))
 	network.RegisterServicesServer(conn, networkServer.New(options.db))
 	credentials.RegisterCredentialsServer(conn, credential.New(options.db))
 	credentials.RegisterLoginsServer(conn, credential.NewLoginServer(options.db))
+
+	// C2
+	c2pb.RegisterAgentsServer(conn, c2.New(options.db))
+	c2pb.RegisterChannelsServer(conn, c2.NewChannelServer(options.db))
+
+	// Infrastructure & tools
+	scans.RegisterScansServer(conn, scan.New(options.db))
 }

@@ -21,8 +21,7 @@ package host
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/host"
-	"github.com/maxlandon/gondor/maltego"
+	host "github.com/d3c3ptive/aims/host/pb"
 )
 
 // Group - A computer group of users.
@@ -37,9 +36,4 @@ func (g *Group) ToORM(ctx context.Context) (host.GroupORM, error) {
 // ToPB - Get the Protobuf object for the Group.
 func (g *Group) ToPB() *host.Group {
 	return (*host.Group)(g)
-}
-
-// AsEntity - Returns the Group as a valid Maltego Entity.
-func (g *Group) AsEntity() maltego.Entity {
-	return maltego.NewEntity(g)
 }

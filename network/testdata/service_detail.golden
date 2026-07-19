@@ -1,0 +1,15 @@
+web01:80/tcp  http   ● open · 1 script(s)
+──────────────────────────────────────────────────────────────────
+Service             State               Meta
+   Port : 80/tcp     State : open       ID : aabbccdd
+   Name : http      Reason : syn-ack
+Product : nginx     Method : probed
+Version : 1.18.0
+  Extra : Ubuntu
+
+Insights
+  ⚠ http is a cleartext protocol — credentials may be sniffable
+
+Scripts
+  Name: http-title
+  Output: Welcome to nginx!

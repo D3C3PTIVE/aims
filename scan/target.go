@@ -21,7 +21,7 @@ package scan
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/scan"
+	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
 // Target - This type can be used as an Input object to a scan,
@@ -29,15 +29,15 @@ import (
 //
 // Represents how the target was specified when passed to nmap,
 // its status and the reason of its status. Example:
-// <target specification="domain.does.not.exist" status="skipped" reason="invalid"/>
+// <target specification="domain.does.not.exist" status="skipped" reason="invalid"/>.
 type Target scan.Target
 
-// ToORM - Get the SQL object for the Target
+// ToORM - Get the SQL object for the Target.
 func (t *Target) ToORM(ctx context.Context) (scan.TargetORM, error) {
 	return (*scan.Target)(t).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Target
+// ToPB - Get the Protobuf object for the Target.
 func (t *Target) ToPB() *scan.Target {
 	return (*scan.Target)(t)
 }

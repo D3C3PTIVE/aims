@@ -21,9 +21,7 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // Password - A credential.Private password.
@@ -59,13 +57,4 @@ func (p *Password) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 func (p *Password) ToPB() *credential.Private {
 	p.Type = credential.PrivateType_Password
 	return (*Private)(p).ToPB()
-}
-
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *Password) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Private)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }

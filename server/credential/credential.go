@@ -21,12 +21,12 @@ package credential
 import (
 	"context"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
-	"github.com/maxlandon/aims/proto/gen/go/credential"
-	"github.com/maxlandon/aims/proto/gen/go/rpc/credentials"
+	"github.com/d3c3ptive/aims/credential"
+	credpb "github.com/d3c3ptive/aims/credential/pb"
+	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
 )
 
 type server struct {
@@ -35,63 +35,193 @@ type server struct {
 }
 
 func New(db *gorm.DB) *server {
-	return &server{db: db}
+	return &server{db: db, UnimplementedCredentialsServer: &credentials.UnimplementedCredentialsServer{}}
 }
 
-func (s *server) CreateCredential(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CreateCredential not implemented")
-}
-
-func (s *server) GetCredential(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
-	// Convert to ORM model
+// Read returns the first credential matching the request filter.
+func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
 	cred, err := req.GetCredential().ToORM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Query
-	creds := []*credential.CoreORM{}
-	err = s.db.Where(cred).First(&creds).Error
+	creds := []*credpb.CoreORM{}
+	err = s.db.Preload(clause.Associations).Where(&cred).First(&creds).Error
 
-	credspb := []*credential.Core{}
-	for _, cred := range creds {
-		pb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &pb)
-	}
-
-	// Response
-	res := &credentials.ReadCredentialResponse{Credentials: credspb}
-
-	return res, err
+	return toResponse(ctx, creds), err
 }
 
-func (s *server) GetCredentialMany(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
-	// Convert to ORM model
+// List returns all credentials matching the request filter, with their sub-credentials preloaded.
+func (s *server) List(ctx context.Context, req *credentials.ReadCredentialRequest) (*credentials.ReadCredentialResponse, error) {
 	cred, err := req.GetCredential().ToORM(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Query
-	creds := []*credential.CoreORM{}
-	err = s.db.Where(cred).Find(&creds).Error
+	creds := []*credpb.CoreORM{}
+	err = s.db.Preload(clause.Associations).Where(&cred).Find(&creds).Error
 
-	credspb := []*credential.Core{}
+	return toResponse(ctx, creds), err
+}
+
+// Create inserts credentials that are genuinely new, skipping any whose (public, private, realm)
+// identity already exists. Unlike Upsert it never merges into an existing credential.
+func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
+	existing, err := s.loadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var created []*credpb.CoreORM
+
+	for _, c := range req.GetCredentials() {
+		corm, err := c.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if findIdentical(&corm, existing) != nil {
+			continue
+		}
+		if err := s.db.Create(&corm).Error; err != nil {
+			return nil, err
+		}
+		existing = append(existing, &corm)
+		created = append(created, &corm)
+	}
+
+	res := toResponse(ctx, created)
+	return &credentials.CreateCredentialResponse{Credentials: res.Credentials}, nil
+}
+
+// Upsert inserts or enriches credentials following the identity + merge model (CREDENTIALS.md
+// §2–4): match on the value triple, merge by field-class when found, absorb a Public-only partial
+// when a richer credential subsumes it, otherwise insert.
+func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
+	existing, err := s.loadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []*credpb.CoreORM
+
+	for _, c := range req.GetCredentials() {
+		corm, err := c.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// 1. Same credential already present → merge by field-class.
+		if match := findIdentical(&corm, existing); match != nil {
+			if credential.MergeCore(match, &corm) {
+				if err := s.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(match).Error; err != nil {
+					return nil, err
+				}
+			}
+			out = append(out, match)
+			continue
+		}
+
+		// 2. A richer credential subsumes an existing Public-only partial → absorb (drop the
+		//    partial and its children) before inserting the fuller credential.
+		if partial := findAbsorbable(&corm, existing); partial != nil {
+			if err := s.db.Select(clause.Associations).Delete(partial).Error; err != nil {
+				return nil, err
+			}
+			existing = removeCore(existing, partial)
+		}
+
+		// 3. New credential → insert.
+		if err := s.db.Create(&corm).Error; err != nil {
+			return nil, err
+		}
+		existing = append(existing, &corm)
+		out = append(out, &corm)
+	}
+
+	res := toResponse(ctx, out)
+	return &credentials.UpsertCredentialResponse{Credentials: res.Credentials}, nil
+}
+
+// Delete removes credentials (and their owned sub-credentials) by Id when provided, else by
+// resolving the value identity against the database.
+func (s *server) Delete(ctx context.Context, req *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
+	existing, err := s.loadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var deleted []*credpb.CoreORM
+
+	for _, c := range req.GetCredentials() {
+		corm, err := c.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		target := &corm
+		if target.Id == "" {
+			if match := findIdentical(target, existing); match != nil {
+				target = match
+			} else {
+				continue
+			}
+		}
+
+		if err := s.db.Select(clause.Associations).Delete(target).Error; err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, target)
+	}
+
+	res := toResponse(ctx, deleted)
+	return &credentials.DeleteCredentialResponse{Credentials: res.Credentials}, nil
+}
+
+//
+// [ Helpers ] ------------------------------------------------------------
+//
+
+// loadAll loads every credential with its sub-credentials preloaded, so identity matching and
+// merging happen against complete objects.
+func (s *server) loadAll(ctx context.Context) ([]*credpb.CoreORM, error) {
+	var cores []*credpb.CoreORM
+	err := s.db.Preload(clause.Associations).Find(&cores).Error
+	return cores, err
+}
+
+func findIdentical(c *credpb.CoreORM, in []*credpb.CoreORM) *credpb.CoreORM {
+	for _, e := range in {
+		if credential.AreCredentialsIdentical(c, e) {
+			return e
+		}
+	}
+	return nil
+}
+
+func findAbsorbable(full *credpb.CoreORM, in []*credpb.CoreORM) *credpb.CoreORM {
+	for _, e := range in {
+		if credential.AbsorbsPartial(full, e) {
+			return e
+		}
+	}
+	return nil
+}
+
+func removeCore(in []*credpb.CoreORM, drop *credpb.CoreORM) []*credpb.CoreORM {
+	out := in[:0]
+	for _, e := range in {
+		if e != drop {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func toResponse(ctx context.Context, creds []*credpb.CoreORM) *credentials.ReadCredentialResponse {
+	credspb := make([]*credpb.Core, 0, len(creds))
 	for _, cred := range creds {
 		pb, _ := cred.ToPB(ctx)
 		credspb = append(credspb, &pb)
 	}
-
-	// Response
-	res := &credentials.ReadCredentialResponse{Credentials: credspb}
-
-	return res, err
-}
-
-func (s *server) UpsertCredential(context.Context, *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertCredential not implemented")
-}
-
-func (s *server) DeleteCredential(context.Context, *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteCredential not implemented")
+	return &credentials.ReadCredentialResponse{Credentials: credspb}
 }

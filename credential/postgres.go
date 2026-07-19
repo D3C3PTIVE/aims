@@ -21,9 +21,7 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // PostgresMD5 - A credential.Private.PasswordHash password hash that can be
@@ -55,13 +53,4 @@ func (p *PostgresMD5) ToORM(ctx context.Context) (credential.PrivateORM, error) 
 func (p *PostgresMD5) ToPB() *credential.Private {
 	p.Type = credential.PrivateType_PostgresMD5
 	return (*ReplayableHash)(p).ToPB()
-}
-
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *PostgresMD5) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*NonReplayableHash)(p).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(p)
 }

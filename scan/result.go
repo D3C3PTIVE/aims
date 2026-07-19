@@ -19,7 +19,7 @@ package scan
 */
 
 import (
-	"github.com/maxlandon/aims/proto/scan"
+	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
 // Result - A type containing various objects that are outputs of a scan.
@@ -32,7 +32,7 @@ import (
 // it is only used as a feeder type for the scan.Run.
 type Result scan.Result
 
-// ToPB - Get the Protobuf object for the Result
+// ToPB - Get the Protobuf object for the Result.
 func (r *Result) ToPB() *scan.Result {
 	return (*scan.Result)(r)
 }

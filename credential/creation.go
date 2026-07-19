@@ -19,7 +19,7 @@ package credential
 */
 
 import (
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // CreateOptions - A template holding the objects (either optional or required

@@ -19,9 +19,20 @@ package scan
 */
 
 import (
+	"errors"
+	"fmt"
+	"net/url"
+	"slices"
 	"strings"
+	"time"
 
-	"github.com/maxlandon/aims/proto/scan"
+	"github.com/fatih/color"
+
+	"github.com/d3c3ptive/aims/cmd/display"
+	hostmerge "github.com/d3c3ptive/aims/host"
+	host "github.com/d3c3ptive/aims/host/pb"
+	scan "github.com/d3c3ptive/aims/scan/pb"
+	"github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 // Run - Represents a scan before, after or while being run.
@@ -48,12 +59,16 @@ func NewRun(scanner string, args ...string) *Run {
 	}
 }
 
+// ToPB - Get the Protobuf object for the Result.
+func (r *Run) ToPB() *scan.Run {
+	return (*scan.Run)(r)
+}
+
 // Functionality
 //
 // Return a concurrent spinner/progress bar / interface for progress
-// Function to update progress
+// unction to update progress
 
-// AddTarget - Add a Target to the Scan. The fields are only checked
 // when they are needed by the service probing stack used by the scan.
 func (r *Run) AddTarget(t *Target) {
 }
@@ -64,22 +79,75 @@ func (r *Run) InitResult() *Result {
 	return &Result{}
 }
 
-// AddResult - Return a Result (which must be created with construtor: has mapped ID)
-// This function takes care of matching anything against DB, populates various fields,
-// and adds all of those into the Run object tree.
+// AddResult folds one feeder Result into the Run's host tree. The Result is the
+// universal adapter output (one {Host, Address, Port, Service, Data} tuple emitted by
+// any scanner); AddResult assembles it into a single-host subtree and merges that in
+// via the non-destructive fold (see fold.go / DEDUP.md). Calling it twice with the
+// same observation is idempotent — the second call merges into the row the first
+// created and changes nothing.
 //
-// Note that when you call this function, if your scan makes use of the Result.Data field
-// (used by custom/specific service scanner), we assume that it is correctly populated.
-// You however have access to a few functions to manage the types you can put in this .Data
-//
-// As for many other objects that you'll find as field in "request option structs", this
-// Result can hold a host, service, port, etc. It is always advised to pass objects that
-// are themselves coming from other tools/pipes, so as to keep track of them in complex workflows.
+// If the Result carries Data (a custom scanner's opaque payload), it is preserved as
+// a script observation on the port (or host) so nothing is lost; mapping structured
+// payloads into the recursive NSE Script/Table/Element tree (jsonToScript, SCAN.md §D)
+// is the richer, philosophy-true follow-on.
 func (r *Run) AddResult(res *Result) (err error) {
-	// if res.Id == "" || res.Id == uuid.Nil.String() {
-	// 	return errors.New("Result is not tied to any scan.Run")
-	// }
-	return
+	if res == nil {
+		return errors.New("nil result")
+	}
+
+	h := res.Host
+	if h == nil {
+		h = &host.Host{}
+	}
+
+	// Address: ensure the Result's address is on the host (identity anchor).
+	if res.Address != nil && res.Address.Addr != "" {
+		if !hasAddress(h, res.Address.Addr) {
+			h.Addresses = append(h.Addresses, res.Address)
+		}
+	}
+
+	// Port + Service: attach the service to the port, the port to the host.
+	if res.Port != nil {
+		if res.Service != nil && res.Port.Service == nil {
+			res.Port.Service = res.Service
+		}
+		if !hasPort(h, res.Port) {
+			h.Ports = append(h.Ports, res.Port)
+		}
+	}
+
+	// Opaque Data: keep it as a script observation rather than dropping it.
+	if res.Data != "" {
+		script := &nmap.Script{Name: "scan.data", Output: res.Data}
+		if res.Port != nil && hasPort(h, res.Port) {
+			res.Port.Scripts = append(res.Port.Scripts, script)
+		} else {
+			h.HostScripts = append(h.HostScripts, script)
+		}
+	}
+
+	r.foldHost(h)
+
+	return nil
+}
+
+func hasAddress(h *host.Host, addr string) bool {
+	for _, a := range h.Addresses {
+		if a != nil && a.Addr == addr {
+			return true
+		}
+	}
+	return false
+}
+
+func hasPort(h *host.Host, p *host.Port) bool {
+	for _, existing := range h.Ports {
+		if hostmerge.SamePort(existing, p) {
+			return true
+		}
+	}
+	return false
 }
 
 //
@@ -94,3 +162,340 @@ func (r *Run) AddResult(res *Result) (err error) {
 //
 // Zgrab-specific ------------------------------------------------------
 //
+
+// DisplayHeaders returns all weighted table headers for a table of scans.
+func DisplayHeaders() (headers []display.Options) {
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("ID", 1)
+	add("Scanner", 1)
+	add("Name", 1)
+	add("Info", 1)
+	add("Hosts", 1)
+	add("Begin/End", 1)
+	add("Tasks", 1)
+	add("Finished", 1)
+
+	add("Args", 2)
+	add("Targets", 2)
+
+	return headers
+}
+
+// DetailHeaders returns the headers for a detailed scan view.
+func DisplayDetails() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	// Core
+	add("ID", 1)
+	add("Scanner", 1)
+	add("Name", 1)
+	add("Info", 1)
+	add("Hosts", 1)
+	add("Begin/End", 1)
+	add("Finished", 1)
+	add("Tasks", 1)
+	add("Targets", 1)
+	add("Args", 1)
+
+	return headers
+}
+
+// Completions returns some columns to be combined into
+// completion candidates and/or their descriptions.
+func Completions() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("ID", 1)
+	add("Scanner", 1)
+	add("Name", 1)
+	add("Info", 1)
+	add("Tasks", 1)
+	add("Args", 1)
+
+	return headers
+}
+
+// Fields maps field names to their value generators.
+var DisplayFields = map[string]func(h *scan.Run) string{
+	// Table
+	"ID": func(h *scan.Run) string {
+		if len(h.Begin) > len(h.End) {
+			return color.HiGreenString(display.FormatSmallID(h.Id))
+		}
+		if len(h.End) == 0 && len(h.Progress) > 0 {
+			return color.HiYellowString(display.FormatSmallID(h.Id))
+		}
+
+		return display.FormatSmallID(h.Id)
+	},
+	"Scanner": func(h *scan.Run) string {
+		return h.Scanner
+	},
+	"Name": func(h *scan.Run) string {
+		return h.ProfileName
+	},
+	"Info": func(h *scan.Run) string {
+		info := h.Info.Protocol + "/" + h.Info.Type
+		return info
+	},
+	"Args": func(h *scan.Run) string {
+		return h.Args
+	},
+	"Begin/End": func(h *scan.Run) string {
+		if h.Stats == nil || h.Stats.Finished == nil {
+			return ""
+		}
+		done := h.Stats.Finished.TimeStr
+		return fmt.Sprintf("%s (%s)",
+			done,
+			time.Duration(int64(h.Stats.Finished.Elapsed)).String())
+	},
+	"Targets": func(h *scan.Run) string {
+		targetsDisplay := new(strings.Builder)
+
+		if h.Info.NumServices > 0 {
+			targetsDisplay.WriteString(fmt.Sprintf("Services (%d)   ", h.Info.NumServices))
+		}
+
+		if len(h.Targets) > 0 {
+			tgtRaw := fmt.Sprintf("Hosts (%d)", len(h.Targets))
+			targetsDisplay.WriteString(tgtRaw)
+		}
+
+		return strings.TrimSpace(targetsDisplay.String())
+	},
+	"Targets Details": func(h *scan.Run) string {
+		targetsDisplay := new(strings.Builder)
+
+		if h.Info.Services != "" {
+			targetsDisplay.WriteString(h.Info.Services)
+		}
+
+		for _, tgt := range h.Targets {
+			tgtRaw := fmt.Sprintf("%s:%d", tgt.Address, tgt.Port)
+			if tgt.Port == 0 {
+				tgtRaw = strings.TrimSuffix(tgtRaw, ":0")
+			}
+			tgtURL, err := url.Parse(tgtRaw)
+			if err != nil {
+				return tgtRaw
+			}
+
+			targetsDisplay.WriteString(fmt.Sprintln(tgtURL.String()))
+		}
+
+		return targetsDisplay.String()
+	},
+	"Finished": func(h *scan.Run) string {
+		if h.Stats != nil && h.Stats.Finished != nil {
+			return color.HiGreenString("true")
+		}
+		return color.HiYellowString("false")
+	},
+	"Hosts": func(h *scan.Run) string {
+		var hosts string
+
+		var hostsUp, hostsDown int32
+
+		if h.Stats != nil && h.Stats.Hosts != nil {
+			hostsUp = h.Stats.Hosts.Up
+			hostsDown = h.Stats.Hosts.Down
+
+		} else {
+			for _, h := range h.Hosts {
+				if h.Status.State == "up" {
+					hostsUp++
+				} else {
+					hostsDown++
+				}
+			}
+		}
+
+		hosts += color.HiGreenString(fmt.Sprint(hostsUp))
+		hosts += "/"
+		hosts += color.HiRedString(fmt.Sprint(hostsDown))
+
+		return hosts
+	},
+	"Tasks": func(h *scan.Run) string {
+		tasksDisplay := ""
+
+		running, done := getTasks(h)
+
+		if len(running) > 0 {
+			tasksDisplay += color.HiYellowString("%d", len(h.End))
+		} else {
+			tasksDisplay += fmt.Sprintf("%d", len(done))
+		}
+
+		tasksDisplay += fmt.Sprintf("/%d", len(done)+len(running))
+
+		return tasksDisplay
+	},
+	"Tasks Details": func(h *scan.Run) string {
+		return formatTasks(h)
+	},
+}
+
+func tasksHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+	add("Time", 1)
+	add("Name", 1)
+	add("Info", 1)
+
+	return headers
+}
+
+var tasksFields = map[string]func(h *scan.ScanTask) string{
+	"Time": func(taskEnd *scan.ScanTask) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Name": func(h *scan.ScanTask) string {
+		return h.Task
+	},
+	"Info": func(h *scan.ScanTask) string {
+		return h.ExtraInfo
+	},
+}
+
+func tasksProgressHeaders() []display.Options {
+	var headers []display.Options
+	add := func(n string, w int) {
+		headers = append(headers, display.WithHeader(n, w))
+	}
+
+	add("Time", 1)
+	add("Name", 1)
+	add("Percent", 1)
+
+	return headers
+}
+
+var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{
+	"Name": func(h *scan.TaskProgress) string {
+		return h.Task
+	},
+	"Time": func(taskEnd *scan.TaskProgress) string {
+		return color.HiBlackString(time.Unix(taskEnd.Time, 0).String())
+	},
+	"Percent": func(taskEnd *scan.TaskProgress) string {
+		return color.HiYellowString(fmt.Sprintf("%v%%", taskEnd.Percent))
+	},
+}
+
+func formatTasks(h *scan.Run) string {
+	tasksDisplay := ""
+	running, done := getTasks(h)
+
+	if len(running) > 0 {
+		table := display.Table(running, tasksProgressFields, tasksProgressHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Running tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	if len(done) > 0 {
+
+		table := display.Table(done, tasksFields, tasksHeaders()...)
+		table.SetTitle("\n" + color.HiYellowString("Done tasks"))
+		tasksDisplay += table.Render()
+	}
+
+	return tasksDisplay
+}
+
+func getTasks(h *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask) {
+	var runningRemain []*scan.TaskProgress
+	nonFinished := true
+
+	if len(h.Begin) > 0 {
+		for i := range h.Begin {
+			// Find the corresponding end if any.
+			// Or check the running tasks progress values.
+			if 0 <= i && i <= len(h.End) {
+				taskEnd := h.End[i]
+				done = append(done, taskEnd)
+				nonFinished = false
+				continue
+			}
+
+			nonFinished = false
+		}
+	}
+
+	// Filter out duplicates in remain
+	if len(h.Progress) > 0 && nonFinished {
+		slices.SortFunc(h.Progress, func(a, b *scan.TaskProgress) int {
+			switch {
+			case a.Percent < b.Percent:
+				return -1
+			case a.Percent > b.Percent:
+				return +1
+			default:
+				return 0
+			}
+		})
+		var current *scan.TaskProgress
+		done := false
+
+		for i := len(h.Progress); i > 0; i-- {
+			task := h.Progress[i-1]
+
+			if current == nil {
+				runningRemain = append(runningRemain, task)
+				current = task
+				continue
+			}
+
+			if current.Task == task.Task {
+				continue
+			}
+
+			current = nil
+			done = true
+		}
+
+		if current != nil && done {
+			runningRemain = append(runningRemain, current)
+		}
+	}
+	if len(done) > 0 {
+		slices.SortFunc(done, func(a, b *scan.ScanTask) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+	}
+
+	if len(runningRemain) > 0 {
+		slices.SortFunc(runningRemain, func(a, b *scan.TaskProgress) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+		running = append(running, runningRemain...)
+	}
+
+	if len(running) > 0 {
+		slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
+			aTime := time.Unix(a.Time, 0)
+			bTime := time.Unix(b.Time, 0)
+
+			return aTime.Compare(bTime)
+		})
+	}
+	return
+}

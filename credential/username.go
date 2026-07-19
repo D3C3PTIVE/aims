@@ -21,9 +21,7 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // Username - A public credential in the form of a Username .
@@ -52,13 +50,4 @@ func (h *Username) ToORM(ctx context.Context) (credential.PublicORM, error) {
 func (h *Username) ToPB() *credential.Public {
 	h.Type = credential.PublicType_Username
 	return (*Public)(h).ToPB()
-}
-
-// AsEntity - Returns the Public as a valid Maltego Entity.
-func (h *Username) AsEntity() maltego.Entity {
-	// e:= maltego.NewEntity(h)
-	// base := (*Public)(h).AsEntity()
-	// e.SetBase(base)
-	// return e
-	return maltego.NewEntity(h)
 }

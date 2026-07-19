@@ -21,8 +21,7 @@ package nmap
 import (
 	"encoding/xml"
 
-	"github.com/maxlandon/aims/scan"
-	"github.com/maxlandon/gondor/maltego"
+	"github.com/d3c3ptive/aims/scan"
 )
 
 // Run - The results of an Nmap scan that has been ran.
@@ -42,9 +41,4 @@ func FromXML(data []byte) (*scan.Run, error) {
 	r := &scan.Run{}
 	err := xml.Unmarshal(data, r)
 	return r, err
-}
-
-// AsEntity - Returns the Scan as a valid Maltego Entity.
-func (s *Run) AsEntity() maltego.Entity {
-	return maltego.Entity{}
 }

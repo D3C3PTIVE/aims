@@ -21,9 +21,7 @@ package credential
 import (
 	"context"
 
-	"github.com/maxlandon/gondor/maltego"
-
-	"github.com/maxlandon/aims/proto/gen/go/credential"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
 // Private - Base type for all private credentials. A private credential is any credential
@@ -45,9 +43,4 @@ func (p *Private) ToORM(ctx context.Context) (credential.PrivateORM, error) {
 // ToPB - Get the Protobuf object for the Private credential.
 func (p *Private) ToPB() *credential.Private {
 	return (*credential.Private)(p)
-}
-
-// AsEntity - Returns the Private as a valid Maltego Entity.
-func (p *Private) AsEntity() maltego.Entity {
-	return maltego.NewEntity(p)
 }

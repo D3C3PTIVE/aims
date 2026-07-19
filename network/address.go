@@ -21,8 +21,7 @@ package network
 import (
 	"context"
 
-	"github.com/maxlandon/aims/proto/network"
-	"github.com/maxlandon/gondor/maltego"
+	network "github.com/d3c3ptive/aims/network/pb"
 )
 
 // Address - An address somewhere on a network, or on a host.
@@ -34,17 +33,12 @@ type Address network.Address
 // General Functions
 //
 
-// ToORM - Get the SQL object for the Host
+// ToORM - Get the SQL object for the Host.
 func (a *Address) ToORM(ctx context.Context) (network.AddressORM, error) {
 	return (*network.Address)(a).ToORM(ctx)
 }
 
-// ToPB - Get the Protobuf object for the Host
+// ToPB - Get the Protobuf object for the Host.
 func (a *Address) ToPB() *network.Address {
 	return (*network.Address)(a)
-}
-
-// AsEntity - Returns the Address as a valid Maltego Entity.
-func (a *Address) AsEntity() maltego.Entity {
-	return maltego.Entity{}
 }

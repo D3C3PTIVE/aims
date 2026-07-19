@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package c2;
+
+// DB 
+import "google/protobuf/timestamp.proto";
+import "options/gorm.proto";
+
+// Common
+import "host/pb/host.proto";
+import "host/pb/user.proto";
+import "host/pb/process.proto";
+import "c2/pb/channel.proto";
+
+// Agent represents a C2 agent/implant program, irrespective
+// of the communication channels and behavior it makes use of.
+message Agent {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // Core
+  host.Host Host = 9 [(gorm.field).belongs_to = {}];
+  string Name = 10;
+  string Runtime = 11;
+  string Tool = 12;
+  bool Burned = 13;
+  bool IsDead = 14;
+  string Arch = 15;
+
+  // System
+  string Locale = 30;
+  string Filename = 31; // Argv[0]
+  host.User User = 32 [(gorm.field).belongs_to = {}];
+  host.Process Process = 34 [(gorm.field).belongs_to = {}];
+
+  // Communications
+  int64 FirstContact = 50;
+  int64 LastCheckin = 51;
+  int64 NextCheckin = 52;
+  repeated Channel Channels = 53;
+
+  // Others
+  repeated Task Tasks = 90;
+  int64 TasksCount = 91;
+  int64 TasksCountCompleted = 92;
+  string WorkingDirectory = 93;
+}
+
+// Task represents a task to run on a target host, irrespective of
+// C2 channel/types through which it's sent and its results received.
+message Task {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" strict:"yes"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+  // @gotags: display:"Sent at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp SentAt = 6;
+  // @gotags: display:"Completed at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CompletedAt = 7;
+
+  // string AgentID = 10;
+  string State = 10;
+  string Request = 11; // bytes
+  string Response = 12; // bytes
+  string Description = 13;
+}

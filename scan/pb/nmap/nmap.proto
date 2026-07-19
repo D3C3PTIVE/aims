@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package scan.nmap;
+
+// DB -----------
+import "options/gorm.proto";
+import "google/protobuf/timestamp.proto";
+
+// Script - Represents a Nmap Scripting Engine Script.
+// The inner elements can be an arbitrary collection of Tables and Elements. They can be empty
+message Script {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true" xml:"script_id"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+  // @gotags: display:"Created at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp CreatedAt = 4;
+  // @gotags: display:"Updated at" readonly:"true" xml:"-" 
+  google.protobuf.Timestamp UpdatedAt = 5;
+
+  // @gotags: xml:"id,attr"
+  string Name = 10;
+  // @gotags: xml:"output,attr"
+  string Output = 11;
+  // @gotags: xml:"elem,omitempty"
+  repeated Element Elements = 12;
+  // @gotags: xml:"table,omitempty"
+  repeated Table Tables = 13;
+}
+
+// elements - The smallest building block for scripts/tables. Key is optional
+message Element {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+
+  // @gotags: xml:"key,attr,omitempty"
+  string Key = 10;
+  // @gotags: xml:",innerxml"
+  string Value = 11;
+}
+
+// Table - An arbitrary collection of (sub-)Tables and Elements. Can be empty
+message Table {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+
+  // @gotags: xml:"key,attr,omitempty"
+  string Key = 10;
+  // @gotags: xml:"table,omitempty"
+  repeated Table Tables = 11;
+  // @gotags: xml:"elem,omitempty"
+  repeated Element Elements = 12;
+}
+
+// Smurf - Contains responses from a smurf attack
+message Smurf {
+  option (gorm.opts).ormable = true;
+  // @gotags: display:"ID" readonly:"true"
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+
+  // @gotags: xml:"responses,attr"
+  string Responses = 10;
+}

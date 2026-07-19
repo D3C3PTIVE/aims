@@ -20,12 +20,16 @@ package host
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	"github.com/maxlandon/aims/proto/gen/go/rpc/hosts"
+	"github.com/d3c3ptive/aims/host"
+	"github.com/d3c3ptive/aims/host/pb"
+	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
+	"github.com/d3c3ptive/aims/internal/db"
 )
 
 type server struct {
@@ -33,26 +37,183 @@ type server struct {
 	*hosts.UnimplementedHostsServer
 }
 
+// New returns a new database host server, from a given db.
 func New(db *gorm.DB) *server {
-	return &server{db: db}
+	return &server{db: db, UnimplementedHostsServer: &hosts.UnimplementedHostsServer{}}
 }
 
-func (server) CreateHost(context.Context, *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
+// Read reads one or more hosts from the database, with optional filters and elements to preload.
+func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
+	filts := req.GetFilters()
+
+	// Convert to ORM model
+	hst, err := req.GetHost().ToORM(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dbHosts := []*pb.HostORM{}
+
+	// Preloads
+	filters := WithPreloads(req.GetFilters())
+	database := db.Preload(s.db.Where(hst), filters)
+
+	// Query
+	if filts != nil && filts.MaxResults == 1 {
+		database = database.First(&dbHosts)
+	} else {
+		database = database.Find(&dbHosts)
+	}
+
+	hostspb := []*pb.Host{}
+
+	for _, host := range dbHosts {
+		pb, _ := host.ToPB(ctx)
+		hostspb = append(hostspb, &pb)
+	}
+
+	// Response
+	res := &hosts.ReadHostResponse{Hosts: hostspb}
+
+	return res, database.Error
+}
+
+// Create creates one or more new hosts in the database.
+func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hosts.CreateHostResponse, error) {
+	var hostsORM []*pb.HostORM
+
+	for _, h := range req.GetHosts() {
+		horm, _ := h.ToORM(ctx)
+		hostsORM = append(hostsORM, &horm)
+	}
+
+	if len(hostsORM) == 0 {
+		return nil, errors.New("No scans were provided")
+	}
+
+	// Filter hosts to add according to AIMS criteria first.
+	dbHosts := []*pb.HostORM{}
+	hostFilters := WithPreloads(&hosts.HostFilters{
+		Trace: true,
+		Ports: true,
+	})
+	database := db.Preload(s.db, hostFilters)
+	filtered := db.FilterNew(hostsORM, dbHosts, host.AreHostsIdentical)
+
+	if len(filtered) == 0 {
+		return nil, errors.New("Hosts already exist in the database, skipping")
+	}
+
+	err := database.Create(&filtered).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var hostsPB []*pb.Host
+	for _, horm := range hostsORM {
+		hpb, _ := horm.ToPB(ctx)
+		hostsPB = append(hostsPB, &hpb)
+	}
+
+	// Response
+	res := &hosts.CreateHostResponse{Hosts: hostsPB}
+
+	return res, err
+}
+
+func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
+	// Convert to ORM model
+	// h, err := req.GetHost().ToORM(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// // Query
+	// hosts := []*host.HostORM{}
+	// err = s.db.Where(h).First(&hosts).Error
+	//
+	// hostspb := []*h.Host{}
+	// for _, host := range hosts {
+	// 	pb, _ := host.ToPB(ctx)
+	// 	hostspb = append(hostspb, &pb)
+	// }
+	//
+	// // Response
+	// res := &h.ReadHostResponse{Hosts: hostspb}
+	//
+	// return res, err
 	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
-func (server) GetHost(context.Context, *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetHost not implemented")
+func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
+	// Convert to ORM model
+	var hostsORM []*pb.HostORM
+
+	for _, h := range req.GetHosts() {
+		horm, _ := h.ToORM(ctx)
+		hostsORM = append(hostsORM, &horm)
+	}
+
+	// Filter hosts to add according to AIMS criteria first.
+	dbHosts := []*pb.HostORM{}
+	hostFilters := WithPreloads(&hosts.HostFilters{
+		Trace: true,
+		Ports: true,
+	})
+	database := db.Preload(s.db, hostFilters)
+	database.Find(&dbHosts)
+
+	// // Query
+	// hosts := []*host.HostORM{}
+	// err = s.db.Where(h).First(&hosts).Error
+	//
+	// hostspb := []*h.Host{}
+	// for _, host := range hosts {
+	// 	pb, _ := host.ToPB(ctx)
+	// 	hostspb = append(hostspb, &pb)
+	// }
+	//
+	// // Response
+	// res := &h.ReadHostResponse{Hosts: hostspb}
+	//
+	// return res, err
+	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
 }
 
-func (server) GetHostMany(context.Context, *hosts.ReadHostRequest) (*hosts.ReadHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetHostMany not implemented")
-}
+// WithPreloads returns a map DB clauses, to dynamically load child struct fields.
+func WithPreloads(from *hosts.HostFilters) (clauses map[string]bool) {
+	if from == nil {
+		return
+	}
 
-func (server) UpsertHost(context.Context, *hosts.UpsertHostRequest) (*hosts.UpsertHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertHost not implemented")
-}
+	clauses = map[string]bool{
+		// Base, unconditional preloads for all hosts
+		"OS":              true,
+		"OS.PortsUsed":    true,
+		"OS.Matches":      true,
+		"OS.Fingerprints": true,
 
-func (server) DeleteHost(context.Context, *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteHost not implemented")
+		"Status":    true,
+		"Hostnames": true,
+		"Uptime":    true,
+
+		// Filtered
+		"Users":     from.Users,
+		"FS":        from.Files,
+		"FS.Files":  from.Files,
+		"Processes": from.Processes,
+
+		"Ports":              from.Ports,
+		"Ports.Service":      from.Ports,
+		"Ports.State":        from.Ports,
+		"Ports.Scripts":      from.Ports,
+		"ExtraPorts":         from.Ports,
+		"ExtraPorts.Reasons": from.Ports,
+
+		"Trace":       from.Trace,
+		"Trace.Hops":  from.Trace,
+		"HostScripts": from.Scripts,
+	}
+
+	return clauses
 }

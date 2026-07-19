@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package scan;
+
+// DB -----------
+import "options/gorm.proto";
+import "google/protobuf/timestamp.proto";
+
+import "host/pb/port.proto";
+import "host/pb/host.proto";
+import "network/pb/network.proto";
+import "network/pb/service.proto";
+
+// Result - A type containing various objects that are outputs of a scan. 
+// It has only one .Target, which theoretically means that we must have
+// n Results for n Targets.
+// This type is to be created from and used by a scan.Run type, which has
+// various methods to set up, populate, curate and save the data from a
+// complete Scan, sometimes concurrently.
+// A Result is not meant to be saved in a database: 
+// it is only used as a feeder type for the scan.Run.
+message Result {
+  option (gorm.opts).ormable = true;
+  string Id = 1 [(gorm.field).tag = {type:"uuid" primary_key: true }];
+
+  host.Host Host = 2 [(gorm.field).belongs_to = {}];;
+  network.Address Address = 3 [(gorm.field).belongs_to = {}];;
+  host.Port Port = 4 [(gorm.field).belongs_to = {}];;
+  network.Service Service = 5 [(gorm.field).belongs_to = {}];;
+
+  // Data - The output data of a scan for a given protocol/service,
+  // eg. if the scan is an SSH one, this will contain the SSH result.
+  // If you pass your service-specific results in there, be sure to
+  // add a branch case in the Go scan package, in which you populate
+  // the entity tree with it.
+  string Data = 10;
+}
