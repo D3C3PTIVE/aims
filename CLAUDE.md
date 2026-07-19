@@ -153,21 +153,23 @@ paused for ~1 year:
 | **Jun–Aug 2023** | Client/server/gRPC layer, `reeflective/team` teamserver transport (mTLS + Tailscale), the generic `cmd/display` engine, cobra command tree | 34 |
 | **Aug 2024** (last) | scan RPC, host/port dedup on insert, JSON/XML import-export, **c2 agents/channels**, display table/detail polish | 32 |
 
-**Where it was left off (Aug 2024):** wiring the c2 Agent/Channel domain end-to-end and
-polishing display fields. That is the newest and least-finished area.
+**2026-07 session (current):** taking one domain at a time to full depth as a "guinea pig" —
+identity/dedup, merge, rich display, styled completions, CLI slice. **credential** and
+**services** slices are done; the **scan** slice is in progress. See STATE.md for the live
+detail.
 
-**Maturity: the model + generated layer is solid; the service/CLI layer is a partial
-vertical slice.** Read/Create paths work for the domains that were exercised; mutation
-(Update/Delete/Upsert) is almost entirely stubbed. Per-service gRPC status:
+**Maturity: the model + generated layer is solid; the service/CLI layer is a vertical slice
+that is filling out domain by domain.** Read paths work broadly; mutation
+(Update/Delete/Upsert) is still stubbed on most services. Per-service gRPC status:
 
 | Service | Read/List | Create | Update/Delete/Upsert | Notes |
 |---------|:---------:|:------:|:--------------------:|-------|
-| host (Hosts) | ✅ | ✅ (with dedup) | ❌ stub | reference implementation |
+| host (Hosts) | ✅ | ✅ (dedup) | ❌ stub | reference impl. Fold merge (`scan/fold.go`) built but **not yet wired into `server/host`** — Create still match-then-drops |
 | host Users | ❌ | ❌ | ❌ | all methods stubbed |
-| network Services | ✅ | ❌ stub | ❌ stub | also has copy-pasted `ReadHost`/`ListHost`/`UpsertHost` stubs |
-| credential Credentials | ✅ | ❌ stub | ❌ stub | |
+| network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; server CRUD still stubbed |
+| credential Credentials | ✅ | ✅ | Upsert ✅ | full slice done (merge, display, completions, CLI) |
 | credential Logins | ❌ | ❌ | ❌ | all methods stubbed |
-| scan Scans | ✅ | ✅ | ❌ stub | |
+| scan Scans | ✅ | ✅ | ❌ stub | in-memory ingest fold done; CLI slice in progress |
 | c2 Agents/Channels | ✅ | ✅ | ❌ stub | see swap quirk below |
 
 ### Known rough edges / gotchas
@@ -176,24 +178,26 @@ vertical slice.** Read/Create paths work for the domains that were exercised; mu
   (`type server`, `CreateAgentRequest`); `server/c2/agent.go` implements the **Channel**
   server (`type channelServer`, `CreateChannelRequest`). The filenames are inverted vs. their
   contents — confusing but functional. Their `Unimplemented` messages are likewise mislabeled.
-- **Empty CLI handlers:** several command `RunE`s are stubs returning `nil` (e.g. `hosts add`,
-  `hosts rm`) — the command tree/completions exist but some actions don't do anything yet.
-- **Debug leftovers in the display path:** `println(c.Type)` in `host/host.go` (`Purpose`),
-  a `fmt.Println(val)` and empty `if head == "Purpose" {}` blocks in `cmd/display/details.go`.
+- **Empty CLI handlers:** some command `RunE`s are still stubs (e.g. `hosts add`, `hosts rm`);
+  the command tree/completions exist but the action does nothing yet.
 - **`credential/core.go`** scope helpers (`WhereLoggedInHost`, `WhereOriginIs`, …) are empty
   signatures — the Metasploit-style credential querying API is designed but not implemented.
 - **Maltego `AsEntity()`** is inconsistent: some real (`host/group.go` → `maltego.NewEntity`),
   some stubbed (`network/service.go` → `return maltego.Entity{}`).
-- **`init()` bug in `cmd/display/defaults.go`:** the `stdoutTerm`/`stdinTerm`/`stderrTerm`
-  assignments are crossed (stdout set to Stderr, stderr set to Stdin) — worth a look if
-  terminal-size/output routing misbehaves.
 - README mentions a `vendor/` dir and a `proto/gen/` layout that don't match reality (deps
   come from the module cache; generated code sits next to each `.proto`, `paths=source_relative`).
 
+> Fixed since the original survey (no longer issues): the display-path debug leftovers
+> (`println`/`fmt.Println`/empty `if head == "Purpose"`) and the crossed
+> `stdoutTerm`/`stdinTerm`/`stderrTerm` `init()` in `cmd/display/defaults.go`.
+
 ### Suggested re-entry points if resuming
 
-1. Finish the **Update/Delete/Upsert** gRPC methods (host domain is the template to copy).
-2. Wire the empty CLI `RunE`s (`hosts add/rm`, etc.) to the now-existing services.
+1. **Wire the `scan/fold.go` merge into `server/host` ingest** — `Create` still uses the
+   destructive `db.FilterNew` match-then-drop (and never loads existing DB rows to compare
+   against). This is the live top priority; see STATE.md / DEDUP.md §1.
+2. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services (credential
+   Upsert is the worked example to copy; host is the reference for the rest).
 3. Untangle the **c2 file/type naming** before building further on agents/channels.
 4. Complete the **Users/Logins** services (both fully stubbed).
 5. Decide the **`maxlandon/gondor`** dependency's fate as part of the org migration.
@@ -277,10 +281,9 @@ groups — **"database"** (hosts, credentials, services, scan) and **"command & 
 (agents, channels). `bindRunners` walks the tree and attaches the client-connect pre-run to
 leaf commands (so completions/commands lazily connect to the teamserver only when needed).
 
-> CLI-layer state note: several command bodies are still stubs (`hosts add`/`rm` `RunE` return
-> `nil`), and there are debug leftovers in the display path (empty `if head == "Purpose" {}`
-> blocks and a `fmt.Println(val)` in `details.go`; a `println(c.Type)` in `host.go`). The
-> *design/engine* is solid and reusable; the per-command handlers are partially wired.
+> CLI-layer state note: the *design/engine* is solid and reusable, and the credential/services
+> slices exercise it fully (grouped tables, `Banner`+`Columns`+`KVLines` detail views, styled
+> completions). Some per-command handlers are still stubs (`hosts add`/`rm` `RunE` return `nil`).
 
 ## Conventions
 
