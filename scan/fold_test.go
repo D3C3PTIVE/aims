@@ -106,21 +106,27 @@ func TestServiceFillOnly(t *testing.T) {
 	r.AddHosts(bare)
 
 	versioned := buildHost("10.0.0.1", 80)
-	versioned.Ports[0].Service = &network.Service{Name: "http", Product: "nginx"}
+	versioned.Ports[0].Service = &network.Service{Name: "http", Product: "nginx", Version: "1.25"}
 	r.AddHosts(versioned)
 
 	svc := portOf(r.Hosts[0], 80).Service
 	if svc.Product != "nginx" {
 		t.Errorf("want Product filled to nginx, got %q", svc.Product)
 	}
+	if svc.Version != "1.25" {
+		t.Errorf("want Version filled to 1.25, got %q", svc.Version)
+	}
 
-	// A later scan that lost the product must not wipe the known one.
+	// A later scan that lost the product/version must not wipe the known ones.
 	regressed := buildHost("10.0.0.1", 80)
 	regressed.Ports[0].Service = &network.Service{Name: "http"}
 	r.AddHosts(regressed)
 
 	if svc.Product != "nginx" {
 		t.Errorf("known Product must not be clobbered by empty, got %q", svc.Product)
+	}
+	if svc.Version != "1.25" {
+		t.Errorf("known Version must not be clobbered by empty, got %q", svc.Version)
 	}
 }
 

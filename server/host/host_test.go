@@ -189,7 +189,7 @@ func TestUpsertEnrichesExistingPort(t *testing.T) {
 		Ports: []*pb.Port{{
 			Number:   80,
 			Protocol: "tcp",
-			Service:  &network.Service{Name: "http", Product: "nginx", LowVersion: "1.25"},
+			Service:  &network.Service{Name: "http", Product: "nginx", Version: "1.25"},
 			Scripts:  []*nmap.Script{{Name: "http-title", Output: "Welcome"}},
 			Reasons:  []*pb.Reason{{Reason: "syn-ack"}},
 		}},
@@ -218,8 +218,8 @@ func TestUpsertEnrichesExistingPort(t *testing.T) {
 	if got := p.GetService().GetProduct(); got != "nginx" {
 		t.Errorf("Service.Product = %q, want %q (fill-merged onto the existing service)", got, "nginx")
 	}
-	if got := p.GetService().GetLowVersion(); got != "1.25" {
-		t.Errorf("Service.LowVersion = %q, want %q (fill-merged onto the existing service)", got, "1.25")
+	if got := p.GetService().GetVersion(); got != "1.25" {
+		t.Errorf("Service.Version = %q, want %q (fill-merged onto the existing service)", got, "1.25")
 	}
 	if got := len(p.GetScripts()); got != 1 || (len(p.GetScripts()) == 1 && p.GetScripts()[0].GetName() != "http-title") {
 		t.Errorf("port scripts = %v, want one http-title script (appended to the existing port)", p.GetScripts())

@@ -274,6 +274,7 @@ func mergeServiceInto(dst, src *network.Service) (changed bool) {
 	// existing value rather than clobbering — surfacing it is a future enhancement.
 	changed = fillStr(&dst.Name, src.Name) || changed
 	changed = fillStr(&dst.Product, src.Product) || changed
+	changed = fillStr(&dst.Version, src.Version) || changed
 	changed = fillStr(&dst.ExtraInfo, src.ExtraInfo) || changed
 	changed = fillStr(&dst.Method, src.Method) || changed
 	changed = fillStr(&dst.DeviceType, src.DeviceType) || changed
