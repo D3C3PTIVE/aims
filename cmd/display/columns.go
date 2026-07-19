@@ -19,8 +19,33 @@ package display
 */
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/fatih/color"
 )
+
+// KVLines renders key/value pairs into aligned "key : value" detail lines: the key subdued (cyan)
+// and right-aligned to the widest *shown* key, a dim " : " separator, then the value (which keeps
+// its own colour). Pairs whose value is empty are skipped entirely, so callers can pass a fixed
+// field list and let absent fields drop out. This is the shared line renderer behind the
+// side-by-side info panes (see Pane / Columns), so every domain's detail view colours keys alike.
+func KVLines(pairs [][2]string) (lines []string) {
+	max := 0
+	for _, p := range pairs {
+		if strings.TrimSpace(p[1]) != "" && len(p[0]) > max {
+			max = len(p[0])
+		}
+	}
+	for _, p := range pairs {
+		if strings.TrimSpace(p[1]) == "" {
+			continue
+		}
+		name := fmt.Sprintf("%*s", max, p[0])
+		lines = append(lines, color.CyanString(name)+color.HiBlackString(" : ")+p[1])
+	}
+	return lines
+}
 
 // Pane is a titled block of pre-rendered content lines, laid out side by side with other panes
 // by Columns. Lines may already contain ANSI colour/style; alignment accounts for that.

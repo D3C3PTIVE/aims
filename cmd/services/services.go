@@ -20,11 +20,15 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/rsteube/carapace"
+	"github.com/rsteube/carapace/pkg/style"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
@@ -36,7 +40,7 @@ import (
 	"github.com/d3c3ptive/aims/network"
 )
 
-// Commands returns a command tree to manage and cmd/display services.
+// Commands returns a command tree to manage and display services.
 func Commands(con *client.Client) *cobra.Command {
 	servicesCmd := &cobra.Command{
 		Use:     "services",
@@ -44,185 +48,333 @@ func Commands(con *client.Client) *cobra.Command {
 		GroupID: "database",
 	}
 
-	listCmd := &cobra.Command{
+	servicesCmd.AddCommand(listCommand(con))
+	servicesCmd.AddCommand(showCommand(con))
+	servicesCmd.AddCommand(rmCommand(con))
+	servicesCmd.AddCommand(export.ExportCommand(servicesCmd, con, exportCommand(con)))
+
+	return servicesCmd
+}
+
+// listCommand renders every service grouped by host: one flat, responsive table in which each
+// host's identity (name + short ID) is printed once on its first port row and blanked on the
+// continuation rows — grouping that costs zero extra header or blank lines.
+func listCommand(con *client.Client) *cobra.Command {
+	return &cobra.Command{
 		Use:   "list",
-		Short: "Display services (with filters or styles)",
+		Short: "Display services grouped by host",
 		RunE: func(command *cobra.Command, args []string) error {
-			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-				},
-			})
-			if err = aims.CheckError(err); err != nil {
+			hostList, err := readHosts(con, command)
+			if err != nil {
 				return err
 			}
 
-			if len(res.GetHosts()) == 0 {
+			rows := groupedRows(hostList)
+			if len(rows) == 0 {
+				fmt.Println("No services in database.")
 				return nil
 			}
 
-			var ports []*pb.Port
-			for _, h := range res.GetHosts() {
-				ports = append(ports, h.GetPorts()...)
-			}
-
-			table := display.Table(ports, network.DisplayFields, network.Headers()...)
+			table := display.Table(rows, groupedFields(), groupedHeaders()...)
 			fmt.Println(table.Render())
 
 			return nil
 		},
 	}
+}
 
-	servicesCmd.AddCommand(listCmd)
+// showCommand renders one or more services in detail, resolved by host-ID prefix (all of a host's
+// services) or by service-ID prefix (a single service). Each is a Banner + side-by-side info panes
+// + derived insights + its NSE scripts.
+func showCommand(con *client.Client) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "show",
+		Aliases: []string{"info"},
+		Short:   "Show one or more services in detail",
+		RunE: func(command *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return errors.New("provide one or more host or service ID prefixes")
+			}
 
-	rmCmd := &cobra.Command{
-		Use:   "rm",
-		Short: "Remove one or more services from the database",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return nil
-		},
-	}
-
-	servicesCmd.AddCommand(rmCmd)
-
-	showCmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show one ore more services details",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			options := network.Details()
-
-			// Request
-			res, err := con.Hosts.Read(cmd.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-				},
-			})
-			err = aims.CheckError(err)
+			hostList, err := readHosts(con, command)
 			if err != nil {
 				return err
 			}
 
-			var ports []*pb.Port
-			for _, h := range res.GetHosts() {
-				ports = append(ports, h.GetPorts()...)
-			}
-
-			// Display
-			for _, h := range ports {
-				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, network.DisplayFields, options...))
+			shown := 0
+			for _, h := range hostList {
+				hostMatch := matchesAny(h.GetId(), args)
+				for _, p := range h.GetPorts() {
+					if hostMatch || matchesAny(p.GetId(), args) {
+						printService(h, p)
+						shown++
+					}
 				}
 			}
+			if shown == 0 {
+				return errors.New("no matching service")
+			}
+
 			return nil
 		},
 	}
-	servicesCmd.AddCommand(showCmd)
 
-	showComps := carapace.Gen(showCmd)
-	showComps.PositionalAnyCompletion(CompleteByID(con))
+	carapace.Gen(cmd).PositionalAnyCompletion(CompleteByID(con))
 
-	// Export
-	exportCmd := export.ExportCommand(servicesCmd, con, exportCommand(con))
-	servicesCmd.AddCommand(exportCmd)
-
-	return servicesCmd
+	return cmd
 }
 
-// CompleteByID returns port/service completions with their smallened IDs as keys.
-func CompleteByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
+// rmCommand is a placeholder: service deletion is scoped by host ingest and not yet wired.
+func rmCommand(con *client.Client) *cobra.Command {
+	return &cobra.Command{
+		Use:   "rm",
+		Short: "Remove one or more services from the database",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return errors.New("service removal is not implemented yet")
+		},
+	}
+}
+
+// printService renders a single service's full detail view.
+func printService(h *pb.Host, p *pb.Port) {
+	fmt.Println(network.Banner(p, hostLabel(h)))
+	fmt.Println(display.Columns(0, 4, network.InfoPanes(p)...))
+
+	if ins := network.Insights(p); len(ins) > 0 {
+		fmt.Println()
+		fmt.Println(display.Bold + "Insights" + display.Reset)
+		for _, l := range ins {
+			fmt.Println("  " + l)
+		}
+	}
+
+	if sb := network.ScriptsBlock(p); sb != "" {
+		fmt.Println()
+		fmt.Println(sb)
+	}
+
+	fmt.Println()
+}
+
+//
+// [ Grouped list rendering ] ---------------------------------------------
+//
+
+// svcRow pairs a port with its owning host for the grouped table. firstOfHost marks the first row
+// of each host group, on which alone the host identity columns are populated.
+type svcRow struct {
+	host        *pb.Host
+	port        *pb.Port
+	firstOfHost bool
+}
+
+// groupedRows flattens hosts→ports into grouped rows: ports sorted by number within each host, the
+// first row of each host flagged so its identity prints once.
+func groupedRows(hostList []*pb.Host) (rows []svcRow) {
+	for _, h := range hostList {
+		ports := h.GetPorts()
+		if len(ports) == 0 {
+			continue
+		}
+		sort.SliceStable(ports, func(i, j int) bool { return ports[i].Number < ports[j].Number })
+		for i, p := range ports {
+			rows = append(rows, svcRow{host: h, port: p, firstOfHost: i == 0})
+		}
+	}
+	return rows
+}
+
+// groupedHeaders are the grouped-list columns: the two host-identity columns, then the port
+// columns (with their responsive weights) from the network domain.
+func groupedHeaders() []display.Options {
+	return append([]display.Options{
+		display.WithHeader("Host", 1),
+		display.WithHeader("ID", 1),
+	}, network.Headers()...)
+}
+
+// groupedFields wraps the port-level network.DisplayFields so they apply to an svcRow, and adds the
+// host-identity columns (blanked on continuation rows) plus a state-coloured port number.
+func groupedFields() map[string]func(svcRow) string {
+	fields := map[string]func(svcRow) string{
+		"Host": func(r svcRow) string {
+			if r.firstOfHost {
+				return hostLabel(r.host)
+			}
+			return ""
+		},
+		"ID": func(r svcRow) string {
+			if r.firstOfHost {
+				return color.HiBlackString(display.FormatSmallID(r.host.GetId()))
+			}
+			return ""
+		},
+		"Num": func(r svcRow) string { return numColored(r.port) },
+	}
+
+	for name, fn := range network.DisplayFields {
+		if name == "ID" || name == "Num" { // host ID and coloured Num are overridden above
+			continue
+		}
+		fn := fn
+		fields[name] = func(r svcRow) string { return fn(r.port) }
+	}
+
+	return fields
+}
+
+// numColored renders a port number coloured by its state (open green / filtered yellow / closed
+// red), so the list carries the state signal even when the State column is dropped on narrow terms.
+func numColored(port *pb.Port) string {
+	n := strconv.Itoa(int(port.Number))
+	if port.State == nil {
+		return n
+	}
+	switch port.State.State {
+	case "open":
+		return color.HiGreenString(n)
+	case "filtered":
+		return color.HiYellowString(n)
+	case "closed":
+		return color.HiRedString(n)
+	}
+	return n
+}
+
+//
+// [ Completions ] --------------------------------------------------------
+//
+
+// CompleteByID completes services by their (short) ID, described by host / number / proto /
+// product / state, and colours each candidate by port state (open green, filtered yellow, else dim).
+func CompleteByID(con *client.Client) carapace.Action {
+	return carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
-		// Request
-		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
-			Host: &pb.Host{},
-			Filters: &hosts.HostFilters{
-				Ports: true,
-			},
+
+		res, err := con.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
+			Host:    &pb.Host{},
+			Filters: &hosts.HostFilters{Ports: true},
 		})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
-		options := network.Completions()
-		options = append(options, display.WithCandidateValue("ID", ""))
-
-		var ports []*pb.Port
+		var rows []svcRow
 		for _, h := range res.GetHosts() {
-			ports = append(ports, h.GetPorts()...)
+			for _, p := range h.GetPorts() {
+				rows = append(rows, svcRow{host: h, port: p})
+			}
+		}
+		if len(rows) == 0 {
+			return carapace.ActionMessage("no services in database")
 		}
 
-		results := display.Completions(ports, network.DisplayFields, options...)
+		fields := map[string]func(svcRow) string{
+			"ID":   func(r svcRow) string { return display.FormatSmallID(r.port.GetId()) },
+			"Host": func(r svcRow) string { return hostLabel(r.host) },
+			"Num":  func(r svcRow) string { return strconv.Itoa(int(r.port.Number)) },
+		}
+		for name, fn := range network.DisplayFields {
+			if name == "ID" || name == "Num" {
+				continue
+			}
+			fn := fn
+			fields[name] = func(r svcRow) string { return fn(r.port) }
+		}
 
-		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
+		opts := []display.Options{
+			display.WithHeader("ID", 1),
+			display.WithHeader("Host", 1),
+			display.WithHeader("Num", 1),
+			display.WithHeader("Proto", 1),
+			display.WithHeader("Product", 2),
+			display.WithHeader("State", 2),
+			display.WithCandidateValue("ID", ""),
+		}
+
+		styleOf := func(r svcRow) string {
+			if r.port.State == nil {
+				return style.Dim
+			}
+			switch r.port.State.State {
+			case "open":
+				return style.Green
+			case "filtered":
+				return style.Yellow
+			default:
+				return style.Dim
+			}
+		}
+
+		results := display.CompletionsStyled(rows, fields, styleOf, opts...)
+
+		return carapace.ActionStyledValuesDescribed(results...).Tag("services (by id)")
 	})
 }
 
-func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
-	// If we have some data, export it according
-	// to command flag specifications (format, file, etc)
-	exportRunE := func(command *cobra.Command, args []string) (data any) {
-		if len(args) == 0 {
-			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-				},
-			})
-			err = aims.CheckError(err)
-			if err != nil {
-				return err
-			}
+//
+// [ Helpers ] ------------------------------------------------------------
+//
 
-			servicesList := []*pb.Port{}
-			for _, h := range res.GetHosts() {
-				servicesList = append(servicesList, h.Ports...)
-			}
-
-			return servicesList
-		} else {
-			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-				},
-			})
-			err = aims.CheckError(err)
-			if err != nil {
-				return err
-			}
-
-			scanList := []*pb.Host{}
-			servicesList := []*pb.Port{}
-
-			// Display
-			for _, arg := range args {
-				for _, h := range res.GetHosts() {
-					if strings.HasPrefix(h.Id, strip(arg)) {
-						scanList = append(scanList, h)
-					}
-				}
-			}
-
-			for _, h := range scanList {
-				servicesList = append(servicesList, h.Ports...)
-			}
-
-			return servicesList
-		}
+// readHosts fetches every host with its ports.
+func readHosts(con *client.Client, command *cobra.Command) ([]*pb.Host, error) {
+	res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+		Host:    &pb.Host{},
+		Filters: &hosts.HostFilters{Ports: true},
+	})
+	if err = aims.CheckError(err); err != nil {
+		return nil, err
 	}
-
-	return exportRunE
+	return res.GetHosts(), nil
 }
 
-const ansi = "[\u001B\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\u0007)|(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))"
+// hostLabel is the human name for a host: first hostname, else first address, else its short ID.
+func hostLabel(h *pb.Host) string {
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			return hn.GetName()
+		}
+	}
+	for _, a := range h.GetAddresses() {
+		if a.GetAddr() != "" {
+			return a.GetAddr()
+		}
+	}
+	return display.FormatSmallID(h.GetId())
+}
 
-var re = regexp.MustCompile(ansi)
+// matchesAny reports whether id has any of the (ANSI-stripped) prefixes.
+func matchesAny(id string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(id, strip(p)) {
+			return true
+		}
+	}
+	return false
+}
 
-// Strip removes all ANSI escaped color sequences in a string.
+func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
+	return func(command *cobra.Command, args []string) (data any) {
+		hostList, err := readHosts(con, command)
+		if err != nil {
+			return err
+		}
+
+		var services []*pb.Port
+		for _, h := range hostList {
+			if len(args) > 0 && !matchesAny(h.GetId(), args) {
+				continue
+			}
+			services = append(services, h.GetPorts()...)
+		}
+
+		return services
+	}
+}
+
+// strip removes all ANSI escaped color sequences in a string.
 func strip(str string) string {
-	return re.ReplaceAllString(str, "")
+	return display.StripANSI(str)
 }

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	host "github.com/d3c3ptive/aims/host/pb"
@@ -57,16 +58,19 @@ func Headers() (headers []display.Options) {
 		headers = append(headers, display.WithHeader(n, w))
 	}
 
+	// Weights are the responsive-drop priority (see cmd/display.adaptTableSize): weight-1 columns
+	// are the always-kept floor, higher weights drop first on narrow terminals. Extra Info in
+	// particular can be very wide (long mod_ssl banners), so it is the first to go — which is what
+	// stops it forcing the whole row past the terminal width and triggering the "~~" truncation.
 	add("Num", 1)
 	add("Proto", 1) // Combined transport/application protocol when possible
 	add("Product", 1)
-
 	add("State", 1) // Combined or relevant port/service state
-	add("Reason", 1)
-	add("Method", 1)
-	add("Extra Info", 1)
 
-	// add("ID", 3)
+	add("Reason", 2)
+	add("Method", 2)
+
+	add("Extra Info", 3)
 
 	return headers
 }
@@ -243,6 +247,200 @@ var DisplayFields = map[string]func(port *host.Port) string{
 
 		return scripts
 	},
+}
+
+//
+// [ Detail View ] --------------------------------------------------------
+//
+
+// Banner renders the one-line header for a single service `info` view: "<host>:<num>/<proto>
+// <app-proto>" on the left, then a state badge and script count on the right, followed by a rule.
+// hostLabel is the owning host's display name (passed in, since a Port doesn't reference its host).
+func Banner(port *host.Port, hostLabel string) string {
+	title := ""
+	if hostLabel != "" {
+		title = hostLabel + display.Dim + ":" + display.Reset
+	}
+	title += display.Bold + strconv.Itoa(int(port.Number)) + display.Reset
+	if port.Protocol != "" {
+		title += display.Dim + "/" + port.Protocol + display.Reset
+	}
+	if name := appProto(port); name != "" {
+		title += "  " + name
+	}
+
+	badges := []string{stateBadge(port)}
+	if n := len(port.GetScripts()); n > 0 {
+		badges = append(badges, color.HiBlueString("%d script(s)", n))
+	}
+
+	head := title + "   " + strings.Join(badges, display.Dim+" · "+display.Reset)
+	rule := display.Dim + strings.Repeat("─", 66) + display.Reset
+	return head + "\n" + rule
+}
+
+// InfoPanes groups a port's detail into titled panes (Service / State / Meta) for side-by-side
+// layout via display.Columns, mirroring the credential info view.
+func InfoPanes(port *host.Port) []display.Pane {
+	svc := port.GetService()
+
+	service := display.KVLines([][2]string{
+		{"Port", strconv.Itoa(int(port.Number)) + "/" + port.Protocol},
+		{"Name", svcField(svc, func(s *network.Service) string { return s.Name })},
+		{"Product", svcField(svc, func(s *network.Service) string { return s.Product })},
+		{"Version", svcField(svc, func(s *network.Service) string { return s.Version })},
+		{"Extra", svcField(svc, func(s *network.Service) string { return s.ExtraInfo })},
+	})
+
+	st := port.GetState()
+	state := display.KVLines([][2]string{
+		{"State", stateText(port)},
+		{"Reason", stateField(st, func(s *host.State) string { return s.Reason })},
+		{"TTL", ttlLabel(st)},
+		{"Method", svcField(svc, func(s *network.Service) string { return s.Method })},
+	})
+
+	meta := display.KVLines([][2]string{
+		{"ID", display.FormatSmallID(port.Id)},
+		{"Updated", fmtTime(port.GetUpdatedAt())},
+	})
+
+	// Drop panes with no content, so an empty section never prints a bare title.
+	var panes []display.Pane
+	for _, p := range []display.Pane{
+		{Title: "Service", Lines: service},
+		{Title: "State", Lines: state},
+		{Title: "Meta", Lines: meta},
+	} {
+		if len(p.Lines) > 0 {
+			panes = append(panes, p)
+		}
+	}
+	return panes
+}
+
+// ScriptsBlock renders a port's NSE scripts as a titled block for the info view, or "" if none.
+func ScriptsBlock(port *host.Port) string {
+	if len(port.GetScripts()) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(display.Bold + "Scripts" + display.Reset)
+	for _, script := range port.GetScripts() {
+		b.WriteString(printScript(script, 1))
+	}
+	return b.String()
+}
+
+// Insights returns cross-cutting observations about a single port for the info view: a cleartext
+// protocol warning, and a note when the port is filtered (no confirmed service).
+func Insights(port *host.Port) (lines []string) {
+	if st := port.GetState(); st != nil && st.State == "filtered" {
+		lines = append(lines, color.HiYellowString("⚠")+" filtered — service not confirmed (no response)")
+	}
+	if p := cleartextProtocol(port); p != "" {
+		lines = append(lines, color.HiYellowString("⚠")+fmt.Sprintf(" %s is a cleartext protocol — credentials may be sniffable", p))
+	}
+	return lines
+}
+
+//
+// [ Detail Formatters ] --------------------------------------------------
+//
+
+// appProto returns the application-layer protocol/name of a port's service (e.g. http, ssh).
+func appProto(port *host.Port) string {
+	svc := port.GetService()
+	if svc == nil {
+		return ""
+	}
+	if svc.Protocol != "" {
+		return svc.Protocol
+	}
+	return svc.Name
+}
+
+// stateText returns the port state coloured by openness (reuses the table field generator).
+func stateText(port *host.Port) string {
+	return DisplayFields["State"](port)
+}
+
+// stateBadge is the state as a coloured "● <state>" badge for the banner.
+func stateBadge(port *host.Port) string {
+	st := port.GetState()
+	if st == nil {
+		return color.HiBlackString("● unknown")
+	}
+	switch st.State {
+	case "open":
+		return color.HiGreenString("● open")
+	case "filtered":
+		return color.HiYellowString("● filtered")
+	case "closed":
+		return color.HiRedString("● closed")
+	default:
+		return color.HiBlackString("● " + st.State)
+	}
+}
+
+// svcField safely extracts a string field from a possibly-nil Service.
+func svcField(s *network.Service, get func(*network.Service) string) string {
+	if s == nil {
+		return ""
+	}
+	return get(s)
+}
+
+// stateField safely extracts a string field from a possibly-nil State.
+func stateField(s *host.State, get func(*host.State) string) string {
+	if s == nil {
+		return ""
+	}
+	return get(s)
+}
+
+// ttlLabel renders the reason TTL of a port state, or "" when unset.
+func ttlLabel(s *host.State) string {
+	if s == nil || s.ReasonTTL == 0 {
+		return ""
+	}
+	return strconv.Itoa(int(s.ReasonTTL))
+}
+
+// cleartextProtocol returns the well-known cleartext protocol name of a port (by app-proto or
+// number), or "" if the port isn't a recognised cleartext service.
+func cleartextProtocol(port *host.Port) string {
+	name := strings.ToLower(appProto(port))
+	switch name {
+	case "ftp", "telnet", "http", "smtp", "pop3", "imap", "snmp":
+		return name
+	}
+	switch port.Number {
+	case 21:
+		return "ftp"
+	case 23:
+		return "telnet"
+	case 25:
+		return "smtp"
+	case 80:
+		return "http"
+	case 110:
+		return "pop3"
+	case 143:
+		return "imap"
+	}
+	return ""
+}
+
+func fmtTime(t *timestamppb.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	tt := t.AsTime()
+	if tt.IsZero() {
+		return ""
+	}
+	return tt.Format("2006-01-02 15:04")
 }
 
 // Recursive function to print a ScriptORM object with nested structures

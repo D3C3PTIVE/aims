@@ -278,3 +278,76 @@ Don't:
    point that runs the scoped match/merge for an ingested `Result` and attaches Run provenance.
 4. Land the §9 idempotence + union + no-false-merge tests first; they're the safety net for
    everything above.
+
+---
+
+## Addendum — worked Port/Service example & credential-reference caveats (2026-07-19, CRUD/CLI agent)
+
+> Added while picking **Services** as the second dedup guinea pig (after credentials). This
+> grounds §2–§5 against the *actual* proto and reports what the credential slice does and does
+> not already give an implementer. It refines, it does not override, anything above.
+
+### A. The CLI "Service" is `host.Port`, not `network.Service`
+
+The `services` command renders **`host.Port`** objects — it reads hosts and flattens `h.Ports`
+(`cmd/services/services.go:180`). `network.Service` is a sub-message hanging off the port
+(`Port.Service`, single, `belongs_to`), carrying Product/Version/ExtraInfo/Method/Name. So §2's
+two separate keys — Port `(hostID,proto,number)` and Service `(hostID,port,proto)` — **collapse
+onto one key in practice**: the Port *is* the service, and its `Service` sub-message is
+enrichment, not a separately-identified row. Dedup Services = dedup Ports.
+
+### B. Worked field-class table for `host.Port` (fills the §4/§10 "classify every field" duty)
+
+Field homes are from `host/pb/port.proto`:
+
+| Proto field | Cardinality | §4 class | Note |
+|---|---|---|---|
+| `Port.Number`, `Port.Protocol` (+ parent `hostID`) | single | **Identity** | the natural key; never merged |
+| `Port.Service.Product/Version/Name/Method/ExtraInfo` | single msg | **Fill-only** | one scan blank, another populated → fill; genuine *conflict* (two different products) is rare but must **keep higher-confidence + record the other**, never clobber |
+| `Port.State{State,Reason,ReasonIP,ReasonTTL}` | **single msg** | **Observation / Latest-wins-with-history** | ⚠️ see proto gap C1 — cannot hold history today |
+| `Port.Scripts[]` (`many_to_many`) | **repeated** | **Observation (append)** | append works natively; identity = content-hash per §6.2 |
+| `Port.Reasons[]`, `ExtraPort.Reasons[]` | repeated | **Observation (append)** | extra closed/filtered reasons — union |
+| `Port.Owner`, `Port.Count` | single | Fill-only | |
+| `Port.CreatedAt` | single | **First-wins** | |
+
+### C. Proto gaps this exposes (per §5's "flag it, don't overwrite")
+
+- **C1 — `Port.State` is a single message, so port-state history is not representable.** Two
+  scans disagreeing (`open syn-ack` at 10:00 vs `filtered no-response` at 14:00) cannot both be
+  stored on the port as §5 wants. Until the proto grows a repeated observation (a `State` with a
+  Run ref + timestamp, or a `StateObservation[]`), apply §5's conservative fallback: **keep the
+  newer-by-timestamp state, and record in provenance that a conflicting observation was seen** —
+  do not silently overwrite. This is the single most important scan-merge proto change to make.
+- **C2 — no Run/timestamp provenance on `Port.State` or `Script`.** §7 (subtractable deletes)
+  and the Latest-wins-*by observation timestamp* rule (§4/§9 order-independence) both need each
+  observation to carry which Run produced it and when. Not present today.
+
+### D. Current-state findings for the implementer (greenfield warnings)
+
+- **`host/identical.go` never scores `Ports`.** It weights ExtraPorts, host `Status`, Trace,
+  Hops, Users, Processes, addresses, hostnames — but not the open-port set. So the §3 scoped
+  "match host → match each port → match each script" recursion is **entirely unimplemented**;
+  there is no `comparePorts`, no `MergePort`. This is the reference work item (§ suggested-first-
+  slice #2).
+- **The credential slice is a *partial* reference — know what you're copying.** `credential/
+  merge.go` (`MergeCore`) implements only **two of the six** §4 classes: Fill-only and
+  First-wins. It has **no** Derived recompute (LoginsCount is a documented TODO), and — because
+  credentials are not volatile-state observations — **no** Observation-append or
+  Latest-wins-with-history. Ports need exactly those two missing classes (C1), which are the hard
+  part. Copy `MergeCore`'s *shape* (per-field, returns `changed bool`, fill-only helper), not its
+  coverage.
+- **The §1 match→{new, merge-pairs} partition is already realized once — out of band.**
+  `server/credential/credential.go` `Upsert` does not use `internal/db.FilterNew`; it hand-rolls
+  `findIdentical` (keyed) → `MergeCore` + `Save` → else insert, exactly the partition §1/§10 ask
+  for. So the pattern is proven; the remaining refactor is **generalizing it back into
+  `internal/db.FilterNew`** (first-slice #1) so host/port ingest gets it too, instead of each
+  domain re-implementing the loop.
+
+### E. Consequence for sequencing
+
+Port dedup is not a standalone "port merge" — per §3 it lives **inside host ingest**, scoped to
+the matched host. So the honest order is: (1) `comparePorts` + `host.MergePort`; (2) fold both
+into a `host.MergeHost` that walks Host→Ports→Scripts; (3) wire `MergeHost` into
+`server/host` Create/Upsert replacing the match-then-drop `FilterNew`; (4) the §9 tests. The
+`services` **display** slice (grouped list, real column weights, redesigned `info`) is
+independent of all that and can land first without touching the ingest path.

@@ -242,24 +242,14 @@ func InfoPanes(c *credential.Core) []display.Pane {
 
 type kvPair struct{ k, v string }
 
-// paneLines renders key/value pairs into aligned "key : value" lines, skipping empty values and
-// right-aligning the keys within the pane.
-func paneLines(pairs []kvPair) (lines []string) {
-	max := 0
-	for _, p := range pairs {
-		if strings.TrimSpace(p.v) != "" && len(p.k) > max {
-			max = len(p.k)
-		}
+// paneLines renders key/value pairs into aligned "key : value" lines via the shared display
+// renderer, so credential detail keys look identical to every other domain's.
+func paneLines(pairs []kvPair) []string {
+	kv := make([][2]string, len(pairs))
+	for i, p := range pairs {
+		kv[i] = [2]string{p.k, p.v}
 	}
-	for _, p := range pairs {
-		if strings.TrimSpace(p.v) == "" {
-			continue
-		}
-		name := fmt.Sprintf("%*s", max, p.k)
-		// Readable subdued key (cyan) + dim separator, value in its own colour.
-		lines = append(lines, color.CyanString(name)+color.HiBlackString(" : ")+p.v)
-	}
-	return lines
+	return display.KVLines(kv)
 }
 
 //
