@@ -61,7 +61,7 @@ production-grade; the verbs (ingest-anything, target, stream, fold, diff) are th
 |---|---|---|
 | Parse nmap XML → `Run` | ✅ works | `scan/nmap/nmap.go` `FromXML` = one `xml.Unmarshal`; the `xml:"…"` tags do all the mapping |
 | Store / read a Run (with host dedup) | ✅ works | `server/scan/scan.go` Create/Read; `db.FilterNew` + `AreScansIdentical` / `AreHostsIdentical` |
-| **Fold async results into a Run** | ❌ empty stub | `scan.Run.AddResult`, `InitResult`, `AddTarget` all `return nil` — `scan/scan.go:69-94` |
+| **Fold results/hosts into a Run** | ✅ built (non-destructive merge) | `scan/fold.go` — `Run.AddResult` (feeder) + `Run.AddHosts` (bulk/import) → scoped keyed match + field-class merge; tested in `scan/fold_test.go`. Wired into `server/scan` Create (replaced the host-dropping `FilterNew`). Cross-run/DB host-row unification still latent. |
 | **Targets-from-DB (hosts-as-targets)** | ❌ absent | `scan.Target` type exists; no bridge from stored `Host`/`Service` → `Target` |
 | **Any scanner other than nmap** | ❌ absent | no adapter interface; `Result.Data`'s *"add a branch case in the Go scan package"* (`result.proto:31-36`) was never written |
 | Live / streaming scans | ❌ absent | `Scans` service is unary-only; yet `scan.go` `getTasks` already splits *running* vs *done* tasks for display |
@@ -165,6 +165,30 @@ nmap-XML parking lot and becomes a **scan orchestrator over a shared object DB**
    recursive `Script{Table, Element}` tree or `Result.Data` — exactly as nmap does NSE — so
    adding a scanner *never* means new proto/DB columns. This keeps the "one shared database"
    promise honest as tools multiply.
+
+### Live scan view — compose `scan show` with `watch`, don't build a blocking monitor
+
+A running scan wants a live, refreshing view (progress, hosts/ports found so far, tasks
+done-vs-todo). The instinct is a blocking `scan monitor <id>` command that owns the terminal
+and redraws — but the cheaper, more Unix-composable answer is to keep a **stateless `scan show
+<id>`** that renders the current snapshot once and exit, and let the operator wrap it:
+
+```
+watch -c -n1 aims scan show <id>
+```
+
+`scan show` already renders running-vs-done task tables (`scan.go` `getTasks`/`formatTasks`
+split `Progress[]` vs `End[]`), so a live view is mostly *there* — it just needs the underlying
+Run to keep updating (the streaming fold + `TaskProgress` from Plug point B). Composing with
+`watch` gives refresh, color, and interval control for free, stays scriptable, and avoids a
+bespoke render loop. A built-in `monitor` can come later as sugar if wanted; it should share the
+exact `scan show` renderer, not fork it.
+
+Open design question (either path): what the live view *shows* — raw scanner stdout passed
+through, or AIMS's own summarized display (objects found so far, task done/todo counts, deltas
+since last tick). The AIMS-native summary is the more valuable and philosophy-true option (it
+reads the folded object tree, not the tool's console spew), but raw passthrough is a trivial
+first cut. Lean summarized, fall back to raw.
 
 ### Recommended first vertical slice
 
