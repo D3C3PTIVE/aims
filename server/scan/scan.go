@@ -20,7 +20,6 @@ package scan
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -76,7 +75,9 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 
 	filtered := db.FilterNew(newScans, dbScans, scan.AreScansIdentical)
 	if len(filtered) == 0 {
-		return nil, errors.New("Scans already exist in the database, skipping")
+		// Every incoming run is already present: an idempotent no-op, not an error.
+		// The CLI renders an empty Scans list as "already present (skipped)".
+		return &scanrpcpb.CreateScanResponse{}, nil
 	}
 
 	err := database.Create(&filtered).Error
