@@ -118,32 +118,9 @@ func Fmt(color string) string {
 	return SGRStart + color + SGREnd
 }
 
-var terminalWeightSizes = map[int]int{
-	1: 80,
-	2: 160,
-	3: 240,
-	4: 320,
-}
-
-func getMaximumWeight(width, height int) int {
-	max := 0
-	maxes := make([]int, len(terminalWeightSizes)+1)
-
-	for i, threshold := range terminalWeightSizes {
-		maxes[i] = threshold
-	}
-
-	sort.Ints(maxes)
-
-	for w, threshold := range maxes {
-		if threshold > width {
-			break
-		}
-		max = w
-	}
-
-	return max
-}
+// columnOverhead is the per-column chrome added by AIMSDefault: padding-left + padding-right +
+// one column separator. Used to estimate rendered width when deciding what fits.
+const columnOverhead = 3
 
 var (
 	tableStyles = map[string]table.Style{
@@ -241,31 +218,82 @@ var (
 	}
 )
 
-func adaptTableSize(headers []string, rows [][]string, maxWeight int, options *opts) ([]string, [][]string) {
-	allW := options.weights
+// adaptTableSize drops columns to fit the available terminal width, using the columns' REAL
+// rendered widths rather than fixed width-per-weight thresholds. Weight is the drop *priority*:
+// all weight-1 columns (the essential identity floor) are always kept — even if they overflow a
+// tiny terminal, in which case go-pretty wraps them — and the remaining columns are then added in
+// ascending-weight order, stopping at the first that no longer fits. This means a wide terminal
+// shows every column that actually fits, instead of being capped by an arbitrary threshold.
+func adaptTableSize(headers []string, rows [][]string, width int, options *opts) ([]string, [][]string) {
+	if len(headers) == 0 {
+		return headers, rows
+	}
 
-	// Keep every column whose weight is within the allowed maximum,
-	// regardless of the order in which headers were declared.
-	var keep []int
-	var maxed []string
+	weights := options.weights
 
+	// Real width of each column: widest of its header and cells (ANSI ignored) + chrome.
+	colWidth := make([]int, len(headers))
 	for i, header := range headers {
-		if allW[header] > maxWeight {
-			continue
+		w := VisibleWidth(header)
+		for _, row := range rows {
+			if i < len(row) {
+				if cw := VisibleWidth(row[i]); cw > w {
+					w = cw
+				}
+			}
 		}
-		keep = append(keep, i)
-		maxed = append(maxed, header)
+		colWidth[i] = w + columnOverhead
+	}
+
+	kept := make([]bool, len(headers))
+	used := 0
+
+	// 1. Always keep the essential (weight <= 1) columns.
+	for i, header := range headers {
+		if weights[header] <= 1 {
+			kept[i] = true
+			used += colWidth[i]
+		}
+	}
+
+	// 2. Add the remaining columns in ascending-weight (priority) order, stopping at the first
+	//    that does not fit — so a shown column always implies every higher-priority column shows.
+	rest := make([]int, 0, len(headers))
+	for i, header := range headers {
+		if weights[header] > 1 {
+			rest = append(rest, i)
+		}
+	}
+	sort.SliceStable(rest, func(a, b int) bool {
+		return weights[headers[rest[a]]] < weights[headers[rest[b]]]
+	})
+	for _, idx := range rest {
+		if used+colWidth[idx] > width {
+			break
+		}
+		kept[idx] = true
+		used += colWidth[idx]
+	}
+
+	// Emit kept columns in their original declared order.
+	var maxed []string
+	var keep []int
+	for i, header := range headers {
+		if kept[i] {
+			keep = append(keep, i)
+			maxed = append(maxed, header)
+		}
 	}
 
 	maxRows := make([][]string, len(rows))
 	for i, row := range rows {
-		var kept []string
+		var krow []string
 		for _, idx := range keep {
 			if idx < len(row) {
-				kept = append(kept, row[idx])
+				krow = append(krow, row[idx])
 			}
 		}
-		maxRows[i] = kept
+		maxRows[i] = krow
 	}
 
 	return maxed, maxRows

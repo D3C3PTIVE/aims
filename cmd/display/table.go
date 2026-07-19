@@ -19,6 +19,9 @@ package display
 */
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	"golang.org/x/term"
 )
@@ -64,20 +67,14 @@ func populate(rows [][]string, options *opts) *table.Table {
 		headers, rows = removeEmptyColumns()(headers, rows)
 	}
 
-	// Adapt to terminal size.
-	// The index of the value range obtained also gives the
-	// maximum weight allowed for the table.
-	width, height, err := term.GetSize(int(stderrTerm.Fd()))
-	if err != nil {
-		width, height = 80, 80
-	}
+	// Adapt to terminal size: drop columns (by weight priority) only when they don't actually
+	// fit the available width — see adaptTableSize.
+	width, _ := terminalSize()
 
 	// By default, give some hints to the table itself.
 	tb.SetAllowedRowLength(width)
-	maxWeight := getMaximumWeight(width, height)
 
-	// But ensure we don't get too far anyway.
-	headers, rows = adaptTableSize(headers, rows, maxWeight, options)
+	headers, rows = adaptTableSize(headers, rows, width, options)
 
 	// Add final headers
 	var heads table.Row
@@ -100,6 +97,27 @@ func populate(rows [][]string, options *opts) *table.Table {
 	// 3 - Last settings
 
 	return tb
+}
+
+// terminalSize returns the width/height of the controlling terminal. It tries the output streams
+// in turn — stdout is the usual render sink, so it is measured first; stderr (the previous sole
+// source) is unreliable when a teamserver redirects it for logging — then falls back to $COLUMNS
+// and finally a sane default. A width of 0 (non-tty) is treated as "unknown" and skipped.
+func terminalSize() (width, height int) {
+	for _, f := range []*os.File{stdoutTerm, stderrTerm, stdinTerm} {
+		if f == nil {
+			continue
+		}
+		if w, h, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
+			return w, h
+		}
+	}
+
+	if c, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && c > 0 {
+		return c, 50
+	}
+
+	return 80, 50
 }
 
 // columnCleaner filters a series of column headers and their contents in rows.

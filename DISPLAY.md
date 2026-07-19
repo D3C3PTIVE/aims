@@ -38,15 +38,17 @@ runs a post-processing pipeline into a `jedib0t/go-pretty` table:
    responsive layout in practice.
 2. `withWeight()` (`table.go:143`) — **currently a no-op**: it returns `raw, rows` unchanged.
    The weight map is not applied through this path.
-3. Terminal-size adaptation — `term.GetSize(stderrTerm.Fd())` (`table.go:74`) reads the real
-   terminal width/height (falling back to 80×80 on error), then `getMaximumWeight(width,height)`
-   (`defaults.go:141`) maps width→max allowed weight via `terminalWeightSizes`
-   (`defaults.go:134`): **weight 1 → ≥80 cols, 2 → ≥160, 3 → ≥240, 4 → ≥320**. Finally
-   `adaptTableSize()` (`defaults.go:257`) truncates the (weight-ascending) header list at the
-   first column whose weight exceeds `maxWeight`.
+3. Terminal-size adaptation — `terminalSize()` (`table.go`) reads the real width (stdout first,
+   then stderr/stdin/`$COLUMNS`/80). `adaptTableSize()` (`defaults.go`) then keeps columns
+   **fit-based, not by fixed threshold** (rewritten 2026-07-19, see Update): all weight-1
+   (essential) columns are always kept, then higher-weight columns are added in ascending-weight
+   (priority) order while their **real rendered width** (`VisibleWidth` + chrome) still fits,
+   stopping at the first that doesn't. The old `terminalWeightSizes`/`getMaximumWeight` fixed
+   thresholds (1→80, 2→160, 3→240, 4→320) are **removed** — they capped column count far below
+   what actually fit (a 200-col terminal showed only weight ≤2).
 
-So the intended model is: **lower weight = higher priority = shown first = survives on narrow
-terminals**. Narrow terminals shed high-weight (weight-3/4) columns; wide terminals show them.
+So the model is: **lower weight = higher priority = kept first; columns drop only when they don't
+fit.** Narrow terminals shed the lowest-priority columns; wide terminals show everything that fits.
 
 **`Details[T]`** — `cmd/display/details.go:32`. A vertical `key: value` view for a single
 object. Headers are **grouped by weight** (`details.go:39-52`), weights sorted ascending, and
@@ -106,7 +108,7 @@ map, `style`, `removeEmpty`, and the completion `candidate`/`fallback`/`sep`. Ke
 | Scan/Run | `scan/scan.go:171` | `*scan.Run` | ✅ (+ nested task tables) |
 | C2 Agent | `c2/agent.go:108` | `*c2.Agent` | ✅ |
 | C2 Channel | `c2/channel.go:96` | `*c2.Channel` | ✅ (severe header/field name drift) |
-| **Credential** | — | — | ❌ **none anywhere** |
+| **Credential** | `credential/display.go` | `*credential.Core` | ✅ Fields + Headers/Details/Completions + `Banner`/`InfoPanes` (2026-07-19) |
 
 ---
 
@@ -148,7 +150,7 @@ printer already exists (`network/service.go:255 printScript` / `:288 printTable`
 right model for weight-4. See the **gap** below: this contract is defined over `*host.Port`,
 so the network `Service` object has no view of its own.
 
-### Credential  (Metasploit heritage — **no contract exists yet**)
+### Credential  (Metasploit heritage — ✅ **implemented 2026-07-19**, see [Update](#update-2026-07-19--credential-slice--engine-additions))
 
 The Metasploit credential model is `Core` = **Public** (username/cert) + **Private**
 (password/hash/key) + **Realm** (domain/db) + **Origin** (how obtained) + **Login**s (where it
@@ -231,11 +233,10 @@ weight-4 "Channel Details" nested table expands. Direction arrows encode bind vs
 
 ### Per-domain
 
-5. **Credentials have no presentation at all.** No `DisplayFields`/`DisplayHeaders` in
-   `credential/*`, and `cmd/credentials/credentials.go` `list`/`show`/`rm` are stubs that fetch
-   then `return nil` without rendering (`credentials.go:44-84`). This is the **single biggest
-   display gap** — the entire Metasploit-heritage model is invisible. Build the Core contract
-   proposed above.
+5. ✅ **DONE (2026-07-19).** Credentials now have a full presentation contract
+   (`credential/display.go`) and wired `list`/`info`/`rm`/`add`/`import` commands — see the
+   [Update](#update-2026-07-19--credential-slice--engine-additions) section. Also fixed the
+   **width-detection bug** (below) that made this the visible "only 4 columns" symptom.
 6. **"Service" display is actually a Port display.** `network/service.go:128` declares
    `DisplayFields map[string]func(*host.Port) string` — keyed on `host.Port`, not
    `network.Service`. `network.Service`'s own `AsEntity` is also a stub. Decide whether Service
@@ -274,3 +275,72 @@ weight-4 "Channel Details" nested table expands. Direction arrows encode bind vs
 2. Build the **credential presentation contract** (gap 5) — the largest missing surface.
 3. Resolve **Service vs Port** typing (gap 6).
 4. Repair or delete the **engine dead code** (gaps 1–3) so weight semantics are trustworthy.
+
+---
+
+## Update 2026-07-19 — credential slice + engine additions
+
+Implemented the credential display/completion vertical slice (see [`CREDENTIALS.md`](./CREDENTIALS.md))
+and, in doing so, fixed one real engine bug and added reusable primitives. **These are the pieces
+to reuse when bringing host/scan/services `show` views up to the same bar.**
+
+### Engine bug fixed — responsive width was measured on the wrong stream
+
+`populate` (`cmd/display/table.go`) previously read terminal width from **`stderrTerm.Fd()`**. In
+the `aims` process stderr carries the teamserver's slog/transport logs and often is **not** the
+tty, so `term.GetSize` errored and fell back to `width=80` → only weight-1 columns survived even
+on a 180-col terminal (the "only 4 columns" symptom). Replaced with `terminalSize()`, which tries
+**stdout first** (the actual render sink), then stderr, then stdin, then `$COLUMNS`, then 80×50.
+**Column dropping is now fit-based, not threshold-based** (`adaptTableSize`, rewritten
+2026-07-19). The old fixed `terminalWeightSizes` (1→80, 2→160, 3→240, 4→320) capped column count
+far below what actually fit — a 200-col terminal showed only weight ≤2. Now all weight-1 columns
+are always kept and higher-weight columns are added in priority order while their real rendered
+width fits. (Verified: credential list shows all 8 columns at ≥120 cols, 6 at 80, the weight-1
+floor at 60.)
+
+### New reusable primitives (`cmd/display/`)
+
+- **`Columns(width, gap int, panes ...Pane) string`** (`columns.go`) — side-by-side "categories as
+  columns" layout for detail views. Packs titled `Pane`s (`{Title string; Lines []string}`) into
+  bands that fit `width` (0 = detect), wraps to a new band when they don't, and pads each pane to
+  its own widest line. **Display-width aware** so ANSI-colored content still aligns. This is the
+  reusable way to render `show`/`info` groups horizontally (credential uses Identity | Provenance
+  | Classification).
+- **`VisibleWidth(s) int`** — column count ignoring ANSI SGR escapes (the basis of correct pane
+  alignment).
+- **`StripANSI(s) string`** — remove SGR escapes, returning plain text.
+
+### Completions must be plain text — colour via carapace, not embedded ANSI
+
+`DisplayFields` generators embed colour (green IDs, `⚡`, dim dashes). Feeding those straight into
+completions bled colour across the terminal and would insert escape codes into the command line.
+Rules now enforced in the engine:
+
+- `Completions` / `CompletionsStyled` **`StripANSI` every value at generation time** (also fixes
+  padding, which used to count escape bytes as width).
+- **`CompletionsStyled[T](values, fields, styleOf func(T) string, opts...)`** returns
+  `(candidate, description, style)` triples for `carapace.ActionStyledValuesDescribed`; plain
+  `Completions` is now a thin wrapper that drops the style column. Candidate colour comes from the
+  **carapace style string** (`style.Green`/`style.Dim`/…), never embedded ANSI. Credential example:
+  green = has a usable secret (loot), dim = bare-username partial.
+
+### Credential presentation, as built (`credential/display.go`)
+
+- `DisplayFields` + weighted `DisplayHeaders`/`DisplayDetails`/`Completions`. List weight-1 floor
+  = ID·Public·Private·Realm; weight-2 = Type·Logins·Origin; weight-3 = Updated.
+- `Banner(c)` — one-line `info` header (`<public> @ <realm>` + `⚡ replayable` / `✓ N login(s)`
+  badges + rule).
+- `InfoPanes(c)` → `[]display.Pane` (Identity | Provenance | Classification), rendered via
+  `Columns`. Keys are cyan + dim separator (the old `colorDetailFieldName` gray-bg/orange chip in
+  `details.go` is **bypassed** for credentials; host/scan still use it — retune globally if wanted).
+- `Insights(target, all)` — cross-set derived lines (reuse ⚠ / replayable ⚡ / cracked-from ↳ /
+  validation ✓); self-compare is pointer-based, not by `Id`.
+- Secret masking (`Reveal` bool): masked in `list`/completions, revealed in `info` and with
+  `--reveal`. `Type` folds `⚡` in (no separate Repl column); NTLM shows only the truncated NT half.
+
+### Still open (unchanged by this work)
+Engine gaps #1 (`withWeight` no-op) and #3 (placeholder `"\033"` color constants) remain — dead
+code, still worth deleting. Per-domain gaps #6–#10 (Service-vs-Port typing, host/c2/scan
+name-drift, inverted direction test, agent generator bugs, `GetOperatingSystem` inversion) are
+untouched — hygiene lane. The credential `info` **Logins sub-table** is still deferred (needs the
+Core↔Login relation untangled).

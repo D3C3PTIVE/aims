@@ -23,31 +23,38 @@ import (
 	"strings"
 )
 
-// Completions returns a list of results that can be passed to a carapace.Action (described or not), to be used as completions.
-func Completions[T any](values []T, fields map[string]func(T) string, opts ...Options) (results []string) {
-	var headers []string
-	var weights []int
+// Completions returns (candidate, description) pairs for carapace.ActionValuesDescribed.
+func Completions[T any](values []T, fields map[string]func(T) string, opts ...Options) []string {
+	triples := CompletionsStyled(values, fields, nil, opts...)
 
-	// Prepare default weights.
-	options := defaultOpts(opts...)
-	headers = options.headers
-	for _, header := range headers {
-		weights = append(weights, options.weights[header])
+	// Drop the style column from each (candidate, description, style) triple.
+	pairs := make([]string, 0, len(triples)/3*2)
+	for i := 0; i+2 < len(triples); i += 3 {
+		pairs = append(pairs, triples[i], triples[i+1])
 	}
 
-	var candidateColumn int
-	var fallbackColumn int
+	return pairs
+}
+
+// CompletionsStyled is like Completions but also emits a per-candidate style, returning
+// (candidate, description, style) triples for carapace.ActionStyledValuesDescribed. styleOf maps
+// each source value to a carapace style string (e.g. style.Green); a nil styleOf yields empty
+// styles. The candidate is inserted verbatim, so all values are ANSI-stripped here — colour comes
+// from the returned style, never from embedded escape codes.
+func CompletionsStyled[T any](values []T, fields map[string]func(T) string, styleOf func(T) string, opts ...Options) (results []string) {
+	options := defaultOpts(opts...)
+	headers := options.headers
+
+	var candidateColumn, fallbackColumn int
 
 	rows := make([][]string, len(values))
 	lengths := make([]int, len(headers))
 
-	// Gather all required "table cells" elements first.
-	// Save the index of our candidates columns if any.
+	// Gather all "table cells", ANSI-stripped so candidate text and padding widths are real.
 	for j, h := range values {
 		for i, column := range headers {
 			if fieldFunc, ok := fields[column]; ok {
-
-				val := fieldFunc(h)
+				val := StripANSI(fieldFunc(h))
 
 				if column == options.candidate && column != "" {
 					candidateColumn = i
@@ -64,12 +71,15 @@ func Completions[T any](values []T, fields map[string]func(T) string, opts ...Op
 		}
 	}
 
-	// For each row, use either the candidate or the fallback
-	// columns for one ore more candidates values to insert.
-	for _, row := range rows {
+	for j, row := range rows {
+		st := ""
+		if styleOf != nil {
+			st = styleOf(values[j])
+		}
+
 		frow := make([]string, len(row))
 
-		// Apply padding to all columns but the first.
+		// Apply padding to all columns but the candidate.
 		for i := 0; i < len(row); i++ {
 			if i == candidateColumn && row[i] != "" {
 				frow[i] = row[i]
@@ -87,34 +97,29 @@ func Completions[T any](values []T, fields map[string]func(T) string, opts ...Op
 			splitFallbacks = strings.Split(frow[fallbackColumn], options.sep)
 		}
 
-		// Generate the completion rows (candidate + description)
+		emit := func(splits []string) {
+			for _, split := range splits {
+				if strings.TrimSpace(split) == "" {
+					continue
+				}
+				results = append(results, strings.TrimSpace(split), formatDesc(frow, candidateColumn), st)
+			}
+		}
+
+		// Generate the completion rows (candidate + description + style).
 		if strings.TrimSpace(frow[candidateColumn]) != "" {
-			for _, split := range splitCandidates {
-				if split == "" {
-					continue
-				}
-				results = append(results, strings.TrimSpace(split))
-				results = append(results, formatDesc(frow, candidateColumn))
-			}
+			emit(splitCandidates)
 		} else if strings.TrimSpace(frow[fallbackColumn]) != "" {
-			for _, split := range splitFallbacks {
-				if split == "" {
-					continue
-				}
-				results = append(results, strings.TrimSpace(split))
-				results = append(results, formatDesc(frow, candidateColumn))
-			}
+			emit(splitFallbacks)
 		}
 	}
 
-	sanitized := make([]string, len(results))
-
-	// Ensure there are no newlines in each string/description/candidate, replace them with a space.
+	// Ensure there are no newlines in any candidate/description/style.
 	for i := range results {
-		sanitized[i] = strings.ReplaceAll(results[i], "\n", " ")
+		results[i] = strings.ReplaceAll(results[i], "\n", " ")
 	}
 
-	return sanitized
+	return results
 }
 
 func formatDesc(fields []string, skip int) string {
