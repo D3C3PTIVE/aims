@@ -185,33 +185,40 @@ func Insights(target *credential.Core, all []*credential.Core) (lines []string) 
 }
 
 //
-// [ Banner ] -------------------------------------------------------------
+// [ Detail View ] --------------------------------------------------------
 //
 
-// Banner renders the one-line header for a single-credential `info` view: the identity on the
-// left ("<public> @ <realm>") and status badges on the right (replayable / validated), followed
-// by a rule. It is intentionally self-contained so the detail body can repeat the fields below.
-func Banner(c *credential.Core) string {
+// Detail assembles the full `info` view for a single credential: the identity banner, the
+// side-by-side info panes, and the derived insights (which need the whole set `all` to compute
+// secret reuse). It hands these to the shared display.Detail renderer, so a credential's detail
+// view is laid out identically to every other domain's.
+func Detail(c *credential.Core, all []*credential.Core) display.Detail {
+	return display.Detail{
+		Title:    bannerTitle(c),
+		Badges:   bannerBadges(c),
+		Panes:    InfoPanes(c),
+		Insights: Insights(c, all),
+	}
+}
+
+// bannerTitle is the credential identity shown in the banner: "<public> @ <realm>", bold.
+func bannerTitle(c *credential.Core) string {
 	title := publicLabel(c)
 	if r := realmLabel(c.GetRealm()); r != "" {
 		title += display.Dim + " @ " + display.Reset + r
 	}
+	return display.Bold + title + display.Reset
+}
 
-	var badges []string
+// bannerBadges are the credential's status badges (replayable / login count) for the banner.
+func bannerBadges(c *credential.Core) (badges []string) {
 	if p := c.GetPrivate(); p != nil && isReplayable(p.Type) {
 		badges = append(badges, color.HiYellowString("⚡ replayable"))
 	}
 	if n := c.GetLoginsCount(); n > 0 {
 		badges = append(badges, color.HiGreenString("✓ %d login(s)", n))
 	}
-
-	head := display.Bold + title + display.Reset
-	if len(badges) > 0 {
-		head += "   " + strings.Join(badges, display.Dim+" · "+display.Reset)
-	}
-
-	rule := display.Dim + strings.Repeat("─", 66) + display.Reset
-	return head + "\n" + rule
+	return badges
 }
 
 // InfoPanes returns the credential's detail grouped into titled panes, for side-by-side layout

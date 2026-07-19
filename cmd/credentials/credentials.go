@@ -128,15 +128,7 @@ func infoCommand(con *client.Client) *cobra.Command {
 			}
 
 			for _, c := range matched {
-				fmt.Println(cred.Banner(c))
-				fmt.Println(display.Columns(0, 4, cred.InfoPanes(c)...))
-				if lines := cred.Insights(c, all); len(lines) > 0 {
-					fmt.Println()
-					fmt.Println(display.Bold + "Insights" + display.Reset)
-					for _, l := range lines {
-						fmt.Println("  " + l)
-					}
-				}
+				fmt.Println(cred.Detail(c, all).Render(0))
 				fmt.Println()
 			}
 

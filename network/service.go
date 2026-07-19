@@ -253,10 +253,26 @@ var DisplayFields = map[string]func(port *host.Port) string{
 // [ Detail View ] --------------------------------------------------------
 //
 
-// Banner renders the one-line header for a single service `info` view: "<host>:<num>/<proto>
-// <app-proto>" on the left, then a state badge and script count on the right, followed by a rule.
-// hostLabel is the owning host's display name (passed in, since a Port doesn't reference its host).
-func Banner(port *host.Port, hostLabel string) string {
+// Detail assembles the full `info` view for a single service: the identity banner, the
+// side-by-side info panes, the derived insights, and the NSE scripts as a trailing section. It
+// hands these to the shared display.Detail renderer, so a service's detail view is laid out
+// identically to every other domain's. hostLabel is the owning host's display name (passed in,
+// since a Port doesn't reference its host).
+func Detail(port *host.Port, hostLabel string) display.Detail {
+	d := display.Detail{
+		Title:    bannerTitle(port, hostLabel),
+		Badges:   bannerBadges(port),
+		Panes:    InfoPanes(port),
+		Insights: Insights(port),
+	}
+	if body := scriptsBody(port); body != "" {
+		d.Sections = []display.Section{{Title: "Scripts", Body: body}}
+	}
+	return d
+}
+
+// bannerTitle is the service identity shown in the banner: "<host>:<num>/<proto> <app-proto>".
+func bannerTitle(port *host.Port, hostLabel string) string {
 	title := ""
 	if hostLabel != "" {
 		title = hostLabel + display.Dim + ":" + display.Reset
@@ -268,15 +284,16 @@ func Banner(port *host.Port, hostLabel string) string {
 	if name := appProto(port); name != "" {
 		title += "  " + name
 	}
+	return title
+}
 
+// bannerBadges are the service's status badges (state + script count) for the banner.
+func bannerBadges(port *host.Port) []string {
 	badges := []string{stateBadge(port)}
 	if n := len(port.GetScripts()); n > 0 {
 		badges = append(badges, color.HiBlueString("%d script(s)", n))
 	}
-
-	head := title + "   " + strings.Join(badges, display.Dim+" · "+display.Reset)
-	rule := display.Dim + strings.Repeat("─", 66) + display.Reset
-	return head + "\n" + rule
+	return badges
 }
 
 // InfoPanes groups a port's detail into titled panes (Service / State / Meta) for side-by-side
@@ -319,13 +336,13 @@ func InfoPanes(port *host.Port) []display.Pane {
 	return panes
 }
 
-// ScriptsBlock renders a port's NSE scripts as a titled block for the info view, or "" if none.
-func ScriptsBlock(port *host.Port) string {
+// scriptsBody renders a port's NSE scripts as the body of the info view's Scripts section (the
+// section title itself is added by display.Detail), or "" if the port has no scripts.
+func scriptsBody(port *host.Port) string {
 	if len(port.GetScripts()) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(display.Bold + "Scripts" + display.Reset)
 	for _, script := range port.GetScripts() {
 		b.WriteString(printScript(script, 1))
 	}

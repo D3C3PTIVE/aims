@@ -137,22 +137,7 @@ func rmCommand(con *client.Client) *cobra.Command {
 
 // printService renders a single service's full detail view.
 func printService(h *pb.Host, p *pb.Port) {
-	fmt.Println(network.Banner(p, hostLabel(h)))
-	fmt.Println(display.Columns(0, 4, network.InfoPanes(p)...))
-
-	if ins := network.Insights(p); len(ins) > 0 {
-		fmt.Println()
-		fmt.Println(display.Bold + "Insights" + display.Reset)
-		for _, l := range ins {
-			fmt.Println("  " + l)
-		}
-	}
-
-	if sb := network.ScriptsBlock(p); sb != "" {
-		fmt.Println()
-		fmt.Println(sb)
-	}
-
+	fmt.Println(network.Detail(p, hostLabel(h)).Render(0))
 	fmt.Println()
 }
 
