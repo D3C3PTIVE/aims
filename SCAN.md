@@ -222,6 +222,48 @@ since last tick). The AIMS-native summary is the more valuable and philosophy-tr
 reads the folded object tree, not the tool's console spew), but raw passthrough is a trivial
 first cut. Lean summarized, fall back to raw.
 
+### Scan execution model — server-side jobs; the client chooses whether to block
+
+**Settled decision: the scanner process runs server-side.** The teamserver is the vantage
+point that execs the scanner (so its host needs the tool + privileges + network reach to the
+targets); clients are operator terminals. This matches the teamserver/Sliver model
+`reeflective/team` gives us, and it is what makes a long scan *survivable* — the job outlives
+the operator's terminal and is visible to every operator.
+
+From that, two principles:
+
+1. **Blocking is a client *presentation* choice over a server-side job — not a property of the
+   scan.** The job always runs on the server; the client picks:
+   - **foreground** (default): stream `TaskProgress`, block until done, show the result;
+     **Ctrl-C detaches** (the job keeps running), it does not kill it.
+   - **background** (`-d`/`--background`): submit, print a job ID, return immediately.
+2. **I/O parity is a hard requirement.** A command must reach the *same* blocking/streaming I/O
+   whether the `aims` binary runs as an **in-process teamserver** or as a **remote teamclient**
+   over the wire. So foreground streaming MUST be built on the team RPC/stream layer uniformly —
+   never a local in-process function-call shortcut for the all-in-one binary and a separate
+   remote path. `reeflective/team`'s in-memory vs mTLS transports expose the *same* RPC surface
+   precisely so this holds; build on that, do not special-case.
+
+CLI shape (settled):
+
+| Command | Behaviour |
+|---|---|
+| `aims scan run nmap <args>` | foreground: stream progress, block to completion; Ctrl-C detaches |
+| `aims scan run nmap <args> -d` | detached: submit, print job ID, return |
+| `aims scan jobs` | list running scan jobs + progress (maps to the teamserver job list) |
+| `aims scan attach <id>` / `scan stop <id>` | reattach to a job's stream / cancel it |
+| `aims scan show <id>` + `watch` | poll-based live view over the continuously-updated stored Run |
+
+Enabling work (all follow-on):
+- The `Scans` RPC is **unary-only** today (Part B) → add a **server-streaming** Run/Progress RPC.
+- The fork already produces the stream: `RunAsync()` + `YieldProgress()`/`YieldHosts()`.
+- The display already splits running-vs-done: `scan.go` `getTasks`/`formatTasks`.
+- Hook the job into `reeflective/team`'s job model rather than inventing a parallel async layer.
+
+> The current `scan run nmap` is a **client-side blocking exec** — a v0 stand-in. It becomes the
+> *foreground* front-end of a server-side job once the streaming RPC + job wrapper land; the
+> passthrough/fold machinery underneath is unchanged.
+
 ### Recommended first vertical slice
 
 Do **not** build the adapter registry, streaming RPC, or diff engine yet. Prove the thesis
