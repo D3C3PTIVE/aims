@@ -1,7 +1,8 @@
 # AIMS — Project State Overview
 
 > Investigated 2026-07-19, after the repo had been paused ~1 year. Companion to
-> [`CLAUDE.md`](./CLAUDE.md) (architecture) and [`ROADMAP.md`](./ROADMAP.md) (re-entry plan).
+> [`CLAUDE.md`](./CLAUDE.md) (architecture), [`ROADMAP.md`](./ROADMAP.md) (re-entry plan) and
+> [`SCAN.md`](./SCAN.md) (scan model & scanner-plug substrate).
 > This file answers: *where is the project right now, and what's broken.*
 
 ## TL;DR

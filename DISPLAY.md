@@ -1,7 +1,8 @@
 # AIMS — Display & "Conditional Screen-Estate" Rendering
 
 > Written 2026-07-19. Companion to [`CLAUDE.md`](./CLAUDE.md) (architecture),
-> [`STATE.md`](./STATE.md) (build/impl state) and [`ROADMAP.md`](./ROADMAP.md) (re-entry plan).
+> [`STATE.md`](./STATE.md) (build/impl state), [`ROADMAP.md`](./ROADMAP.md) (re-entry plan) and
+> [`SCAN.md`](./SCAN.md) (scan model & scanner-plug substrate).
 > This doc explains **how the single generic display engine works** (Part A), then reflects on
 > **the best single-entity info view for each object type** (Part B), and ends with a
 > **gaps & recommendations** sweep grounded in the current code.

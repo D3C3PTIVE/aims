@@ -1,7 +1,8 @@
 # AIMS — Re-Entry Roadmap
 
 > Written 2026-07-19. Companion to [`STATE.md`](./STATE.md) (where things are) and
-> [`CLAUDE.md`](./CLAUDE.md) (architecture). This is the *plan to pick the project back up*
+> [`CLAUDE.md`](./CLAUDE.md) (architecture) and [`SCAN.md`](./SCAN.md) (scan model &
+> scanner-plug substrate). This is the *plan to pick the project back up*
 > after ~1 year: ordered phases, concrete tasks, and the reasoning behind the ordering.
 
 ## Guiding strategy

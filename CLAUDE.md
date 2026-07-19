@@ -4,6 +4,7 @@
 > for the repository plus working guidance for future sessions.
 >
 > **Companion docs:** [`STATE.md`](./STATE.md) — current state & what's broken ·
+> [`SCAN.md`](./SCAN.md) — scan model & scanner-plug substrate ·
 > [`ROADMAP.md`](./ROADMAP.md) — re-entry plan.
 >
 > ✅ **Build status (updated 2026-07-19): the AIMS core now compiles.** The `maltego`/`gondor`
