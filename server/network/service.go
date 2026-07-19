@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
-	host "github.com/d3c3ptive/aims/host/pb"
 	"github.com/d3c3ptive/aims/network/pb"
 	network "github.com/d3c3ptive/aims/network/pb/rpc"
 )
@@ -95,39 +94,4 @@ func (s *server) Upsert(ctx context.Context, req *network.UpsertServiceRequest) 
 
 func (s *server) Delete(ctx context.Context, req *network.DeleteServiceRequest) (*network.DeleteServiceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteService not implemented")
-}
-
-func (s *server) ReadHost(context.Context, *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadHost not implemented")
-}
-
-func (s *server) ListHost(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
-	// Convert to ORM model
-	h, err := req.GetHost().ToORM(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Preload everything
-	db := s.db.Where(h).
-		Preload("Addresses").
-		Preload("HostScripts").
-		Preload("Hostnames").
-		Preload("Ports").
-		Preload("ExtraPorts")
-
-	// Query
-	hs := []*host.HostORM{}
-
-	err = db.First(&hs).Error
-	for _, h := range hs {
-		err = db.Model(&h).Association("Addresses").Find(h.Addresses)
-		err = db.Model(&h).Association("OS").Find(h.OS)
-	}
-
-	return nil, status.Errorf(codes.Unimplemented, "method ListHost not implemented")
-}
-
-func (s *server) UpsertHost(context.Context, *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertHost not implemented")
 }
