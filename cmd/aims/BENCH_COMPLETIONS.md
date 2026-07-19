@@ -20,12 +20,17 @@ scripts + trace) — there is no server-side prefix match and no result cap (see
 struct match, never a prefix `LIKE`). So latency and wire size grow with total DB size on **every**
 keystroke. The sweep is `N ∈ {100, 1_000, 10_000}` to make that visible.
 
-Two modes:
+Three modes:
 
 - **warm** — connect once before the timed loop (persistent-connection console / a completion
   daemon). Times `Read + format` only.
 - **cold** — call `ConnectComplete()` *inside* the timed loop before each query (exec-once CLI,
   where every Tab is a fresh process that reconnects and re-runs `Init`).
+- **hit** (`BenchmarkCompleteHostsCacheHit`) — drive the **real wired completion**
+  (`cmdhosts.CompleteByHostnameOrIP`, wrapped in `cmd.CacheCompletion`) through carapace's `Invoke`,
+  warm the on-disk cache once, then time only cache hits. Models every Tab after the first within
+  `CompletionCacheTTL`: no connect, no gRPC, no format — just load + deserialize the cached candidate
+  set from disk. `XDG_CACHE_HOME` is redirected to a temp dir so each `N` is isolated.
 
 ## Measured numbers
 
@@ -87,6 +92,46 @@ zero measurable delta) and Read + format is the whole cost. **But** — see the 
 benchmark cannot measure the real-world connect cost, so the hypothesis is not refuted for the felt
 CLI latency; bufconn simply shows that the *portion of connect it does exercise* (pre-connect hooks
 + `Init`) is free.
+
+## Warm cache hit — the payoff of `CacheCompletion`
+
+The host/service/credential completions are now wrapped in carapace's on-disk `Action.Cache` (via
+`cmd.CacheCompletion`, TTL 10 s, keyed by teamserver scope + name + a mutation epoch). A cache **hit**
+skips connect + Read + format entirely and just deserialises the stored candidate set. Measured in
+the same consolidated `-benchtime=10x` run as the queries above:
+
+```
+BenchmarkCompleteHosts/N=100/warm-4              10    20472213 ns/op      100 candidates/op       97490 wirebytes/op    4155815 B/op    64537 allocs/op
+BenchmarkCompleteHosts/N=100/cold-4              10    33837088 ns/op      100 candidates/op       97490 wirebytes/op    4154669 B/op    64552 allocs/op
+BenchmarkCompleteHostsCacheHit/N=100/hit-4       10      189655 ns/op      100 candidates/op       10485 cachebytes/op     53896 B/op      465 allocs/op
+BenchmarkCompleteHosts/N=1000/warm-4             10   363940572 ns/op     1000 candidates/op      968828 wirebytes/op   42802220 B/op   625200 allocs/op
+BenchmarkCompleteHosts/N=1000/cold-4             10   226580348 ns/op     1000 candidates/op      968478 wirebytes/op   42831764 B/op   625189 allocs/op
+BenchmarkCompleteHostsCacheHit/N=1000/hit-4      10     2762886 ns/op     1000 candidates/op      105085 cachebytes/op    411912 B/op     4068 allocs/op
+BenchmarkCompleteHosts/N=10000/warm-4            10  2856204201 ns/op    10000 candidates/op     9693958 wirebytes/op  450858128 B/op  6237892 allocs/op
+BenchmarkCompleteHosts/N=10000/cold-4            10  2404924896 ns/op    10000 candidates/op     9700530 wirebytes/op  450517580 B/op  6237834 allocs/op
+BenchmarkCompleteHostsCacheHit/N=10000/hit-4     10    23743320 ns/op    10000 candidates/op     1060085 cachebytes/op   5977161 B/op    40078 allocs/op
+```
+
+| N      | warm query | cache hit | speed-up | allocs warm → hit |
+|--------|-----------:|----------:|---------:|-------------------|
+| 100    | 20.5 ms    | 0.19 ms   | ~108×    | 64 537 → 465      |
+| 1 000  | 364 ms     | 2.76 ms   | ~132×    | 625 200 → 4 068   |
+| 10 000 | 2 856 ms   | 23.7 ms   | ~120×    | 6 237 892 → 40 078 |
+
+Two readings:
+
+- **A hit is ~100–130× cheaper than the query at every N**, and does ~140× fewer allocations. In
+  exec-once CLI mode a burst of Tabs within the TTL now pays the whole-DB query **once** (~2.4 s at
+  10 k) and then ~24 ms per subsequent Tab, instead of ~2.4 s on *every* keystroke. Unlike the cold
+  query number, this hit number is representative rather than a floor: the disk load is a real
+  local-filesystem read. (It still omits OS process spawn, which the cache cannot help — a fresh
+  `_carapace` process starts per Tab regardless.)
+- **The hit cost still grows ~linearly with N** (0.19 → 2.76 → 23.7 ms, ~×14 per ×10): carapace loads
+  and deserialises the *entire* cached candidate set (`cachebytes/op`: 10 KB → 105 KB → 1.06 MB — the
+  whole set, since nothing is capped). Caching removes the network + GORM + proto-marshal cost but not
+  the "proportional to the whole DB" shape. The structural fix — a **server-side prefix filter +
+  `MaxResults` cap** (see below) — is still what would make a keystroke *sub*-linear; caching and that
+  cap are complementary, not alternatives.
 
 ## Caveat: the cold number here is a FLOOR, not the felt CLI latency
 
