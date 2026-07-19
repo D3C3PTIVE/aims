@@ -31,6 +31,13 @@ import (
 
 // Schema returns all AIMS objects to be registered as a database schema.
 func Migrate(db *gorm.DB) error {
+	// SQLite emits foreign-key constraints inline at CREATE TABLE, so a self/circular reference
+	// (e.g. cores.login_id -> logins.id while logins has a Core association) makes table-creation
+	// order-sensitive and can fail with "no such table". Skipping FK-constraint creation lets all
+	// tables be created regardless of order; the ORM relationships and preloads are unaffected, and
+	// SQLite does not enforce FKs by default anyway.
+	db.DisableForeignKeyConstraintWhenMigrating = true
+
 	return db.AutoMigrate(
 		// Network
 		network.AddressORM{},
@@ -39,8 +46,14 @@ func Migrate(db *gorm.DB) error {
 		network.HopORM{},
 		network.TraceORM{},
 		network.ServiceORM{},
+		network.SequenceORM{},
+		network.TCPSequenceORM{},
+		network.TCPTSSequenceORM{},
+		network.IPIDSequenceORM{},
+		network.ICMPResponseORM{},
 
 		// OS
+		host.OSClassORM{},
 		host.OSFingerprintORM{},
 		host.OSMatchORM{},
 		host.OSORM{},
@@ -57,15 +70,25 @@ func Migrate(db *gorm.DB) error {
 		host.HostnameORM{},
 		host.UserORM{},
 		host.GroupORM{},
+		host.ProcessORM{},
+		host.UptimeORM{},
 		host.HostORM{},
 		host.FileSystemORM{},
 		host.FileORM{},
 
-		// Credentials
+		// Credentials.
+		// Order matters for SQLite: cores.login_id references logins.id, and the
+		// public/private/realm/origin children reference cores.id — so logins → cores → children.
+		credential.LoginORM{},
 		credential.CoreORM{},
+		credential.RealmORM{},
+		credential.PublicORM{},
+		credential.PrivateORM{},
+		credential.OriginORM{},
 
 		// Scans
 		scan.RunORM{},
+		scan.ResultORM{},
 		scan.InfoORM{},
 		scan.DebuggingORM{},
 		scan.VerboseORM{},
