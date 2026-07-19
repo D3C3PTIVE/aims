@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	nmapscan "github.com/maxlandon/nmap"
+	nmapscan "github.com/d3c3ptive/nmap"
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"

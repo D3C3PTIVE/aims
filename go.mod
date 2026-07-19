@@ -52,6 +52,7 @@ require (
 	github.com/carapace-sh/carapace v1.8.1 // indirect
 	github.com/carapace-sh/carapace-shlex v1.0.1 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
+	github.com/d3c3ptive/nmap v0.0.0-00010101000000-000000000000
 	github.com/dblohm7/wingoes v0.0.0-20230803162905-5c6286bb8c6e // indirect
 	github.com/fxamacker/cbor/v2 v2.4.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -85,7 +86,6 @@ require (
 	github.com/mattn/go-isatty v0.0.18 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/mattn/go-sqlite3 v1.14.17 // indirect
-	github.com/maxlandon/nmap v0.0.0-00010101000000-000000000000
 	github.com/mdlayher/genetlink v1.3.2 // indirect
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/sdnotify v1.0.0 // indirect
@@ -133,4 +133,4 @@ require (
 	nhooyr.io/websocket v1.8.7 // indirect
 )
 
-replace github.com/maxlandon/nmap => ../nmap
+replace github.com/d3c3ptive/nmap => ../nmap

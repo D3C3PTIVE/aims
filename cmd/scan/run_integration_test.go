@@ -22,7 +22,7 @@ import (
 	"os"
 	"testing"
 
-	nmapscan "github.com/maxlandon/nmap"
+	nmapscan "github.com/d3c3ptive/nmap"
 
 	pb "github.com/d3c3ptive/aims/scan/pb"
 )
