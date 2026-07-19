@@ -25,6 +25,7 @@ import (
 
 	host "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
+	"github.com/d3c3ptive/aims/provenance"
 	"github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
@@ -145,22 +146,39 @@ func MergeHost(dst, src *host.Host) (changed bool) {
 	dst.HostScripts, changed = mergeScripts(dst.HostScripts, src.HostScripts, changed)
 	changed = mergePorts(dst, src) || changed
 
+	// Provenance is a unioned collection: every tool that contributed this host accumulates,
+	// so a second scanner enriching a known host adds its Source rather than dropping the
+	// first's (the whole point of per-tool scoping — provenance survives the merge).
+	if merged, grew := provenance.MergeSources(dst.Sources, src.Sources); grew {
+		dst.Sources = merged
+		changed = true
+	}
+
 	return changed
 }
 
 func mergeAddresses(dst, src *host.Host) (changed bool) {
-	seen := make(map[string]bool, len(dst.Addresses))
+	index := make(map[string]*network.Address, len(dst.Addresses))
 	for _, a := range dst.Addresses {
 		if a != nil {
-			seen[a.Addr] = true
+			index[a.Addr] = a
 		}
 	}
 	for _, a := range src.Addresses {
-		if a == nil || a.Addr == "" || seen[a.Addr] {
+		if a == nil || a.Addr == "" {
+			continue
+		}
+		if existing := index[a.Addr]; existing != nil {
+			// Same address re-reported: union its provenance rather than dropping the
+			// new contributor.
+			if merged, grew := provenance.MergeSources(existing.Sources, a.Sources); grew {
+				existing.Sources = merged
+				changed = true
+			}
 			continue
 		}
 		dst.Addresses = append(dst.Addresses, a)
-		seen[a.Addr] = true
+		index[a.Addr] = a
 		changed = true
 	}
 	return changed
@@ -262,6 +280,13 @@ func mergePortInto(dst, src *host.Port) (changed bool) {
 	changed = mergeReasons(dst, src) || changed
 	dst.Scripts, changed = mergeScripts(dst.Scripts, src.Scripts, changed)
 
+	// Provenance union: two tools may each contribute a different port to the same host, so
+	// provenance is tracked per port, not only at the host level.
+	if merged, grew := provenance.MergeSources(dst.Sources, src.Sources); grew {
+		dst.Sources = merged
+		changed = true
+	}
+
 	return changed
 }
 
@@ -285,6 +310,13 @@ func mergeServiceInto(dst, src *network.Service) (changed bool) {
 	changed = fillStr(&dst.Tunnel, src.Tunnel) || changed
 	changed = fillStr(&dst.LowVersion, src.LowVersion) || changed
 	changed = fillStr(&dst.HighVersion, src.HighVersion) || changed
+
+	// Provenance union: a service reported by several tools accrues each tool's Source.
+	if merged, grew := provenance.MergeSources(dst.Sources, src.Sources); grew {
+		dst.Sources = merged
+		changed = true
+	}
+
 	return changed
 }
 

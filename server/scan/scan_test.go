@@ -29,9 +29,11 @@ import (
 
 	schema "github.com/d3c3ptive/aims/db"
 	hostpb "github.com/d3c3ptive/aims/host/pb"
+	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	network "github.com/d3c3ptive/aims/network/pb"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
 	scanrpcpb "github.com/d3c3ptive/aims/scan/pb/rpc"
+	hostsrv "github.com/d3c3ptive/aims/server/host"
 )
 
 // newTestServer returns a scan server backed by a fresh, migrated sqlite database (pure-Go driver,
@@ -77,6 +79,50 @@ func countRows(t *testing.T, gdb *gorm.DB, table string) int64 {
 		t.Fatalf("count %s: %v", table, err)
 	}
 	return n
+}
+
+// TestCreateStampsAndScopesProvenance is the end-to-end provenance contract: a scan ingest stamps
+// a provenance.Source (Tool=Scanner) onto the hosts it produces, persists it through the host
+// fold, and the per-tool query scope (HostFilters.Source / WhereContributedBy) returns only the
+// hosts a given tool contributed.
+func TestCreateStampsAndScopesProvenance(t *testing.T) {
+	s, gdb, ctx := newTestServer(t)
+
+	if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{runObserving("<xml>P</xml>", 443, "https")}}); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	// Provenance persisted: a source row exists and the host is linked to it via host_sources.
+	if n := countRows(t, gdb, "sources"); n == 0 {
+		t.Fatal("no provenance sources persisted after scan ingest")
+	}
+	if n := countRows(t, gdb, "host_sources"); n == 0 {
+		t.Fatal("host not linked to provenance (host_sources join empty)")
+	}
+	var tool string
+	if err := gdb.Table("sources").Select("tool").Limit(1).Scan(&tool).Error; err != nil {
+		t.Fatalf("read source tool: %v", err)
+	}
+	if tool != "nmap" {
+		t.Fatalf("stamped source tool = %q, want nmap", tool)
+	}
+
+	// Per-tool scoping: the contributing tool sees the host; another tool sees nothing.
+	hsrv := hostsrv.New(gdb)
+	mine, err := hsrv.Read(ctx, &hostrpcpb.ReadHostRequest{Host: &hostpb.Host{}, Filters: &hostrpcpb.HostFilters{Source: "nmap"}})
+	if err != nil {
+		t.Fatalf("read scoped to nmap: %v", err)
+	}
+	if len(mine.GetHosts()) != 1 {
+		t.Fatalf("WhereContributedBy(nmap) returned %d hosts, want 1", len(mine.GetHosts()))
+	}
+	other, err := hsrv.Read(ctx, &hostrpcpb.ReadHostRequest{Host: &hostpb.Host{}, Filters: &hostrpcpb.HostFilters{Source: "metasploit"}})
+	if err != nil {
+		t.Fatalf("read scoped to metasploit: %v", err)
+	}
+	if len(other.GetHosts()) != 0 {
+		t.Fatalf("WhereContributedBy(metasploit) returned %d hosts, want 0", len(other.GetHosts()))
+	}
 }
 
 // TestCreateUnifiesHostAcrossRuns is the cross-run host-row unification contract: two *different*

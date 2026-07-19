@@ -33,6 +33,11 @@ message HostFilters {
 
     bool Scripts = 70;
     bool OSFingerprints = 71;
+
+    // Source: if set, scope the read to only the hosts contributed by this tool (matched
+    // against provenance.Source.Tool via the host_sources join) — the "give me only my
+    // objects" filter. Empty means the default cross-tool shared view (all hosts).
+    string Source = 80;
 }
 
 // General

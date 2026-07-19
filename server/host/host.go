@@ -30,6 +30,7 @@ import (
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
 	network "github.com/d3c3ptive/aims/network/pb"
+	"github.com/d3c3ptive/aims/provenance"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
@@ -57,7 +58,13 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 
 	// Preloads
 	filters := WithPreloads(req.GetFilters())
-	database := db.Preload(s.db.Where(hst), filters)
+	query := s.db.Where(hst)
+	// Per-tool scoping: restrict to hosts contributed by a given tool ("give me only my
+	// objects") via the host_sources provenance join. Empty Source is a no-op (all hosts).
+	if tool := filts.GetSource(); tool != "" {
+		query = query.Scopes(provenance.WhereContributedBy("host_sources", "host_id", tool))
+	}
+	database := db.Preload(query, filters)
 
 	// Query
 	if filts != nil && filts.MaxResults == 1 {

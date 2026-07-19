@@ -28,6 +28,7 @@ import (
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
+	provpb "github.com/d3c3ptive/aims/provenance/pb"
 	"github.com/d3c3ptive/aims/scan"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
 	scanrpcpb "github.com/d3c3ptive/aims/scan/pb/rpc"
@@ -71,6 +72,12 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 		folded := &scan.Run{}
 		folded.AddHosts(run.GetHosts()...)
 		run.Hosts = folded.Hosts
+
+		// Stamp this run's provenance onto every object it produced, so scan-produced hosts/
+		// ports/services carry "who found me" through the ingest fold (where MergeSources unions
+		// it with any prior contributors). This is what lets scan-produced objects be scoped by
+		// tool without a RunId back-reference on each row.
+		stampScanProvenance(run)
 
 		// Skip an exact-duplicate run wholesale (idempotent re-import).
 		runORM, err := run.ToORM(ctx)
@@ -135,6 +142,51 @@ func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, 
 	}
 
 	return out, nil
+}
+
+// stampScanProvenance derives a provenance.Source from the run (Tool=Scanner, Type=Scan, plus
+// Args/Version/ProfileName/SessionId) and attaches it to the run itself (its producer Source
+// field) and to every object the run produced — each host and its addresses, ports, and port
+// services. Each object gets its OWN Source value (not a shared pointer) so the ORM writes a
+// distinct join row per object rather than aliasing one. Once stamped, the Sources ride through
+// hosts.IngestHosts, where host.MergeSources unions them into any existing shared record.
+func stampScanProvenance(run *scanpb.Run) {
+	if run == nil || run.GetScanner() == "" {
+		return
+	}
+	newSource := func() *provpb.Source {
+		return &provpb.Source{
+			Tool:        run.GetScanner(),
+			Type:        provpb.SourceType_Scan,
+			Args:        run.GetArgs(),
+			Version:     run.GetVersion(),
+			ProfileName: run.GetProfileName(),
+			SessionId:   run.GetSessionId(),
+		}
+	}
+
+	run.Source = newSource()
+
+	for _, h := range run.GetHosts() {
+		if h == nil {
+			continue
+		}
+		h.Sources = append(h.Sources, newSource())
+		for _, a := range h.GetAddresses() {
+			if a != nil {
+				a.Sources = append(a.Sources, newSource())
+			}
+		}
+		for _, p := range h.GetPorts() {
+			if p == nil {
+				continue
+			}
+			p.Sources = append(p.Sources, newSource())
+			if p.Service != nil {
+				p.Service.Sources = append(p.Service.Sources, newSource())
+			}
+		}
+	}
 }
 
 // isDuplicateRun reports whether run is already stored. RawXML is the scanner's verbatim output and
