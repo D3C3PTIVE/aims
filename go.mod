@@ -1,6 +1,6 @@
 module github.com/d3c3ptive/aims
 
-go 1.23.0
+go 1.24
 
 require (
 	github.com/fatih/color v1.15.0
@@ -12,8 +12,8 @@ require (
 	github.com/maxlandon/gondor v0.0.0-20211107181652-b501c4771abd
 	github.com/reeflective/team v0.3.2
 	github.com/rsteube/carapace v0.39.1
-	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.6
+	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	golang.org/x/crypto v0.37.0
 	golang.org/x/term v0.31.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
@@ -49,8 +49,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.18.10 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
-	github.com/carapace-sh/carapace v1.8.1 // indirect
-	github.com/carapace-sh/carapace-shlex v1.0.1 // indirect
+	github.com/carapace-sh/carapace v1.13.2
+	github.com/carapace-sh/carapace-shlex v1.1.1 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
 	github.com/d3c3ptive/nmap v0.0.0-00010101000000-000000000000
 	github.com/dblohm7/wingoes v0.0.0-20230803162905-5c6286bb8c6e // indirect
@@ -93,8 +93,8 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/miekg/dns v1.1.55 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
-	github.com/ncruces/go-sqlite3 v0.22.0 // indirect
-	github.com/ncruces/go-sqlite3/gormlite v0.22.0 // indirect
+	github.com/ncruces/go-sqlite3 v0.22.0
+	github.com/ncruces/go-sqlite3/gormlite v0.22.0
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.17 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

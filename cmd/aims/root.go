@@ -23,7 +23,7 @@ import (
 
 	"github.com/reeflective/team/server"
 	"github.com/reeflective/team/server/commands"
-	"github.com/rsteube/carapace"
+	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"

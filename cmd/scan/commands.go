@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rsteube/carapace"
+	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -88,7 +88,7 @@ func CompleteByID(client *client.Client) carapace.Action {
 
 		results := display.Completions(res.Scans, scan.DisplayFields, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("scans").Filter(c.Args)
+		return carapace.ActionValuesDescribed(results...).Tag("scans").Filter(c.Args...)
 	})
 }
 

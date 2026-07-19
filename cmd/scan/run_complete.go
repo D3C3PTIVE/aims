@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rsteube/carapace"
+	"github.com/carapace-sh/carapace"
 
 	"github.com/d3c3ptive/aims/client"
 	"github.com/d3c3ptive/aims/cmd/hosts"
