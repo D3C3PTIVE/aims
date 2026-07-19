@@ -2,7 +2,12 @@
 # AIMS Makefile
 #
 
-EXECUTABLES = protoc protoc-gen-go protoc-go-inject-tag $(GO)
+GO ?= go
+
+# The build only needs the Go toolchain. The protoc/buf codegen tools are
+# required by the `gen` target alone, so they are checked there rather than
+# gating every invocation (which previously broke `make build`).
+EXECUTABLES = $(GO)
 K := $(foreach exec,$(EXECUTABLES),\
         $(if $(shell which $(exec)),some string,$(error "No $(exec) in PATH")))
 
@@ -13,6 +18,12 @@ K := $(foreach exec,$(EXECUTABLES),\
 .ONESHELL:
 	# Applies to all targets in the file. Runs all recipes
 	# in a single instantiation of the shell (enables cd)
+
+.PHONY: build
+build:
+	# Build the aims binary. GOWORK=off is required because this module is
+	# commented out of the surrounding go.work (plain `go build` errors).
+	GOWORK=off $(GO) build -o aims ./cmd/aims
 
 .PHONY: deps
 deps:
