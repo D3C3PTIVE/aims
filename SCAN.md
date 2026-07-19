@@ -90,12 +90,15 @@ rows"* prime directive (DEDUP.md §0) is **not realized**. Current behaviour:
 (the same `sameHost`/`sharesAddress` address/hostname keys) → `ToPB` → `AddHosts` the incoming
 batch into that set → `ToORM` → `Save` with `FullSaveAssociations`, replacing `FilterNew`+`Create`.
 
-**Architecture decision:** promote the host-tree merge (`mergeHostInto`/`sameHost`/`samePort`,
-currently in `scan/fold.go`) to a canonical host-domain primitive — `host.MergeHost` /
-`host.SameHost` / `host.SamePort` in `host/merge.go` — so the scan-import path and the host
-gRPC CRUD share **one** merge (avoids `server/host` importing `scan`). The Run-level fold stays
-in `scan`. Server persistence wiring is the CRUD-agent's lane; the merge primitive is the
-scan-agent's to provide.
+**Shared primitive — ✅ landed.** The host-tree merge is now the canonical host-domain
+primitive `host.MergeHost` / `host.SameHost` / `host.SamePort` (`host/merge.go`), delegated to
+by the scan-import fold (`scan/fold.go` `Run.AddHosts`/`foldHost`) and available to the host and
+scan gRPC CRUD servers — one merge, no divergence, and `server/host` need not import `scan`.
+
+**What remains (the DB wiring):** make `server/host.Create`/`Upsert` and `server/scan.Create`
+load candidate rows by key → `ToPB` → `AddHosts`/`MergeHost` into that set → `ToORM` → `Save`
+with `FullSaveAssociations`, replacing `FilterNew`+`Create`, and fix the `server/host` empty-
+`dbHosts` bug. That's the CRUD-agent's lane; the primitive it needs is in place.
 
 ### The object catalog (for reference)
 
