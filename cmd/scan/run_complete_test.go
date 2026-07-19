@@ -21,6 +21,9 @@ package scan
 import (
 	"strings"
 	"testing"
+
+	pb "github.com/d3c3ptive/aims/host/pb"
+	network "github.com/d3c3ptive/aims/network/pb"
 )
 
 // A faithful slice of nmap's real script.db format.
@@ -83,5 +86,108 @@ func TestParseScriptDBEmpty(t *testing.T) {
 	// Even with no entries, the synthetic "all" selector is present.
 	if len(categories) != 1 || categories[0] != "all" {
 		t.Errorf("want just [all], got %v", categories)
+	}
+}
+
+// TestLocalityOf pins the target sub-grouping classifier: loopback, the private estate (RFC1918,
+// ULA, link-local, in both address families), routable public space, and non-IP tokens.
+func TestLocalityOf(t *testing.T) {
+	cases := map[string]string{
+		"127.0.0.1":       "loopback",
+		"127.5.6.7":       "loopback",
+		"::1":             "loopback",
+		"10.0.0.5":        "private",
+		"192.168.1.10":    "private",
+		"172.16.0.1":      "private",
+		"169.254.1.1":     "private", // link-local
+		"fe80::1":         "private", // IPv6 link-local
+		"fc00::1":         "private", // IPv6 ULA
+		"8.8.8.8":         "routable",
+		"1.1.1.1":         "routable",
+		"2606:4700::1111": "routable",
+		"  10.0.0.9  ":    "private", // surrounding whitespace tolerated
+		"scanme.nmap.org": "",        // a hostname is not an IP literal
+		"":                "",
+		"not-an-ip":       "",
+	}
+	for addr, want := range cases {
+		if got := localityOf(addr); got != want {
+			t.Errorf("localityOf(%q) = %q, want %q", addr, got, want)
+		}
+	}
+}
+
+// TestHostLocality checks a host is bucketed by its first parseable address, and that a host known
+// only by hostname (no parseable address) lands in the "no address" group.
+func TestHostLocality(t *testing.T) {
+	host := func(addrs ...string) *pb.Host {
+		h := &pb.Host{}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+
+	cases := []struct {
+		name string
+		host *pb.Host
+		want string
+	}{
+		{"routable", host("8.8.8.8"), tagRoutable},
+		{"private", host("192.168.0.1"), tagPrivate},
+		{"loopback", host("127.0.0.1"), tagLoopback},
+		{"first-parseable-wins", host("", "10.0.0.1", "8.8.8.8"), tagPrivate},
+		{"no-parseable-address", host("", "web.example.com"), tagNoAddr},
+		{"no-address-at-all", host(), tagNoAddr},
+	}
+	for _, c := range cases {
+		if got := hostLocality(c.host); got != c.want {
+			t.Errorf("%s: hostLocality = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestNmapFlagGroups guards the curated flag set: every group is a well-formed described list
+// (even length, no empty flag or description), tags are unique, and the highest-value flags the
+// design contract calls out are actually present.
+func TestNmapFlagGroups(t *testing.T) {
+	groups := nmapFlagGroups()
+	if len(groups) == 0 {
+		t.Fatal("no flag groups defined")
+	}
+
+	seenTag := map[string]bool{}
+	seenFlag := map[string]bool{}
+	for _, g := range groups {
+		if g.tag == "" {
+			t.Error("group with empty tag")
+		}
+		if seenTag[g.tag] {
+			t.Errorf("duplicate group tag %q", g.tag)
+		}
+		seenTag[g.tag] = true
+
+		if len(g.flags)%2 != 0 {
+			t.Errorf("group %q: flags must be (value, description) pairs, got odd length %d", g.tag, len(g.flags))
+		}
+		for i := 0; i+1 < len(g.flags); i += 2 {
+			flag, desc := g.flags[i], g.flags[i+1]
+			if !strings.HasPrefix(flag, "-") {
+				t.Errorf("group %q: %q is not a flag (want a leading -)", g.tag, flag)
+			}
+			if strings.TrimSpace(desc) == "" {
+				t.Errorf("group %q: flag %q has an empty description", g.tag, flag)
+			}
+			if seenFlag[flag] {
+				t.Errorf("flag %q listed in more than one group", flag)
+			}
+			seenFlag[flag] = true
+		}
+	}
+
+	for _, must := range []string{"-sS", "-sV", "-sC", "-O", "-A", "-p", "--script", "-Pn", "-T4", "-oX"} {
+		if !seenFlag[must] {
+			t.Errorf("curated flag set is missing %q", must)
+		}
 	}
 }
