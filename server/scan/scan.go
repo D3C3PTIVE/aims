@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
+	hostpb "github.com/d3c3ptive/aims/host/pb"
 	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
 	"github.com/d3c3ptive/aims/scan"
@@ -43,58 +44,132 @@ func New(db *gorm.DB) *server {
 	return &server{db: db, UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{}}
 }
 
-// Create creates one or more new scan runs in the database.
+// Create stores one or more new scan runs, unifying the hosts they observed with the shared host
+// table. A run is skipped wholesale when an identical run is already present (AreScansIdentical is
+// RawXML-keyed), so re-importing the exact same scan is an idempotent no-op — the CLI renders the
+// resulting empty Scans list as "already present (skipped)". Otherwise the run is persisted and its
+// hosts are folded through the global host records (host.IngestHosts): the run is linked to the
+// resulting shared rows via the run_hosts join rather than getting a private copy of every host, so
+// one physical host observed by several runs is a single row referenced by each — cross-run
+// host-row unification (DEDUP.md's documented follow-on), not the old match-then-drop.
 func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (*scanrpcpb.CreateScanResponse, error) {
-	var newScans []*scanpb.RunORM
+	// Load existing runs once to detect exact-duplicate re-imports. Their host trees need not be
+	// preloaded: AreScansIdentical keys on RawXML and the scan tasks, not on the host subtree.
 	dbScans := []*scanpb.RunORM{}
+	if err := s.db.Find(&dbScans).Error; err != nil {
+		return nil, err
+	}
 
-	// Get scans to save. Before persisting, fold each run's own hosts together via the
-	// non-destructive ingest fold (scan/fold.go): a scan that observed the same host
-	// across several results collapses to one host subtree — union of evidence, never
-	// duplicated and never dropped. This replaces the old per-host FilterNew, which
-	// *dropped* any incoming host that matched the DB and silently lost its new ports,
-	// scripts and OS guesses (the data-loss defect in DEDUP.md §1). Cross-run host-row
-	// unification (so one physical host is a single row shared by many runs) is the
-	// documented follow-on — it needs GORM association-merge, not a match-then-drop.
+	var created []*scanpb.Run
 	for _, run := range req.GetScans() {
+		if run == nil {
+			continue
+		}
+
+		// Fold this run's own hosts together first (intra-run union): a scan that observed the same
+		// host across several results collapses to one host subtree before it ever hits the DB.
 		folded := &scan.Run{}
 		folded.AddHosts(run.GetHosts()...)
 		run.Hosts = folded.Hosts
 
-		scanORM, _ := run.ToORM(ctx)
-		newScans = append(newScans, &scanORM)
+		// Skip an exact-duplicate run wholesale (idempotent re-import).
+		runORM, err := run.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if isDuplicateRun(&runORM, dbScans) {
+			continue
+		}
+
+		saved, err := s.persistRun(ctx, run)
+		if err != nil {
+			return nil, err
+		}
+
+		created = append(created, saved)
+		dbScans = append(dbScans, &runORM) // so a duplicate later in the same batch is caught too
 	}
 
-	// Load existing scans so an identical run is skipped wholesale (AreScansIdentical
-	// is RawXML-keyed): re-importing the exact same scan is an idempotent no-op.
-	filters := WithPreloads(&scanrpcpb.RunFilters{
-		Hosts: true,
+	return &scanrpcpb.CreateScanResponse{Scans: created}, nil
+}
+
+// persistRun stores a single run and unifies its hosts with the shared host table. The whole
+// operation is one transaction: the run's hosts are folded into the global host records (enriching
+// existing rows, inserting new ones), the run and its non-host associations are written, and the
+// run is linked to the shared host rows via the run_hosts join. If any step fails, the host
+// enrichment rolls back with the run.
+func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, error) {
+	var out *scanpb.Run
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Fold this run's hosts into the shared host table; the returned rows carry their DB IDs.
+		sharedHosts, err := hosts.IngestHosts(ctx, tx, run.GetHosts())
+		if err != nil {
+			return err
+		}
+
+		runORM, err := run.ToORM(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Reference the shared rows instead of the run's private host subtrees: Omit("Hosts.*")
+		// makes Create write only the run_hosts join entries (the host records are left as the
+		// already-persisted shared rows), and the join insert is OnConflict-DoNothing, so
+		// re-linking a host a run already references is idempotent.
+		runORM.Hosts = sharedStubs(sharedHosts)
+		if err := tx.Omit("Hosts.*").Create(&runORM).Error; err != nil {
+			return err
+		}
+
+		pb, err := runORM.ToPB(ctx)
+		if err != nil {
+			return err
+		}
+		pb.Hosts = sharedHosts // return the full shared host trees, not the bare stubs
+		out = &pb
+		return nil
 	})
-	database := db.Preload(s.db, filters)
-	database.Find(&dbScans)
-
-	filtered := db.FilterNew(newScans, dbScans, scan.AreScansIdentical)
-	if len(filtered) == 0 {
-		// Every incoming run is already present: an idempotent no-op, not an error.
-		// The CLI renders an empty Scans list as "already present (skipped)".
-		return &scanrpcpb.CreateScanResponse{}, nil
-	}
-
-	err := database.Create(&filtered).Error
 	if err != nil {
 		return nil, err
 	}
 
-	var runsPB []*scanpb.Run
-	for _, scanORM := range filtered {
-		hpb, _ := scanORM.ToPB(ctx)
-		runsPB = append(runsPB, &hpb)
+	return out, nil
+}
+
+// isDuplicateRun reports whether run is already stored. RawXML is the scanner's verbatim output and
+// thus a definitive fingerprint of a run: when both sides carry it, equality alone decides identity
+// and inequality alone rules it out — two scans with different raw documents are different scans,
+// whatever their other fields. Only when a run lacks RawXML (e.g. a scanner that emitted no raw
+// document) does it fall back to AreScansIdentical's field-weighted heuristic. This matters for
+// cross-run host unification: a too-eager match here would skip a genuinely new run and its host
+// would never be linked to it. (AreScansIdentical scores two runs with empty task-lists as matching
+// regardless of RawXML, so it cannot be the sole gate.)
+func isDuplicateRun(run *scanpb.RunORM, existing []*scanpb.RunORM) bool {
+	for _, e := range existing {
+		if run.RawXML != "" && e.RawXML != "" {
+			if run.RawXML == e.RawXML {
+				return true
+			}
+			continue // different raw documents: definitively distinct runs
+		}
+		if scan.AreScansIdentical(run, e) {
+			return true
+		}
 	}
+	return false
+}
 
-	// Response
-	res := &scanrpcpb.CreateScanResponse{Scans: runsPB}
-
-	return res, nil
+// sharedStubs reduces persisted host rows to bare {Id} stubs — enough to write the run_hosts join
+// entries that link a run to the shared host records without touching the host rows themselves.
+func sharedStubs(in []*hostpb.Host) []*hostpb.HostORM {
+	stubs := make([]*hostpb.HostORM, 0, len(in))
+	for _, h := range in {
+		if h.GetId() != "" {
+			stubs = append(stubs, &hostpb.HostORM{Id: h.GetId()})
+		}
+	}
+	return stubs
 }
 
 // Read reads one or more scans from the database, with optional filters and elements to preload.

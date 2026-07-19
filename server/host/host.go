@@ -122,13 +122,37 @@ func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hos
 		return nil, status.Error(codes.InvalidArgument, "no hosts were provided")
 	}
 
+	out, err := s.ingest(ctx, req.GetHosts())
+	if err != nil {
+		return nil, err
+	}
+
+	return &hosts.UpsertHostResponse{Hosts: out}, nil
+}
+
+// IngestHosts folds the given hosts into the shared host table non-destructively — the same
+// additive, idempotent merge Upsert performs (host.MergeHost / host.SameHost) — and returns the
+// persisted rows, each carrying its DB-assigned ID. It is the entry point other domains use to
+// unify the hosts they observed with the global host records: a scan Run, for instance, folds its
+// hosts through here and then links the returned shared rows via its own join table, rather than
+// inserting a private copy of every host per run. The passed *gorm.DB may be a transaction, so the
+// caller's own writes and this fold commit or roll back together.
+func IngestHosts(ctx context.Context, gdb *gorm.DB, in []*pb.Host) ([]*pb.Host, error) {
+	return New(gdb).ingest(ctx, in)
+}
+
+// ingest is the shared body of Upsert and IngestHosts: match each incoming host against the DB by
+// natural key, merge-in-place when found (persisting only the new evidence), insert when not, and
+// return the persisted rows with their DB-assigned IDs. Hosts later in the batch dedup against the
+// ones already ingested, so a batch that repeats a host folds it into one row.
+func (s *server) ingest(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) {
 	existing, err := s.loadHostsPB(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var out []*pb.Host
-	for _, h := range req.GetHosts() {
+	for _, h := range in {
 		if h == nil {
 			continue
 		}
@@ -153,7 +177,7 @@ func (s *server) Upsert(ctx context.Context, req *hosts.UpsertHostRequest) (*hos
 		out = append(out, saved)
 	}
 
-	return &hosts.UpsertHostResponse{Hosts: out}, nil
+	return out, nil
 }
 
 //
