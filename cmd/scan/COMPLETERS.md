@@ -15,9 +15,19 @@ classifier per-scanner (arg/flag names differ), the completers shared. DB-backed
 through the teamclient RPC (never the DB directly), are cached (`aims.CacheCompletion`), and are
 wrapped in `guard(...)` so a panic degrades to a message instead of hanging the shell.
 
+## File layout
+
+The completer code is split by role:
+
+- `run_complete.go` — the scanner-specific glue: the nmap/masscan positional-tail dispatchers, the
+  shared plumbing (`guard`, `cachedCompleter`, `cachedHostCompleter`, `renderGroups`), the curated
+  flag sets, and the NSE script/args machinery (`nseArgValueKind` → `completeNSEArgValue`).
+- `run_complete_values.go` — the scanner-agnostic value-typed completers below and their
+  collect/group/desc helpers.
+
 ## Built — the value types
 
-All in `run_complete.go`, all cross-scanner:
+All cross-scanner, in `run_complete_values.go`:
 
 | type          | function                     | source                                                        |
 |---------------|------------------------------|---------------------------------------------------------------|
@@ -30,6 +40,7 @@ All in `run_complete.go`, all cross-scanner:
 | secret        | `completeSecret`             | DB credential plaintext, grouped by type, agent-promoted     |
 | MAC           | `completeMAC`                | DB `Host.MAC` + type=="mac" addresses (vendor-described), agent-promoted |
 | interface     | `completeInterface`          | local `net.Interfaces()`, up/down (not agent-context — local NICs) |
+| source address| `completeSourceAddr`         | local interface addresses (up, non-loopback) — nmap `-S`, masscan `--source-ip`/`--adapter-ip` |
 | web URL       | `completeWebURL`             | synthesized `scheme://host[:port]/` from DB web services + http-enum paths |
 | domain        | `completeDomain`             | parent zones of DB hostnames                                 |
 
@@ -37,7 +48,8 @@ The **username** and **secret** completers are the two halves of the credential 
 its counterpart (a username by the secret it carries; a secret by its owner) so either axis picks
 the same login knowingly. **MAC** is consumed by nmap `--spoof-mac`, masscan `--router-mac`/
 `--adapter-mac`/`--spoof-mac`, and NSE `*.mac`. The nmap `-p` **service-names** group is nmap-only —
-masscan's `-p` is numeric, so it uses `completePortValue`.
+masscan's `-p` is numeric, so it uses `completePortValue`. **interface** and **source address** are
+local by design (they name the tooling box's NICs/IPs, not the possibly-remote loaded agent).
 
 Two cross-cutting mechanisms these share:
 
@@ -56,19 +68,22 @@ Numeric/duration (`timeout`, `threads`, `limit`, `size`) and free-text (`cmd`, `
 `format`) — no knowable value set; a completer only gets in the way. Leave free-form; at most hint
 the default.
 
-## Type-list completers (enum vocabularies) — noted, mostly *don't*
+## Resolved design questions (closed — reopen only if the premise changes)
 
-A value slot taking a token from a fixed vocabulary (hash type, protocol, output format) makes a
-cheap, precise, static completer. Build one only when (a) the vocab is stable/small *or* the tokens
-are obscure enough that completion earns its keep, (b) no existing tool completion already covers it
-(many tools ship completion a bridge can tap, as we do for nmap's zsh `_nmap`), and (c) it can live
-at the right layer without a bad dependency.
+- **Agent-host interface source — closed.** The idea was, with a context loaded, to surface the
+  *agent host's* named NICs. Hosts store bare addresses (`network.Address` = Addr/Type/Vendor), **no
+  interface-name records**, so there is nothing to list as agent-host interfaces; the agent host's
+  addresses/subnet are already promoted in the target, subnet and source-address completers.
+  `completeInterface` stays local. Reopen only if AIMS starts storing per-host NIC records.
 
-Motivating non-example: **do not copy Sliver's 124-value hashcat-mode `HashType` enum into AIMS** —
-it is *downstream* of AIMS (the upstream model must not import it) and drifts every hashcat release.
-Prefer a carapace-bin/bridge spec for hashcat, or a mode completer Sliver-side where the enum lives.
-For **AIMS-native type slots** (its own `PrivateType`, nmap scan types, output formats) a small
-curated described list is fine — what `completeHashType` and the curated nmap flag set already do.
+- **Type-list completers (enum vocabularies) — closed for the scan surface.** The rule stands: build
+  a static described list only when the vocab is stable/small *or* the tokens are obscure, no existing
+  tool completion covers it, and it sits at the right layer. In the scan surface no un-served slot
+  remains — scan types and output formats already live in the curated nmap/masscan flag sets, and
+  `PrivateType` in `completeHashType`. In particular **do not copy Sliver's 124-value hashcat-mode
+  `HashType` enum into AIMS**: it is *downstream* (the upstream model must not import it) and drifts
+  each hashcat release; a hashcat mode completer belongs to a carapace-bin/bridge spec or the Sliver
+  side where the enum lives. Keep this as guidance for future scanners, not as pending work.
 
-See also: `SCAN.md` (completion contract), `run_complete.go` (nmap consumer),
-`cmd/aims/BENCH_COMPLETIONS.md` (latency budget for the DB-backed completers).
+See also: `SCAN.md` (completion contract), `run_complete.go` / `run_complete_values.go` (nmap +
+masscan consumers), `cmd/aims/BENCH_COMPLETIONS.md` (latency budget for the DB-backed completers).
