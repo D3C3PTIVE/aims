@@ -18,6 +18,10 @@ message RunFilters {
     int64 MaxResults = 1;
     bool Hosts = 2;
     bool Ports = 3;
+
+    // Source: if set, scope the read to only the runs of this tool (matched against the
+    // run's Scanner, which is the producing tool). Empty means all runs.
+    string Source = 4;
 }
 message CreateScanRequest {
     RunFilters Filters = 1;

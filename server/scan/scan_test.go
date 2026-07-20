@@ -31,9 +31,11 @@ import (
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
 	network "github.com/d3c3ptive/aims/network/pb"
+	netrpcpb "github.com/d3c3ptive/aims/network/pb/rpc"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
 	scanrpcpb "github.com/d3c3ptive/aims/scan/pb/rpc"
 	hostsrv "github.com/d3c3ptive/aims/server/host"
+	netsrv "github.com/d3c3ptive/aims/server/network"
 )
 
 // newTestServer returns a scan server backed by a fresh, migrated sqlite database (pure-Go driver,
@@ -122,6 +124,20 @@ func TestCreateStampsAndScopesProvenance(t *testing.T) {
 	}
 	if len(other.GetHosts()) != 0 {
 		t.Fatalf("WhereContributedBy(metasploit) returned %d hosts, want 0", len(other.GetHosts()))
+	}
+
+	// The same per-tool scope works for a second domain: the produced service is stamped and
+	// filterable through the network server (service_sources join).
+	if n := countRows(t, gdb, "service_sources"); n == 0 {
+		t.Fatal("service not linked to provenance (service_sources empty)")
+	}
+	nsrv := netsrv.New(gdb)
+	svc, err := nsrv.Read(ctx, &netrpcpb.ReadServiceRequest{Service: &network.Service{}, Source: "nmap"})
+	if err != nil {
+		t.Fatalf("read services scoped to nmap: %v", err)
+	}
+	if len(svc.GetServices()) != 1 {
+		t.Fatalf("service WhereContributedBy(nmap) returned %d, want 1", len(svc.GetServices()))
 	}
 }
 

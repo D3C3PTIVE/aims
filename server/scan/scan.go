@@ -167,6 +167,12 @@ func stampScanProvenance(run *scanpb.Run) {
 
 	run.Source = newSource()
 
+	// NOTE: each produced object gets its OWN Source value, so a run of a host with N ports/
+	// services yields N+ identical source rows rather than one shared row. Collapsing these to a
+	// single shared row (dedup) needs OnConflict-DoNothing / shared-association persistence inside
+	// the host save path (saveMergedHost's FullSaveAssociations workaround) — deferred so it can be
+	// done together with that path's ongoing rework, not fought against it. The rows are correct,
+	// just not storage-optimal; the merge unions by key so no incorrect duplication of contributors.
 	for _, h := range run.GetHosts() {
 		if h == nil {
 			continue
@@ -238,7 +244,13 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 
 	// Preloads
 	scanFilters := WithPreloads(filters)
-	database := db.Preload(s.db.Where(hst), scanFilters)
+	query := s.db.Where(hst)
+	// Per-tool scoping: a run's producing tool is its Scanner, so scoping to a tool is a
+	// direct Scanner match (no join needed). Empty Source is a no-op (all runs).
+	if tool := filters.GetSource(); tool != "" {
+		query = query.Where("scanner = ?", tool)
+	}
+	database := db.Preload(query, scanFilters)
 
 	// Query
 	if filters.MaxResults == 1 {

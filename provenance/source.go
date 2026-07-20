@@ -63,6 +63,29 @@ func MergeSourceORMs(dst, src []*pb.SourceORM) ([]*pb.SourceORM, bool) {
 	return dst, changed
 }
 
+// Tools returns the distinct, comma-joined contributing tool names of a set of Sources, for
+// compact display ("nmap, metasploit"). An empty Tool renders as "manual". Shared by every
+// domain's detail view so provenance is presented identically everywhere.
+func Tools(sources []*pb.Source) string {
+	seen := make(map[string]bool, len(sources))
+	var tools []string
+	for _, s := range sources {
+		if s == nil {
+			continue
+		}
+		t := s.GetTool()
+		if t == "" {
+			t = "manual"
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
+		tools = append(tools, t)
+	}
+	return strings.Join(tools, ", ")
+}
+
 // WhereContributedBy is the code-API "give me only my objects" scope: it restricts a query to
 // the objects contributed by the named tool, joining through that object's provenance m2m table
 // to the shared sources table. joinTable is the m2m join (e.g. "host_sources", "core_sources")
@@ -75,9 +98,12 @@ func WhereContributedBy(joinTable, objectFK, tool string) func(*gorm.DB) *gorm.D
 		if tool == "" {
 			return d
 		}
+		// Qualify the selected FK with the join table: sources itself carries a service_id
+		// column (the soft Source.ServiceId ref), so a bare "service_id" would be ambiguous
+		// once sources is joined in.
 		sub := d.Session(&gorm.Session{NewDB: true}).
 			Table(joinTable).
-			Select(objectFK).
+			Select(joinTable + "." + objectFK).
 			Joins("JOIN sources ON sources.id = " + joinTable + ".source_id").
 			Where("sources.tool = ?", tool)
 		return d.Where("id IN (?)", sub)

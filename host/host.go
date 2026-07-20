@@ -27,6 +27,7 @@ import (
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/host/pb"
+	"github.com/d3c3ptive/aims/provenance"
 )
 
 // Host - A physical or virtual computer host.
@@ -88,6 +89,7 @@ func DisplayDetails() []display.Options {
 	// Tools
 	add("Comment", 4)
 	add("Scripts", 4)
+	add("Sources", 4)
 
 	return headers
 }
@@ -219,6 +221,9 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 	},
 	"Scripts": func(h *pb.Host) string {
 		return ""
+	},
+	"Sources": func(h *pb.Host) string {
+		return provenance.Tools(h.GetSources())
 	},
 	"Virtual Host": func(h *pb.Host) string {
 		return h.VirtualHost
