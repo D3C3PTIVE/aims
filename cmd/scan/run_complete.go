@@ -454,6 +454,105 @@ func classifyNmapFlag(flag string) string {
 	}
 }
 
+//
+// [ masscan — second scanner, reusing the shared value completers ] -----------------------------
+//
+
+// completeRunMasscan is the positional-tail completer for `scan run masscan`, the second server-side
+// scanner. It is the proof that the value completers are scanner-agnostic: the masscan-specific part
+// is only this dispatch (which preceding token means what) plus the curated flag set — the port,
+// interface and target completions are the very same functions nmap's NSE args borrow. masscan has
+// no key=value arg surface, so there is no argValueKind classifier; the preceding flag is the
+// classifier.
+func completeRunMasscan(con *client.Client) carapace.Action {
+	return carapace.ActionCallback(guard("masscan", func(c carapace.Context) carapace.Action {
+		if n := len(c.Args); n > 0 {
+			switch c.Args[n-1] {
+			case "-p", "--ports":
+				return completePortValue(con)
+			case "-e", "--interface", "--adapter":
+				return completeInterface()
+			case "--exclude", "--range":
+				return completeTargets(con) // a host or CIDR — the target completer offers both
+			case "-iL", "--excludefile", "-oX", "-oJ", "-oL", "-oG":
+				return carapace.ActionFiles()
+			}
+		}
+		if strings.HasPrefix(c.Value, "-") {
+			return masscanFlagCompletions()
+		}
+		return completeTargets(con)
+	}))
+}
+
+// masscanFlagCompletions completes a masscan `-flag` from the AIMS-owned curated set, grouped by
+// classifyMasscanFlag. Unlike nmap there is no zsh `_masscan` bridge worth tapping on most boxes, so
+// this curated set is the whole source — it covers the flags an operator actually reaches for.
+func masscanFlagCompletions() carapace.Action {
+	return carapace.ActionValuesDescribed(curatedMasscanFlags()...).TagF(classifyMasscanFlag)
+}
+
+// curatedMasscanFlags is the AIMS-owned (flag, description) set of high-value masscan flags, flat for
+// ActionValuesDescribed and grouped at render time by classifyMasscanFlag.
+func curatedMasscanFlags() []string {
+	return []string{
+		// ports & targets
+		"-p", "Ports to scan (e.g. -p80,443 or -p1-65535 or -pU:53)",
+		"--ports", "Ports to scan (same as -p)",
+		"--range", "Address ranges to scan",
+		"--exclude", "Exclude the given hosts/ranges",
+		"--excludefile", "Exclude hosts/ranges listed in a file",
+		"-iL", "Read target ranges from a file",
+		"--top-ports", "Scan the N most common ports",
+		// rate & performance
+		"--rate", "Transmit rate in packets per second",
+		"--wait", "Seconds to wait for responses after transmit finishes",
+		"--retries", "Number of retransmissions per probe",
+		"--offline", "Run without sending packets (benchmark the rate)",
+		// probes & output detail
+		"--banners", "Grab service banners from open ports",
+		"--ping", "Also send ICMP echo probes",
+		"--open", "Report only open ports",
+		"--source-ip", "Spoof the source IP address",
+		"--source-port", "Set/spoof the source port",
+		// interface / link layer
+		"-e", "Network interface (adapter) to use",
+		"--interface", "Network interface to use",
+		"--adapter", "Network adapter to use",
+		"--adapter-ip", "Source IP for the adapter",
+		"--adapter-mac", "Source MAC for the adapter",
+		"--router-mac", "Router (gateway) MAC address",
+		// output
+		"-oX", "Write nmap-compatible XML output to a file",
+		"-oJ", "Write JSON output to a file",
+		"-oL", "Write list output to a file",
+		"-oG", "Write grepable output to a file",
+		// other
+		"--rate-accuracy", "Trade rate accuracy for speed",
+		"--resume", "Resume an aborted scan from its paused.conf",
+	}
+}
+
+// classifyMasscanFlag buckets a masscan flag into a display group by its stable name, mirroring the
+// grouped shape of classifyNmapFlag. An unrecognised token lands in a generic group rather than being
+// dropped.
+func classifyMasscanFlag(flag string) string {
+	switch flag {
+	case "-p", "--ports", "--range", "--exclude", "--excludefile", "-iL", "--top-ports":
+		return "ports & targets"
+	case "--rate", "--wait", "--retries", "--offline", "--rate-accuracy":
+		return "rate & performance"
+	case "--banners", "--ping", "--open", "--source-ip", "--source-port":
+		return "probes & detail"
+	case "-e", "--interface", "--adapter", "--adapter-ip", "--adapter-mac", "--router-mac":
+		return "interface / link layer"
+	case "-oX", "-oJ", "-oL", "-oG":
+		return "output"
+	default:
+		return "other masscan flags"
+	}
+}
+
 // completeNSEScripts completes the `--script` argument with nmap's NSE script names and
 // category selectors, parsed from the local script.db. `--script` takes a comma-separated
 // list (names, categories, wildcards), so completion is per comma-separated segment.

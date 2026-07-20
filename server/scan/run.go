@@ -305,14 +305,16 @@ func (s *server) Stop(ctx context.Context, req *scanrpcpb.StopRequest) (*scanrpc
 	return &scanrpcpb.StopResponse{JobId: req.GetJobId(), Stopped: true}, nil
 }
 
-// scannerFor resolves a scanner name to its server-side driver. Only nmap is wired today; the
-// switch is the extension point for masscan/naabu/… drivers.
+// scannerFor resolves a scanner name to its server-side driver. nmap and masscan are wired; the
+// switch is the extension point for naabu/… drivers.
 func scannerFor(name string) (drive.Scanner, error) {
 	switch name {
 	case "nmap", "":
 		return drive.Nmap{}, nil
+	case "masscan":
+		return drive.Masscan{}, nil
 	default:
-		return nil, fmt.Errorf("unknown scanner %q (only nmap is supported)", name)
+		return nil, fmt.Errorf("unknown scanner %q (known: nmap, masscan)", name)
 	}
 }
 
