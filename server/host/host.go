@@ -20,6 +20,7 @@ package host
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -78,7 +79,15 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	// Response
 	res := &hosts.ReadHostResponse{Hosts: hostspb}
 
-	return res, database.Error
+	// An empty result set is not an error: a MaxResults==1 First that matches no row yields
+	// gorm.ErrRecordNotFound, but "no host matched" is a valid empty answer the CLI renders as
+	// "No hosts in database." rather than surfacing an error. (The Find path returns no such error.)
+	readErr := database.Error
+	if errors.Is(readErr, gorm.ErrRecordNotFound) {
+		readErr = nil
+	}
+
+	return res, readErr
 }
 
 // Create inserts hosts that are genuinely new, skipping any whose natural key already exists in

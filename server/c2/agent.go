@@ -2,6 +2,7 @@ package c2
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,6 +52,12 @@ func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	agents := []*pb.AgentORM{}
 	database := Preloads(s.db, &c2.AgentFilters{})
 	err = database.Where(cred).First(&agents).Error
+	// An empty result set is not an error: a filtered Read that matches no rows is a valid
+	// "nothing here" answer, so the CLI's len(res)==0 branch (e.g. "No agents in database.")
+	// fires instead of surfacing a bare gorm "record not found".
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = nil
+	}
 
 	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
 	if convErr != nil {

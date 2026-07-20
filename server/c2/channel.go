@@ -2,6 +2,7 @@ package c2
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,6 +52,11 @@ func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*
 	// Query
 	chans := []*pb.ChannelORM{}
 	err = s.db.Where(cred).First(&chans).Error
+	// An empty result set is not an error (see Agents.Read): map "record not found" to an
+	// empty successful response so the CLI renders "no channels" rather than an error.
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = nil
+	}
 
 	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, chans)
 	if convErr != nil {

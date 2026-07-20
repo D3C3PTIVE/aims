@@ -20,6 +20,7 @@ package credential
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -51,7 +52,9 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 	// Per-tool scoping: restrict to credentials contributed by a given tool via the
 	// core_sources provenance join. Empty Source is a no-op (all credentials).
 	query = db.ScopeBySource(query, "core_sources", "core_id", req.GetSource())
-	if err = query.First(&creds).Error; err != nil {
+	// An empty result set is not an error: a filtered Read matching no rows returns an empty
+	// list, so the caller's len==0 branch fires rather than a bare gorm "record not found".
+	if err = query.First(&creds).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 

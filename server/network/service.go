@@ -20,6 +20,7 @@ package network
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,7 +57,9 @@ func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*ne
 	// Per-tool scoping: restrict to services contributed by a given tool via the
 	// service_sources provenance join. Empty Source is a no-op (all services).
 	query = db.ScopeBySource(query, "service_sources", "service_id", req.GetSource())
-	if err = query.First(&services).Error; err != nil {
+	// An empty result set is not an error: a filtered Read matching no rows returns an empty
+	// list, so the caller's len==0 branch fires rather than a bare gorm "record not found".
+	if err = query.First(&services).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
