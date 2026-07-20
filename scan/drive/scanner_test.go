@@ -29,10 +29,10 @@ import (
 // a scan with an empty target list (which nmap would reject or, worse, interpret oddly). This
 // needs no nmap binary.
 func TestScanNoTargets(t *testing.T) {
-	if _, _, err := (Nmap{}).Scan(context.Background(), nil); err == nil {
+	if _, _, _, err := (Nmap{}).Scan(context.Background(), nil); err == nil {
 		t.Error("Scan with no targets should error")
 	}
-	if _, _, err := (Nmap{}).Scan(context.Background(), []*scan.Target{{}}); err == nil {
+	if _, _, _, err := (Nmap{}).Scan(context.Background(), []*scan.Target{{}}); err == nil {
 		t.Error("Scan with only empty targets should error")
 	}
 }

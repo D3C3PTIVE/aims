@@ -53,13 +53,13 @@ type Masscan struct {
 var masscanProgressRE = regexp.MustCompile(`([0-9]+\.[0-9]+)%\s+done`)
 
 func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...string) (
-	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, error,
+	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, <-chan error, error,
 ) {
 	specs := scandomain.TargetSpecs(targets)
 	// Reject only when there is nothing at all to scan; in raw-passthrough mode the target is just
 	// another token in args (e.g. `scan run masscan -p80 10.0.0.0/24`).
 	if len(specs) == 0 && len(args) == 0 && len(m.Args) == 0 {
-		return nil, nil, errors.New("drive: no scan targets or arguments")
+		return nil, nil, nil, errors.New("drive: no scan targets or arguments")
 	}
 
 	// masscan writes XML only at completion; capture it in a temp file we parse when the process
@@ -67,7 +67,7 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 	// ports and flags — not an -oX of their own.
 	xmlFile, err := os.CreateTemp("", "aims-masscan-*.xml")
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	xmlPath := xmlFile.Name()
 	_ = xmlFile.Close()
@@ -87,15 +87,16 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		os.Remove(xmlPath)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := cmd.Start(); err != nil {
 		os.Remove(xmlPath)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	results := make(chan *scanpb.Result)
 	progress := make(chan *scanpb.TaskProgress)
+	errc := make(chan error, 1)
 	stderrDone := make(chan struct{})
 
 	// Progress: forward masscan's "N.NN% done" stderr frames as TaskProgress. Ranges until stderr
@@ -124,19 +125,27 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 
 	// Results: once stderr is drained and masscan has exited, parse the XML it wrote and emit each
 	// host as a Result — the same fold the Nmap driver feeds. The temp file is removed when done.
+	// The terminal outcome (masscan's exit status, or an XML parse failure on a clean exit) is
+	// reported on errc so a failed masscan run reads as failed, not as a clean empty success — the
+	// same fix as the Nmap driver's WaitResult.
 	go func() {
+		var termErr error
 		defer close(results)
+		defer func() { errc <- termErr; close(errc) }()
 		defer os.Remove(xmlPath)
 
 		<-stderrDone
-		_ = cmd.Wait()
+		termErr = cmd.Wait() // non-zero exit == a real failure (bad args, missing privileges)
 
 		raw, err := os.ReadFile(xmlPath)
 		if err != nil || len(raw) == 0 {
-			return // masscan found nothing, or failed before writing any output
+			return // masscan found nothing, or failed before writing any output (termErr covers it)
 		}
 		run, err := nmapscan.FromXML(raw)
 		if err != nil {
+			if termErr == nil {
+				termErr = err // a clean exit but unparseable output is still a failure
+			}
 			return
 		}
 		for _, h := range run.ToPB().GetHosts() {
@@ -148,5 +157,5 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 		}
 	}()
 
-	return results, progress, nil
+	return results, progress, errc, nil
 }

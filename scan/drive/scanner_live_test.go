@@ -40,7 +40,7 @@ func TestNmapScanLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	results, progress, err := (Nmap{Args: []string{"-sT", "-p", "22,80,443"}}).
+	results, progress, errc, err := (Nmap{Args: []string{"-sT", "-p", "22,80,443"}}).
 		Scan(ctx, []*scan.Target{{Address: "127.0.0.1"}})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
@@ -71,5 +71,14 @@ func TestNmapScanLive(t *testing.T) {
 	if hosts == 0 {
 		t.Error("expected at least one host result from 127.0.0.1")
 	}
-	t.Logf("streamed %d host batch(es), %d progress frame(s); both channels closed", hosts, frames)
+
+	// The terminal outcome: a -sT (connect) scan of localhost needs no privileges, so errc must
+	// carry a nil error (a clean completion), and it must be closed after the single value.
+	if scanErr := <-errc; scanErr != nil {
+		t.Errorf("errc reported a failure for a clean -sT localhost scan: %v", scanErr)
+	}
+	if _, ok := <-errc; ok {
+		t.Error("errc must deliver at most one value then close")
+	}
+	t.Logf("streamed %d host batch(es), %d progress frame(s); both channels closed, errc clean", hosts, frames)
 }

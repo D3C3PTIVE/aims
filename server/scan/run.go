@@ -161,7 +161,7 @@ func (s *server) Run(req *scanrpcpb.RunScanRequest, stream scanrpcpb.Scans_RunSe
 	job := newScanJob(req, id, jobCtx, cancel, time.Now().Unix())
 	s.addJob(job)
 
-	results, progress, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
+	results, progress, errc, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
 	if err != nil {
 		cancel()
 		s.removeJob(id)
@@ -169,7 +169,7 @@ func (s *server) Run(req *scanrpcpb.RunScanRequest, stream scanrpcpb.Scans_RunSe
 	}
 
 	// Consume the scan independently of any client: fold + broadcast + persist on completion.
-	go s.consume(job, results, progress)
+	go s.consume(job, results, progress, errc)
 
 	// First frame is the job id, so a foreground client can print it (and Ctrl-C to detach).
 	if err := stream.Send(jobIDUpdate(id)); err != nil {
@@ -207,7 +207,7 @@ func (s *server) forward(stream updateStream, job *scanJob) error {
 // consume drains the scanner's result/progress channels, folding hosts into a Run and
 // broadcasting each host/progress frame live, then persists the completed run through the same
 // host-unifying fold as Create and broadcasts the stored run as the terminal Final frame.
-func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <-chan *scanpb.TaskProgress) {
+func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <-chan *scanpb.TaskProgress, errc <-chan error) {
 	run := &scan.Run{}
 	run.Scanner = job.scanner
 	// Carry the invocation onto the persisted run so `scan list`/`show` (and a cross-process
@@ -299,30 +299,54 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		}
 	}
 
+	// The scanner's terminal outcome, drained now that both the result and progress channels have
+	// closed. errc delivers exactly one value (nil == clean completion) then closes; a nil channel
+	// (a caller that supplies none — e.g. a unit test exercising only interrupt/clean paths) simply
+	// yields no error and the outcome falls to interrupted-or-success.
+	var scanErr error
+	if errc != nil {
+		scanErr = <-errc
+	}
+
 	// Final persist (fresh context so a cancelled/Stopped scan still saves its partial results):
 	// stamp provenance once, then upsert the authoritative stored run under the same job Id. Mark it
 	// finished so stateOf reads a terminal state (a streamed run carries no nmap runstats, so without
 	// this the completed run would linger as "queued"). Set once, on the final write.
 	//
-	// A Stop cancels the job's context; that partial run is stamped Exit=ExitInterrupted so it reads
-	// as "interrupted" (terminal and resumable) rather than a false "done" — the hosts it did gather
-	// are kept. The live progress rows persist for both outcomes (persistRun is additive), so an
-	// interrupted run's `scan show` shows how far each task got; a cleanly-finished run simply
-	// doesn't surface them as "running" tasks (see scan.getTasks, which drops them once terminal).
+	// Terminal state, in precedence order interrupted > failed > success:
+	//   - interrupted: the job's context was cancelled (a Stop). This wins even when the killed
+	//     scanner also reports an exit error ("signal: killed") — a deliberate stop is not a failure.
+	//     Stamped Exit=ExitInterrupted so it reads as "interrupted" (terminal, resumable), not a false
+	//     "done"; the hosts it gathered are kept.
+	//   - failed: the scanner signalled a real error AFTER launching (nmap "requires root privileges.
+	//     QUITTING!", a resolve failure, a non-zero exit — surfaced via the driver's WaitResult).
+	//     Stamped Exit="error" with the reason so stateOf reads stateFailed and the run shows
+	//     "✗ <reason>" instead of a false "✓ done" over zero hosts.
+	//   - success: a clean completion.
+	//
+	// The live progress rows persist for every outcome (persistRun is additive), so an interrupted or
+	// failed run's `scan show` still shows how far each task got; a cleanly-finished run simply doesn't
+	// surface them as "running" tasks (see scan.getTasks, which drops them once terminal).
 	interrupted := job.ctx.Err() != nil
+	now := time.Now().Unix()
+	fin := &scanpb.Finished{
+		Time:    now,
+		Elapsed: float32(now - job.started), // measured duration, so the Info column can show it
+	}
+	switch {
+	case interrupted:
+		fin.Exit = scan.ExitInterrupted
+	case scanErr != nil:
+		fin.Exit = "error"
+		fin.ErrorMsg = scanErr.Error()
+	default:
+		fin.Exit = "success"
+	}
+
 	pbRun := run.ToPB()
 	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
-	now := time.Now().Unix()
-	exit := "success"
-	if interrupted {
-		exit = scan.ExitInterrupted
-	}
-	pbRun.Stats = &scanpb.Stats{Finished: &scanpb.Finished{
-		Time:    now,
-		Exit:    exit,
-		Elapsed: float32(now - job.started), // measured duration, so the Info column can show it
-	}}
+	pbRun.Stats = &scanpb.Stats{Finished: fin}
 	stampScanProvenance(pbRun)
 
 	stored, err := s.persistRun(context.Background(), pbRun)
@@ -330,11 +354,11 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		job.finish(errorUpdate(err.Error()))
 		return
 	}
-	// A cleanly completed scan supersedes older runs of the same definition, so `scan list`
-	// self-collapses. An interrupted (partial) run is NOT collapsed: it must stay visible as its own
-	// row so an operator can find and `scan resume` it, and its partial surface must not tombstone a
-	// sibling's fuller history.
-	if !interrupted {
+	// Only a clean completion collapses older runs of the same definition, so `scan list`
+	// self-collapses. A failed OR interrupted run is NOT collapsed: an interrupted (partial) run must
+	// stay visible as its own row so an operator can find and `scan resume` it, and a failed run has
+	// no results and must never tombstone a sibling's fuller, good history.
+	if !interrupted && scanErr == nil {
 		s.autoSupersede(context.Background(), stored.GetId())
 	}
 	job.finish(finalUpdate(stored))

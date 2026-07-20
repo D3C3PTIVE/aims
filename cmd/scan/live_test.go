@@ -27,6 +27,8 @@ import (
 
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
+	scandom "github.com/d3c3ptive/aims/scan"
+	scanpb "github.com/d3c3ptive/aims/scan/pb"
 )
 
 // stripANSI removes any CSI escape sequence (…m colors, …K clear-line, …A cursor-up) so assertions
@@ -166,6 +168,59 @@ func TestDashboardRender(t *testing.T) {
 	}
 	if !strings.Contains(stripANSI(out2), "done") {
 		t.Errorf("done render should mark the scan done\n---\n%s", stripANSI(out2))
+	}
+}
+
+// TestFinalOutcomeClassifiers pins the three-way terminal classification the live views branch on:
+// a clean run is neither failed nor interrupted, a stopped run is interrupted (not failed), and a
+// scanner error is failed and carries its reason.
+func TestFinalOutcomeClassifiers(t *testing.T) {
+	clean := &scanpb.Run{Stats: &scanpb.Stats{Finished: &scanpb.Finished{Exit: "success"}}}
+	stopped := &scanpb.Run{Stats: &scanpb.Stats{Finished: &scanpb.Finished{Exit: scandom.ExitInterrupted}}}
+	failed := &scanpb.Run{Stats: &scanpb.Stats{Finished: &scanpb.Finished{
+		Exit: "error", ErrorMsg: "You requested a scan type which requires root privileges. QUITTING!",
+	}}}
+
+	if finalFailed(clean) || finalInterrupted(clean) || failureReason(clean) != "" || finalVerb(clean) != "Scan complete" {
+		t.Error("a clean run must classify as complete, not failed/interrupted")
+	}
+	if !finalInterrupted(stopped) || finalFailed(stopped) || finalVerb(stopped) != "Scan interrupted" {
+		t.Error("a stopped run must classify as interrupted, not failed")
+	}
+	if !finalFailed(failed) || finalInterrupted(failed) || finalVerb(failed) != "Scan failed" {
+		t.Error("an errored run must classify as failed")
+	}
+	if !strings.Contains(failureReason(failed), "requires root privileges") {
+		t.Errorf("failureReason = %q, want the scanner reason", failureReason(failed))
+	}
+}
+
+// TestDashboardRenderFailed asserts a failed terminal frame renders as "✗ failed" with its reason in
+// the footer — NOT a green "done" over "0 host(s) stored", which is exactly the false success the
+// server fold fixes surfacing on the client side.
+func TestDashboardRenderFailed(t *testing.T) {
+	var buf bytes.Buffer
+	d := &dashboard{
+		w:     &buf,
+		width: 120,
+		opts:  streamOpts{scanner: "nmap", args: []string{"-sU", "--top-ports", "200"}},
+		start: time.Now().Add(-1 * time.Second),
+		jobID: "c8e6eb9e-115b-467f-a1b1-1b3161d3d982",
+	}
+	d.done = true
+	d.failed = true
+	d.reason = "You requested a scan type which requires root privileges. QUITTING! (exit status 1)"
+	d.render()
+
+	out := stripANSI(buf.String())
+	if !strings.Contains(out, "✗ failed") {
+		t.Errorf("failed render must show \"✗ failed\"\n---\n%s", out)
+	}
+	if !strings.Contains(out, "requires root privileges") {
+		t.Errorf("failed footer must carry the reason\n---\n%s", out)
+	}
+	if strings.Contains(out, "✓ done") || strings.Contains(out, "host(s) stored") {
+		t.Errorf("a failed scan must not read as a clean stored success\n---\n%s", out)
 	}
 }
 

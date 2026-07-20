@@ -49,6 +49,31 @@ func finalInterrupted(r *scanpb.Run) bool {
 	return r.GetStats().GetFinished().GetExit() == scandom.ExitInterrupted
 }
 
+// finalFailed reports whether a terminal run FAILED — the scanner errored after launching (e.g. nmap
+// "requires root privileges. QUITTING!"), stamped Exit="error"/ErrorMsg by the server. Without this
+// the live views would render a failed scan as a green "✓ done" over zero hosts, the client-side face
+// of the same bug the server fold fixes. Mirrors scan.stateOf's failed rule; interrupted is not a
+// failure and is excluded.
+func finalFailed(r *scanpb.Run) bool {
+	fin := r.GetStats().GetFinished()
+	if fin.GetExit() == scandom.ExitInterrupted {
+		return false
+	}
+	return fin.GetErrorMsg() != "" || (fin.GetExit() != "" && fin.GetExit() != "success")
+}
+
+// failureReason is the human message for a failed run: the scanner's errormsg, else a bare fallback.
+// Empty for a run that did not fail, so callers can branch on it.
+func failureReason(r *scanpb.Run) string {
+	if !finalFailed(r) {
+		return ""
+	}
+	if msg := r.GetStats().GetFinished().GetErrorMsg(); msg != "" {
+		return msg
+	}
+	return "scan failed"
+}
+
 // updateReceiver is the common receive side of the Run and Attach client streams, so one set of
 // renderers serves both `scan run` and `scan attach`.
 type updateReceiver interface {
@@ -107,6 +132,8 @@ type dashboard struct {
 	hosts       []hostRow
 	done        bool
 	interrupted bool
+	failed      bool
+	reason      string
 	stored      int
 
 	prev int // lines emitted by the last render (how far to move the cursor up)
@@ -144,8 +171,10 @@ func dashboardStream(stream updateReceiver, opts streamOpts) error {
 		case *scans.RunUpdate_Final:
 			d.done = true
 			d.interrupted = finalInterrupted(u.Final)
-			if !d.interrupted {
-				d.pct = 100 // a stopped scan keeps the percent it reached, not a false 100%
+			d.failed = finalFailed(u.Final)
+			d.reason = failureReason(u.Final)
+			if !d.interrupted && !d.failed {
+				d.pct = 100 // a stopped or failed scan keeps the percent it reached, not a false 100%
 			}
 			d.stored = len(u.Final.GetHosts())
 			d.jobID = u.Final.GetId()
@@ -210,9 +239,12 @@ func (d *dashboard) lines() []string {
 	}
 	prog := bar(d.pct, barW) + fmt.Sprintf(" %5.1f%%", d.pct)
 	if d.done {
-		if d.interrupted {
+		switch {
+		case d.failed:
+			prog += "  " + color.RedString("✗ failed")
+		case d.interrupted:
 			prog += "  " + color.RedString("⚠ interrupted")
-		} else {
+		default:
 			prog += "  " + color.GreenString("✓ done")
 		}
 	} else {
@@ -235,24 +267,29 @@ func (d *dashboard) lines() []string {
 		}
 	}
 
-	// Footer: live count of up hosts, or the stored count once done.
-	var foot string
-	if d.done {
-		verb := "stored"
-		if d.interrupted {
-			verb = "stored (interrupted)"
-		}
-		foot = fmt.Sprintf("── %d host(s) %s · elapsed %s ──", d.stored, verb, fmtDur(time.Since(d.start)))
+	// Footer: live count of up hosts, or the terminal summary once done. A failed run shows its
+	// reason in red instead of a host count — "0 host(s) stored" would read like a clean empty scan.
+	if d.done && d.failed {
+		out = append(out, color.RedString("── ✗ %s ──", d.reason))
 	} else {
-		up := 0
-		for _, h := range d.hosts {
-			if h.state == "up" {
-				up++
+		var foot string
+		if d.done {
+			verb := "stored"
+			if d.interrupted {
+				verb = "stored (interrupted)"
 			}
+			foot = fmt.Sprintf("── %d host(s) %s · elapsed %s ──", d.stored, verb, fmtDur(time.Since(d.start)))
+		} else {
+			up := 0
+			for _, h := range d.hosts {
+				if h.state == "up" {
+					up++
+				}
+			}
+			foot = fmt.Sprintf("── %d host(s) up ──", up)
 		}
-		foot = fmt.Sprintf("── %d host(s) up ──", up)
+		out = append(out, display.Dim+foot+display.Reset)
 	}
-	out = append(out, display.Dim+foot+display.Reset)
 
 	for i := range out {
 		out[i] = clipVisible(out[i], d.width)
@@ -403,8 +440,7 @@ func quietStream(stream updateReceiver, opts streamOpts) error {
 				return nil
 			}
 		case *scans.RunUpdate_Final:
-			fmt.Printf("%s: %s — %d host(s) stored.\n",
-				finalVerb(u.Final), display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
+			printFinal(u.Final)
 			return nil
 		case *scans.RunUpdate_Error:
 			return fmt.Errorf("scan error: %s", u.Error)
@@ -412,13 +448,27 @@ func quietStream(stream updateReceiver, opts streamOpts) error {
 	}
 }
 
-// finalVerb is the terminal-frame headline word: a stopped scan is "Scan interrupted", a clean one
-// "Scan complete".
+// finalVerb is the terminal-frame headline word: a failed scan is "Scan failed", a stopped one
+// "Scan interrupted", a clean one "Scan complete".
 func finalVerb(r *scanpb.Run) string {
-	if finalInterrupted(r) {
+	switch {
+	case finalFailed(r):
+		return "Scan failed"
+	case finalInterrupted(r):
 		return "Scan interrupted"
+	default:
+		return "Scan complete"
 	}
-	return "Scan complete"
+}
+
+// printFinal writes the one-line terminal summary shared by the quiet and line renderers: a failed
+// run reports its reason (not a misleading "0 host(s) stored"), every other outcome its stored count.
+func printFinal(r *scanpb.Run) {
+	if reason := failureReason(r); reason != "" {
+		fmt.Printf("%s: %s — %s\n", finalVerb(r), display.FormatSmallID(r.GetId()), reason)
+		return
+	}
+	fmt.Printf("%s: %s — %d host(s) stored.\n", finalVerb(r), display.FormatSmallID(r.GetId()), len(r.GetHosts()))
 }
 
 // backgroundStream reads until the JobId frame, prints it, and returns (the job keeps running
@@ -478,8 +528,7 @@ func lineStream(stream updateReceiver) error {
 			}
 			fmt.Println(line)
 		case *scans.RunUpdate_Final:
-			fmt.Printf("%s: %s — %d host(s) stored.\n",
-				finalVerb(u.Final), display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
+			printFinal(u.Final)
 			return nil
 		case *scans.RunUpdate_Error:
 			return fmt.Errorf("scan error: %s", u.Error)

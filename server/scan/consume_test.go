@@ -20,6 +20,7 @@ package scan
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -47,6 +48,15 @@ func upHost(addr string) *hostpb.Host {
 		Addresses: []*network.Address{{Addr: addr}},
 		Status:    &hostpb.Status{State: "up"},
 	}
+}
+
+// errChan builds the terminal-outcome channel consume drains: one value (the scanner's terminal
+// error, or nil for a clean completion) then closed, exactly as the drivers deliver it.
+func errChan(err error) <-chan error {
+	c := make(chan error, 1)
+	c <- err
+	close(c)
+	return c
 }
 
 // TestConsumeInterruptedStampsInterrupted asserts the interrupt-aware final persist: when the job's
@@ -77,7 +87,9 @@ func TestConsumeInterruptedStampsInterrupted(t *testing.T) {
 	s.addJob(job)
 
 	results, progress := feed(upHost("10.0.0.9"), &scanpb.TaskProgress{Task: "SYN Stealth Scan", Percent: 45})
-	s.consume(job, results, progress)
+	// The killed scanner also reports an exit error; interrupted must WIN over failed — a deliberate
+	// Stop is not a scan failure.
+	s.consume(job, results, progress, errChan(errors.New("signal: killed")))
 
 	run, err := s.readRun(ctx, "job-int")
 	if err != nil || run == nil {
@@ -135,7 +147,7 @@ func TestConsumeCleanRunCompletesAndSupersedes(t *testing.T) {
 	s.addJob(job)
 
 	results, progress := feed(upHost("10.0.0.9"), &scanpb.TaskProgress{Task: "SYN Stealth Scan", Percent: 100})
-	s.consume(job, results, progress)
+	s.consume(job, results, progress, errChan(nil)) // clean terminal outcome
 
 	run, err := s.readRun(ctx, "job-ok")
 	if err != nil || run == nil {
@@ -208,5 +220,68 @@ func TestAttachFromDBStreamsProgress(t *testing.T) {
 	}
 	if !sawFinal {
 		t.Error("attachFromDB did not stream the terminal Final frame")
+	}
+}
+
+// TestConsumeFailedRunStampsError is the third terminal outcome: a job that drains WITHOUT a cancel
+// but whose scanner reported an error after launching (the driver's errc carries it — e.g. nmap
+// "requires root privileges. QUITTING!") must be stamped Exit="error" with the reason so it reads as
+// FAILED, not a false clean "done" over zero hosts. A failed run must NOT collapse a good sibling of
+// the same definition — it has no results and burying real history would be worse than the bug we fix.
+func TestConsumeFailedRunStampsError(t *testing.T) {
+	s, _, ctx := newTestServer(t)
+
+	// A previously-good sibling of the same definition. It must survive the failed run untouched.
+	sib := &scanpb.Run{
+		Id: "sib", Scanner: "nmap", Args: "-sU -p1-100",
+		Targets: []*scanpb.Target{{Id: "st", Address: "10.0.0.9"}},
+		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 1000, Exit: "success"}},
+	}
+	if _, err := s.persistRun(ctx, sib); err != nil {
+		t.Fatalf("persist sibling: %v", err)
+	}
+
+	jobCtx, cancel := context.WithCancel(context.Background())
+	defer cancel() // NOT cancelled: this is a genuine failure, not a Stop
+	job := newScanJob(&scanrpcpb.RunScanRequest{
+		Scanner: "nmap",
+		Args:    []string{"-sU", "-p1-100"},
+		Targets: []*scanpb.Target{{Id: "jt", Address: "10.0.0.9"}},
+	}, "job-fail", jobCtx, cancel, time.Now().Unix())
+	s.addJob(job)
+
+	// The scanner produced no host (it quit before scanning) and signalled a terminal error.
+	reason := "You requested a scan type which requires root privileges. QUITTING! (exit status 1)"
+	results := make(chan *scanpb.Result)
+	progress := make(chan *scanpb.TaskProgress)
+	close(results)
+	close(progress)
+	s.consume(job, results, progress, errChan(errors.New(reason)))
+
+	run, err := s.readRun(ctx, "job-fail")
+	if err != nil || run == nil {
+		t.Fatalf("readRun: %v (run=%v)", err, run)
+	}
+	fin := run.GetStats().GetFinished()
+	if fin.GetExit() != "error" {
+		t.Errorf("exit = %q, want error", fin.GetExit())
+	}
+	if fin.GetErrorMsg() != reason {
+		t.Errorf("errormsg = %q, want the scanner reason %q", fin.GetErrorMsg(), reason)
+	}
+	if scan.IsRunning(run) {
+		t.Error("a failed run must not read as running")
+	}
+	if run.GetSupersededBy() != "" {
+		t.Errorf("failed run tombstoned (SupersededBy=%q); a failure must stay its own row", run.GetSupersededBy())
+	}
+
+	// The good sibling must be untouched: a resultless failure must never bury real history.
+	got, err := s.readRun(ctx, "sib")
+	if err != nil || got == nil {
+		t.Fatalf("readRun sibling: %v", err)
+	}
+	if got.GetSupersededBy() != "" {
+		t.Errorf("sibling tombstoned by a failed run (SupersededBy=%q); must not happen", got.GetSupersededBy())
 	}
 }

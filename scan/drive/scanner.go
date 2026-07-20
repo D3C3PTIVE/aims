@@ -43,12 +43,23 @@ import (
 // in-process form of the substrate; the server-side streaming RPC (SCAN.md Part C, Phase 4)
 // puts the same surface behind the teamserver so foreground and detached scans share one path.
 type Scanner interface {
-	// Scan runs the tool against targets (plus any extra tool arguments) and returns two
-	// channels: Results to fold (Run.AddResult) and TaskProgress to display. Both are closed
-	// when the scan ends; a nil error means the scan started, not that it succeeded.
+	// Scan runs the tool against targets (plus any extra tool arguments) and returns three
+	// channels plus a launch error:
+	//   - results:  Results to fold (Run.AddResult), closed when the scan ends;
+	//   - progress: TaskProgress to display, closed when the scan ends;
+	//   - errc:     the scan's TERMINAL outcome — at most one value then closed. nil means the
+	//               tool completed cleanly; a non-nil error is a failure the tool signalled AFTER
+	//               launch (e.g. nmap "requires root privileges. QUITTING!", a resolve failure, a
+	//               non-zero exit). Drain it AFTER results/progress close.
+	//   - err:      a synchronous LAUNCH error (bad args, binary missing) — the scan never started,
+	//               and results/progress/errc are all nil.
+	//
+	// Splitting launch (err) from terminal (errc) is the whole point: a tool that starts and then
+	// dies mid-flight had, until now, nowhere to report that — so the run was misread as a success.
 	Scan(ctx context.Context, targets []*scanpb.Target, args ...string) (
 		results <-chan *scanpb.Result,
 		progress <-chan *scanpb.TaskProgress,
+		errc <-chan error,
 		err error,
 	)
 }
@@ -64,14 +75,14 @@ type Nmap struct {
 }
 
 func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string) (
-	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, error,
+	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, <-chan error, error,
 ) {
 	specs := scandomain.TargetSpecs(targets)
 	// Reject only when there is nothing at all to scan. In raw-passthrough mode the target is
 	// just another token in args (e.g. `scan run nmap -sT 127.0.0.1`), so a non-empty args set
 	// is a valid invocation even with no structured Targets.
 	if len(specs) == 0 && len(args) == 0 && len(n.Args) == 0 {
-		return nil, nil, errors.New("drive: no scan targets or arguments")
+		return nil, nil, nil, errors.New("drive: no scan targets or arguments")
 	}
 
 	nmapArgs := make([]string, 0, len(n.Args)+len(args)+len(specs))
@@ -89,7 +100,7 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 
 	scanner, err := nmapfork.NewScanner(opts...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Start nmap asynchronously and consume its live host/progress streams (the fork's fixed
@@ -97,11 +108,12 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 	// batch becomes per-host Results; progress frames pass through. The channels close when the
 	// scan ends so consumers' range loops terminate.
 	if err := scanner.RunAsync(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	results := make(chan *scanpb.Result)
 	progress := make(chan *scanpb.TaskProgress)
+	errc := make(chan error, 1)
 
 	go func() {
 		defer close(results)
@@ -127,9 +139,16 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 		}
 	}()
 
-	// Reap the process once it exits (releases resources; the yield channels already signal
-	// completion to consumers by closing).
-	go func() { _ = scanner.Wait() }()
+	// Reap the process once it exits and surface its terminal outcome. WaitResult folds nmap's
+	// three error channels (stderr warnings, XML runstats errormsg, process exit status) into one
+	// error — the signal Wait alone discarded, which is why a scan that failed after launch (e.g.
+	// "requires root privileges. QUITTING!") was misread as a clean, empty success. Buffered so this
+	// send never blocks even if the consumer drains errc only after results/progress close.
+	go func() {
+		_, werr := scanner.WaitResult()
+		errc <- werr
+		close(errc)
+	}()
 
-	return results, progress, nil
+	return results, progress, errc, nil
 }
