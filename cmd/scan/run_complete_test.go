@@ -333,6 +333,58 @@ func TestNSEArgValueKind(t *testing.T) {
 	}
 }
 
+// TestCuratedMasscanFlags guards the second scanner's AIMS-owned flag set: well-formed
+// (flag, description) pairs, no empties, no dashless tokens, no duplicates, and the high-value flags
+// an operator reaches for (-p, --rate, --banners, -oX for the XML the driver folds).
+func TestCuratedMasscanFlags(t *testing.T) {
+	pairs := curatedMasscanFlags()
+	if len(pairs)%2 != 0 {
+		t.Fatalf("curatedMasscanFlags must be (flag, description) pairs, got odd length %d", len(pairs))
+	}
+	seen := map[string]bool{}
+	for i := 0; i < len(pairs); i += 2 {
+		flag, desc := pairs[i], pairs[i+1]
+		if !strings.HasPrefix(flag, "-") {
+			t.Errorf("%q is not a flag (want a leading -)", flag)
+		}
+		if strings.TrimSpace(desc) == "" {
+			t.Errorf("flag %q has an empty description", flag)
+		}
+		if seen[flag] {
+			t.Errorf("flag %q listed more than once", flag)
+		}
+		seen[flag] = true
+	}
+	for _, must := range []string{"-p", "--rate", "--banners", "-oX", "--exclude"} {
+		if !seen[must] {
+			t.Errorf("curated masscan flag set is missing %q", must)
+		}
+	}
+}
+
+// TestClassifyMasscanFlag pins the masscan flag grouping.
+func TestClassifyMasscanFlag(t *testing.T) {
+	cases := map[string]string{
+		"-p":           "ports & targets",
+		"--ports":      "ports & targets",
+		"--exclude":    "ports & targets",
+		"--rate":       "rate & performance",
+		"--retries":    "rate & performance",
+		"--banners":    "probes & detail",
+		"--open":       "probes & detail",
+		"-e":           "interface / link layer",
+		"--router-mac": "interface / link layer",
+		"-oX":          "output",
+		"-oJ":          "output",
+		"--resume":     "other masscan flags",
+	}
+	for flag, want := range cases {
+		if got := classifyMasscanFlag(flag); got != want {
+			t.Errorf("classifyMasscanFlag(%q) = %q, want %q", flag, got, want)
+		}
+	}
+}
+
 // TestTargetTag pins the agent-context promotion: the agent's own host (by id) and its subnet
 // neighbours are promoted (via the shared agentctx classifier); every other host — and every host
 // when no context is loaded — falls into its locality group.
