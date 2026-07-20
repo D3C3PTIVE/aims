@@ -1,96 +1,185 @@
+AIMS — Attacked Infrastructure Modular Specification
+====================================================
 
-Attacked Infrastructure Modular Specification (AIMS)
-======
+A **shared data model and object store for offensive-security tooling.** AIMS declares the
+objects an attacker cares about — hosts, networks, services, credentials, scans, C2 agents —
+and gives them first-class facilities so that *many different tools can contribute to and
+consume the same database of the same objects.*
 
+Think *MISP/STIX, but for the attacker's side* — with the emphasis on being easy to move
+around, easy to store in SQL, and interoperable across languages and tools.
 
-## Overview
+It ships as three things at once:
 
-This repository aims to gather various declarations/specification of elements faced or needed
-in offensive security tasks, to be used and consumed by securiy tools. This might be somewhat compared
-to MISP and STIX specifications, except that we are here considering objects of interest for attackers.
-There is no functional logic code in the project: just types and their own facilities.
+- a **specification** — Protobuf definitions that are the source of truth for every object;
+- a **library** — generated Go types you can embed in your own tool, SQL-storable out of the box;
+- a **binary** — `aims`, a teamserver + client + CLI to populate, query, and browse the store.
 
-Many tools and frameworks are bound to their own object types (often because either language-agnostic 
-specifications are not possible, or they didn't write them), and therefore passing their outputs as 
-inputs to other tools might be sometimes complicated. Various data formats have helped along the way, 
-but interoperability still lacks in some places.
+> **Status.** The data model and generated layer are mature. The user-facing server/CLI is a
+> vertical slice that fills out domain by domain — see the [status matrix](#status) below and
+> [`STATE.md`](./STATE.md) for the live detail. `GOWORK=off go build ./...` builds the whole
+> tree and the `aims` binary runs.
 
-Also, because storing these objects in traditonal SQL-like Databases is somewhat contradictory and
-because directly declaring SQL-compliant objects can be a pain, most of the types found out there
-are hard to move from one DB system to another.
+---
 
-Summarizing, this repository aims to give access to objects & types encountered in security tasks,
-in a way that makes them easy to be moved around, registered and stored in SQL-like databases, and
-which optionally support helpers code to be declared along, for instance to implement some interfaces.
+## Quickstart
 
-Protobuf definitions being prevalent today and having good builtin/plugin support for many languages,
-the base declarations of objects will be found in `.proto` files. Besides, because the tooling for Go
-is quite advanced and the language has a nice support for builtin data format marshalling, the first
-phase of the project's code is generated in Go. Please see below for other reasons.
+**Requirements:** Go 1.24+. The repo lives under a `go.work` context, so build with `GOWORK=off`.
 
+```sh
+# Build the binary
+GOWORK=off go build -o aims ./cmd/aims
 
-## Aims 
+# The binary is a self-contained teamserver + in-process client + CLI.
+# First run migrates the embedded database automatically.
+./aims --help
+```
 
-The repository wish to provide several primary "guarantees" about/along with the objects 
-it provides. Some of these guarantees are related to the Go-generated code for these objects:
-- Using all objects as Go native types.
-- The user-facing types are Protobuf-compliant Go types (generated code)
-- These types can be easily stored, updated, deleted in a SQL-database (GORM is our driver here) .
-- The Go types are tagged so as to support various tools' data formats (eg. nmap' XML) out of the box.
-- All objects have an exhaustive list of attributes, so that users may wish to populate those they need.
-- Most types have sane DB-behavior defaults, such as deleting on cascade, etc.
+Run a scan and browse what it found:
 
-Along with these, the repo has another set of secondary (sometimes more tool-specific) aims:
-- The ability for most objects to express themselves as valid Maltego Entities.
-- A few default Database profiles, to be consumed by users storing their objects and needing to customize behavior.
+```sh
+# Scan a subnet with nmap (args after `nmap` are passed straight through) and store the results
+aims scan run nmap -- -sV -O 10.0.0.0/24
 
+# List what's in the store
+aims hosts list                 # discovered hosts (responsive, colored, weight-ranked columns)
+aims services list              # network services across all hosts
+aims scan list                  # scans, with live run-state
 
-## Tools & Technologies
+# Drill into one object by ID prefix
+aims hosts show a1b2            # detail view; add --traceroute for the route
+aims scan show 5f3c
 
-The following technologies, libraries and tools are core pillars of the project:
-- Protocol Buffers
-- GORM (Go Relational Models)
-- Go plugins for struct tagging
-- Go Maltego library
-- Buf Build for managing code generation/customization
+# See what changed between two scans (attack-surface drift)
+aims scan diff <id-a> <id-b>
+```
 
+Credentials and C2:
 
-## User & Developer Documentation
+```sh
+aims credentials list
+aims credentials add            # Metasploit-style Private/Public/Realm/Origin model
+aims agents list                # C2 agents
+aims channels list
+```
 
-The repository contains a Wiki documentation where are explained:
-- How to make use of existing types in your own projects, in various contexts.
-- How to add fields to existing types and generate the new updated code. 
-- How to use and customize the overall DB behaviors, should you want to store your objects.
-- How to use tags and various Protobuf options to make your types/field available in other ways.
-- Some examples and use cases with more complete workflows.
+Completions are rich and **live** — a `Tab` on any `show`/`rm` queries the store and renders
+described, aligned candidates (results are briefly cached so repeated `Tab`s are instant). Wire
+them into your shell with carapace (`aims` is carapace-instrumented).
 
+Multi-user / remote operation is available too: `aims` embeds a
+[`reeflective/team`](https://github.com/reeflective/team) teamserver (extracted from Sliver),
+so you can serve the store to remote operators over mTLS. See the `teamserver` command group.
 
-## Code Structure
+---
 
-The code structure for the project is the following, with some brief descriptions for each part.
-Most of the subdirectories will often include their own README, especially when they have some
-context that is peculiar to them.
+## What it stores
 
-The structure tries to provide the following advantages:
-- Most of the DB helper code generated by GORM is hidden from the user API.
-- Declutters the directory contents by moving Protobuf definitions and generated code out of the package you use.
-- Gives place in the user-facing package for user-facing helper code, such as Maltego Entity interface implementations.
+Each domain mirrors the object model of a tool people already trust, so tool-native output maps
+onto the types with little friction:
 
-#### Core 
-- `credential/`     - Access and secret management related objects, including all cryptographic ones.
-- `host/`           - Types related to a physical/virtual host, considering the latter non-networked.
-- `network/`        - Types associated to computer networks, like IP addresses, services, routes, etc.
-- `scan/`           - Types related to various forms of scanning, sometimes in their own tool directory (eg. nmap)
+| Domain         | Core objects                                                                                   | Model heritage |
+|----------------|------------------------------------------------------------------------------------------------|----------------|
+| **Host**       | `Host`, `Hostname`, `Port`, `OS`/`OSMatch`, `User`, `Group`, `Process`, `FileSystem`, `Uptime` | nmap           |
+| **Network**    | `Address`, `Service`, `Trace`/`Hop`, `Distance`, `TCPSequence`/`IPIDSequence`, packets          | nmap           |
+| **Credential** | `Core` (Private/Public/Realm/Origin), `Login`, passwords, hashes, keys, certificates            | Metasploit     |
+| **Scan**       | `Run`, `Info`, `Stats`, `Target`, `ScanTask`, `TaskProgress` (nmap `Script`/`Table`/`Element`)  | nmap et al.    |
+| **C2**         | `Agent`, `Channel`, `Task`                                                                      | Sliver-like    |
+| **Provenance** | `Source` — per-tool origin stamped on co-produced objects, for "give me only my data" queries   | —              |
 
-### Protobuf & Generated Code
-- `proto/*`         - All directories of the **Core** section have their equivalent here, where they're defined.
-- `proto/gen/`      - All generated code, for a directory per language (eg. `gen/go`)
+Many host/network proto fields carry `xml:"…"` tags that map **directly onto nmap's XML
+output**, so nmap results unmarshal straight into the types. Re-importing the same scan does not
+duplicate rows — a shared merge/dedup fold folds new facts into existing objects.
 
-### Go
-- `go.mod`/`go.sum` - The repository module management.
-- `vendor/`         - All vendored Go dependencies.
+---
 
+## Status
 
-## License - GPLv3
+The model + generated layer is solid. The server/CLI slice is filling out domain by domain;
+read paths work broadly, mutation is landing service by service.
 
-Gondor is licensed under [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
+| Service                  | Read / List | Create      | Update / Delete / Upsert | Notes                                              |
+|--------------------------|:-----------:|:-----------:|:------------------------:|----------------------------------------------------|
+| **host** (Hosts)         | ✅          | ✅ (dedup)  | Upsert ✅ · Delete stub  | reference impl; deep in-place child merge on insert |
+| **credential**           | ✅          | ✅          | Upsert ✅ · Delete ✅    | full CRUD; Delete resolves by identity             |
+| **scan**                 | ✅          | ✅          | Upsert ✅ · Delete ✅    | full CRUD; cross-run host unification; live state   |
+| **network** (Services)   | ✅          | stub        | stub                     | display/CLI slice done; server CRUD pending         |
+| **c2** (Agents/Channels) | ✅          | ✅          | stub                     | Upsert/Delete pending                              |
+| host Users · cred Logins | ❌          | ❌          | ❌                       | services scaffolded but stubbed                     |
+
+Also in flight: a scanner-plug **substrate** (live/streaming scans, `Ingestor`/`Scanner` plug
+interfaces, stored-object → `Target` bridge, run-to-run diff) and `bring` — sourcing a C2 agent
+context into your live shell. See [`SUBSTRATE.md`](./SUBSTRATE.md), [`SCAN.md`](./SCAN.md), and
+[`BRING.md`](./BRING.md).
+
+---
+
+## Architecture
+
+One code-generation pipeline runs the whole repo: `.proto` → generated Go PB types → generated
+GORM ORM types → hand-written helpers + per-domain gRPC services + CLI.
+
+```
+ proto definitions          generated code                    hand-written layers
+ ─────────────────          ──────────────                    ───────────────────
+ <domain>/pb/*.proto    ─►  *.pb.go       (protoc-gen-go)
+                            *.pb.gorm.go  (protoc-gen-gorm)  ─►  server/<domain>/  gRPC CRUD
+ <domain>/pb/rpc/*.proto ─► *_grpc.pb.go  (gRPC)             ─►  client/           client wrappers
+                                                             ─►  <domain>/*.go     native helpers, display, dedup
+                                                             ─►  cmd/<domain>/     cobra CLI + completions
+```
+
+- **Two representations per object** (via `infobloxopen/protoc-gen-gorm`): `pb.Host` (the
+  user-facing Protobuf Go type) and `pb.HostORM` (the GORM-storable type), with `ToPB`/`ToORM`
+  converters. Services convert PB→ORM to query/write, then ORM→PB to return.
+- **Struct tags drive everything.** `// @gotags:` comments attach `xml:` (nmap ingest),
+  `display:` (CLI columns), `readonly`, `strict`; GORM relations come from `(gorm.field)` proto
+  options. IDs are UUID strings; relations cascade.
+- **One generic display engine** (`cmd/display/`) — a type-parameterized
+  `map[string]func(T) string` per object feeds tables, detail views, *and* completions, with
+  weight-driven responsive column dropping. Define an object's presentation once.
+- **Multi-user layer** built on `reeflective/team` — auth, transports (mTLS, optional
+  Tailscale), and RPC plumbing.
+
+---
+
+## Documentation
+
+The companion docs carry the detail:
+
+| Doc                              | What it covers                                           |
+|----------------------------------|---------------------------------------------------------|
+| [`CLAUDE.md`](./CLAUDE.md)       | Root context — architecture, pipeline, domain catalog   |
+| [`STATE.md`](./STATE.md)         | Current state, build status, per-service maturity        |
+| [`ROADMAP.md`](./ROADMAP.md)     | Re-entry plan / what to build next                       |
+| [`SCAN.md`](./SCAN.md)           | Scan model & scanner-plug substrate                     |
+| [`SUBSTRATE.md`](./SUBSTRATE.md) | Ingest / target / diff / streaming substrate            |
+| [`DEDUP.md`](./DEDUP.md)         | Identity, dedup, and the merge fold                      |
+| [`DISPLAY.md`](./DISPLAY.md)     | The generic table/detail/completion display engine       |
+| [`COMPLETIONS.md`](./COMPLETIONS.md) | Live, cached, sub-categorized completions           |
+| [`CREDENTIALS.md`](./CREDENTIALS.md) | The credential domain in depth                      |
+| [`BRING.md`](./BRING.md)         | Sourcing a C2 agent context into the shell (design)      |
+
+---
+
+## Building & regenerating
+
+- **Canonical module path:** `github.com/d3c3ptive/aims`. (The local checkout may sit under
+  `maxlandon/aims`; that path is being migrated away — always use `d3c3ptive` imports.)
+- **Build / vet:** `GOWORK=off go build ./...` (the `go.work` context requires `GOWORK=off`).
+  First build pulls a large tree (gRPC, teamserver, nmap fork) — expect a slow initial download.
+- **Optional build tags:** `-tags maltego` enables the `AsEntity()` Maltego integration;
+  `-tags tailscale` enables the Tailscale transport. Both are opt-in and off by default.
+- **Regenerate from proto:** `make gen` (buf: go + gorm + gotemplate, then go-grpc, then
+  `protoc-go-inject-tag` for the `xml:`/`display:` tags). `make deps` installs the plugins.
+
+When extending: prefer changing the **`.proto`** and regenerating over editing generated
+`*.pb.go`/`*.pb.gorm.go` by hand; put Go-idiomatic behavior in the domain root `<name>.go`
+files; wire new CRUD in `server/<domain>` + `client` + `cmd/<domain>`, following the **host**
+domain as the reference implementation.
+
+---
+
+## License — GPLv3
+
+AIMS is licensed under [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html).
