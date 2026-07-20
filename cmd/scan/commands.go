@@ -50,6 +50,7 @@ func Commands(con *client.Client) *cobra.Command {
 	scanCmd.AddCommand(showCommand(con))
 	scanCmd.AddCommand(rmCommand(con))
 	scanCmd.AddCommand(runCommand(con))
+	scanCmd.AddCommand(diffCommand(con))
 
 	// Import
 	importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
@@ -403,4 +404,3 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 
 	return exportRunE
 }
-

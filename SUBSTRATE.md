@@ -223,6 +223,21 @@ assume, defer.
     covers the in-memory fold; the persisted round-trip is untested for non-nmap.
   - Port/Service identity across tools: `SamePort` keys on (proto, number) only — a zgrab port with
     `Protocol:"tcp"` must line up with an nmap port that may store protocol differently.
+- **`server/scan.Read` loads hosts UNSCOPED (bug, gates stored-run diff).** The host-loading loop
+  (`server/scan/scan.go` ~275–283) does `database.Find(&run.Hosts)` — a plain Find over the whole
+  hosts table — instead of loading via the `run_hosts` association. Result: **every run comes back
+  with all hosts in the DB**, not its own. `scan diff` between any two runs therefore sees identical
+  host sets ("no changes"); `scan show --hosts` is similarly wrong. Fix: load via the many2many
+  association (`s.db.Model(&run).Association("Hosts").Find(...)` or preload `Hosts` in the main
+  query with the join). Sits squarely in the uncertain dedup/cascade/relationship area — verify the
+  `run_hosts` join semantics while fixing.
+- **Cross-run unification vs. run diff (design tension).** Ingest MERGES a host observed by N runs
+  into ONE shared row (the `sharedRunCount` insight), so even with the Read bug fixed, two runs that
+  saw the same physical host both point at the *merged* current state — per-run host/port snapshots
+  are not preserved, so `scan diff` can't show same-host drift (new/gone whole hosts still work).
+  For true drift, either snapshot per-run observations (heavier model) or diff in-memory Runs before
+  the fold. `scan.DiffRuns` itself is correct and immediately useful on in-memory/pre-fold Runs and
+  on disjoint-host runs; only the *stored shared-host* diff is limited. Decide the model deliberately.
 
 ## Critical files
 
