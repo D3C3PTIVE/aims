@@ -52,7 +52,7 @@ require (
 	github.com/carapace-sh/carapace v1.13.2
 	github.com/carapace-sh/carapace-shlex v1.1.1 // indirect
 	github.com/coreos/go-iptables v0.6.0 // indirect
-	github.com/d3c3ptive/nmap v0.0.1
+	github.com/d3c3ptive/nmap v0.0.2
 	github.com/dblohm7/wingoes v0.0.0-20230803162905-5c6286bb8c6e // indirect
 	github.com/fxamacker/cbor/v2 v2.4.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
