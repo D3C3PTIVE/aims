@@ -82,3 +82,54 @@ func TestNmapScanLive(t *testing.T) {
 	}
 	t.Logf("streamed %d host batch(es), %d progress frame(s); both channels closed, errc clean", hosts, frames)
 }
+
+// TestNmapScanLiveUDP proves the whole raw-packet privilege chain end to end: a -sU (UDP) scan needs
+// CAP_NET_RAW, which nmap ignores unless NMAP_PRIVILEGED=1 is set — and the driver sets it (via the
+// fork's WithCustomEnv) exactly when nmapPrivileged detects the cap. So on a host where nmap carries
+// the cap (as `aims init caps` grants), an unprivileged -sU scan must complete with a NIL terminal
+// error rather than the "requires root privileges. QUITTING!" failure. Guarded by AIMS_NMAP_IT=1 and
+// requires nmap to actually be capped (or the process root); otherwise errc correctly reports the
+// privilege failure and this test is not applicable.
+func TestNmapScanLiveUDP(t *testing.T) {
+	if os.Getenv("AIMS_NMAP_IT") == "" {
+		t.Skip("set AIMS_NMAP_IT=1 to run (requires nmap with CAP_NET_RAW, e.g. `aims init caps`)")
+	}
+	if !nmapPrivileged("") {
+		t.Skip("nmap is not capability-privileged here (run `aims init caps`); -sU cannot run")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	results, progress, errc, err := (Nmap{Args: []string{"-sU", "-p", "53,123"}}).
+		Scan(ctx, []*scan.Target{{Address: "127.0.0.1"}})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+
+	hosts := 0
+	done := make(chan struct{}, 2)
+	go func() {
+		for range progress {
+		}
+		done <- struct{}{}
+	}()
+	go func() {
+		for r := range results {
+			if r.GetHost() != nil {
+				hosts++
+			}
+		}
+		done <- struct{}{}
+	}()
+	<-done
+	<-done
+
+	// The payoff: a -sU scan that would have died with "requires root privileges" now completes clean.
+	if scanErr := <-errc; scanErr != nil {
+		t.Fatalf("UDP scan reported a terminal error (privilege chain broken?): %v", scanErr)
+	}
+	if hosts == 0 {
+		t.Error("expected at least one host result from a -sU scan of 127.0.0.1")
+	}
+}

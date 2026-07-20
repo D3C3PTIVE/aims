@@ -32,6 +32,9 @@ package drive
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"strings"
 
 	nmapfork "github.com/d3c3ptive/nmap"
 
@@ -97,6 +100,15 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 	if n.BinaryPath != "" {
 		opts = append(opts, nmapfork.WithBinaryPath(n.BinaryPath))
 	}
+	// nmap's own guard aborts a raw-packet scan (-sS/-sU/-sO/-O) whenever euid != 0 — even when the
+	// binary carries CAP_NET_RAW (as `aims init caps` grants). When nmap is genuinely privilege-capable
+	// (we are root, or the binary has the cap), pass NMAP_PRIVILEGED=1 so nmap proceeds and uses those
+	// caps. When it is NOT, leave it unset on purpose: an unprivileged nmap then keeps its connect-scan
+	// fallback and reports the honest "requires root privileges" error for raw scans, rather than
+	// picking a privileged default it cannot carry out.
+	if nmapPrivileged(n.BinaryPath) {
+		opts = append(opts, nmapfork.WithCustomEnv("NMAP_PRIVILEGED=1"))
+	}
 
 	scanner, err := nmapfork.NewScanner(opts...)
 	if err != nil {
@@ -151,4 +163,29 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 	}()
 
 	return results, progress, errc, nil
+}
+
+// nmapPrivileged reports whether nmap can perform raw-packet scans without being launched as root:
+// either the process is already root, or the nmap binary carries CAP_NET_RAW (e.g. granted by `aims
+// init caps`). binaryPath is the configured nmap path; empty resolves via $PATH. Detection is
+// best-effort — an absent or unreadable getcap reads as "not privileged", the safe default that
+// leaves nmap its unprivileged connect-scan fallback and honest raw-scan error.
+func nmapPrivileged(binaryPath string) bool {
+	if os.Geteuid() == 0 {
+		return true
+	}
+	path := binaryPath
+	if path == "" {
+		if resolved, err := exec.LookPath("nmap"); err == nil {
+			path = resolved
+		}
+	}
+	if path == "" {
+		return false
+	}
+	out, err := exec.Command("getcap", path).Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "cap_net_raw")
 }

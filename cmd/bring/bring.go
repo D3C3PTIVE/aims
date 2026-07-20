@@ -73,6 +73,12 @@ func InitCommand(con *client.Client) *cobra.Command {
 		},
 	}
 
+	// `aims init caps` is a sibling one-shot for the other half of setup — granting the scanner
+	// binaries their raw-packet capabilities. cobra dispatches `aims init caps` to this subcommand
+	// while `aims init zsh` (no matching subcommand) still falls through to the shell-emitting RunE
+	// above, so both live under `init` without colliding.
+	cmd.AddCommand(capsCommand())
+
 	carapace.Gen(cmd).PositionalCompletion(carapace.ActionValues(shell.Supported()...).Usage("shell dialect"))
 
 	return cmd
