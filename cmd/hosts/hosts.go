@@ -169,6 +169,10 @@ func CompleteByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
+		if len(res.GetHosts()) == 0 {
+			return carapace.ActionMessage("no hosts in database")
+		}
+
 		options := host.Completions()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
@@ -192,6 +196,10 @@ func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
 		})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
+		}
+
+		if len(res.GetHosts()) == 0 {
+			return carapace.ActionMessage("no hosts in database")
 		}
 
 		options := host.Completions()

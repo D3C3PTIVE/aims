@@ -125,6 +125,10 @@ func CompleteChannelByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
+		if len(res.GetChannels()) == 0 {
+			return carapace.ActionMessage("no channels in database")
+		}
+
 		options := core.CompletionsChannel()
 		options = append(options, display.WithCandidateValue("ID", ""))
 

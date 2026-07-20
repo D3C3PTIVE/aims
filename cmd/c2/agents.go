@@ -130,6 +130,10 @@ func CompleteByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
+		if len(res.GetAgents()) == 0 {
+			return carapace.ActionMessage("no agents in database")
+		}
+
 		options := core.CompletionsAgent()
 		options = append(options, display.WithCandidateValue("ID", ""))
 

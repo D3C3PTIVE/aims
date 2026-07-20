@@ -132,6 +132,9 @@ func completeJobs(con *client.Client) carapace.Action {
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
 		}
+		if len(res.GetJobs()) == 0 {
+			return carapace.ActionMessage("no running scan jobs")
+		}
 		var pairs []string
 		for _, j := range res.GetJobs() {
 			desc := strings.TrimSpace(j.GetScanner() + " " + strings.Join(j.GetArgs(), " "))

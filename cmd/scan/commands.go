@@ -49,6 +49,8 @@ func Commands(con *client.Client) *cobra.Command {
 	scanCmd.AddCommand(listCommand(con))
 	scanCmd.AddCommand(showCommand(con))
 	scanCmd.AddCommand(rmCommand(con))
+	scanCmd.AddCommand(cleanupCommand(con))
+	scanCmd.AddCommand(historyCommand(con))
 	scanCmd.AddCommand(runCommand(con))
 	scanCmd.AddCommand(diffCommand(con))
 	scanCmd.AddCommand(jobsCommand(con))
@@ -95,9 +97,15 @@ func CompleteByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
+		if len(res.GetScans()) == 0 {
+			return carapace.ActionMessage("no scans in database")
+		}
+
 		options := scan.Completions()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
+		// The server's default read already returns only surviving heads — a tombstoned run is
+		// browsed via `scan history`, not offered as a first-class completion target.
 		results := display.Completions(res.Scans, scan.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("scans")
@@ -113,10 +121,14 @@ func listCommand(con *client.Client) *cobra.Command {
 		Use:   "list",
 		Short: "Display hosts (with filters or styles)",
 		RunE: func(command *cobra.Command, args []string) error {
+			// The server hides tombstoned runs by default (a collapsed series shows only its
+			// surviving head, which advertises the count it absorbed via Series); --all lifts that.
+			all, _ := command.Flags().GetBool("all")
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
-					Hosts: true,
+					Hosts:             true,
+					IncludeSuperseded: all,
 				},
 			})
 			err = aims.CheckError(err)
@@ -124,13 +136,17 @@ func listCommand(con *client.Client) *cobra.Command {
 				return err
 			}
 
-			if len(res.GetScans()) == 0 {
-				fmt.Printf("No scans in database.\n")
+			scans := res.GetScans()
+			if len(scans) == 0 {
+				if all {
+					fmt.Printf("No scans in database.\n")
+				} else {
+					fmt.Printf("No scans in database (superseded runs hidden; use --all).\n")
+				}
 				return nil
 			}
 
 			// Order running scans first (most actionable), then by recency, before rendering.
-			scans := res.GetScans()
 			scan.SortRuns(scans)
 
 			table := display.Table(scans, scan.DisplayFields, scan.DisplayHeaders()...)
@@ -139,6 +155,10 @@ func listCommand(con *client.Client) *cobra.Command {
 			return nil
 		},
 	}
+
+	aims.BindFlags(listCmd.Name(), false, listCmd, func(f *pflag.FlagSet) {
+		f.BoolP("all", "a", false, "Include superseded (tombstoned) runs, not just series heads")
+	})
 
 	return listCmd
 }
@@ -155,9 +175,11 @@ func rmCommand(con *client.Client) *cobra.Command {
 			// ID-prefix argument against them — the same prefix match `show` uses. Only the Id is
 			// needed to delete, so hosts are left unpreloaded (a light Delete payload); the
 			// unconditional Begin/Progress/Stats preloads are enough for the running-scan guard.
+			// Resolve against every run, tombstoned included — `rm` is id-addressed and must be able
+			// to remove a superseded run, not just a visible head.
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan:    &pb.Run{},
-				Filters: &scans.RunFilters{},
+				Filters: &scans.RunFilters{IncludeSuperseded: true},
 			})
 			if err = aims.CheckError(err); err != nil {
 				return err
@@ -212,6 +234,153 @@ func rmCommand(con *client.Client) *cobra.Command {
 	return rmCmd
 }
 
+func cleanupCommand(con *client.Client) *cobra.Command {
+	cleanupCmd := &cobra.Command{
+		Use:   "cleanup",
+		Short: "Collapse repeated runs of the same scan definition into one head per series",
+		Long: `Collapse a scan series — repeated runs of the same definition (same scanner + args +
+targets, e.g. a cron scan of the same hosts) — down to a single visible head, tombstoning the older
+siblings. Tombstoning keeps the rows (and their host links) so 'scan history' and 'scan diff' still
+reach every instance; only the drift-free, byte-identical re-imports are hard-deletable with --prune.
+
+The default is a dry run: it prints the plan without changing anything. Re-run with --yes to apply.`,
+		RunE: func(command *cobra.Command, args []string) error {
+			prune, _ := command.Flags().GetBool("prune")
+			yes, _ := command.Flags().GetBool("yes")
+
+			res, err := con.Scans.Cleanup(command.Context(), &scans.CleanupScanRequest{
+				DryRun: !yes,
+				Prune:  prune,
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			if res.GetTombstoned() == 0 && res.GetPruned() == 0 {
+				fmt.Println("Nothing to clean up — every scan series already has a single head.")
+				return nil
+			}
+
+			verb := "Would collapse"
+			if yes {
+				verb = "Collapsed"
+			}
+			fmt.Printf("%s %d run(s) into %d series head(s)", verb, res.GetTombstoned(), len(res.GetHeads()))
+			if prune {
+				fmt.Printf("; %d byte-identical run(s) %s", res.GetPruned(), pastOrFuture(yes, "pruned", "to prune"))
+			}
+			fmt.Println(".")
+			for _, h := range res.GetHeads() {
+				fmt.Printf("  head %s  %-8s  former runs: %d\n",
+					display.FormatSmallID(h.GetId()), h.GetScanner(), h.GetFormerRuns())
+			}
+			if !yes {
+				fmt.Println("\nRe-run with --yes to apply (add --prune to also hard-delete byte-identical dupes).")
+			}
+			return nil
+		},
+	}
+
+	aims.BindFlags(cleanupCmd.Name(), false, cleanupCmd, func(f *pflag.FlagSet) {
+		f.Bool("prune", false, "Hard-delete byte-identical re-imports instead of tombstoning them")
+		f.BoolP("yes", "y", false, "Apply the plan (the default is a dry run)")
+	})
+
+	return cleanupCmd
+}
+
+// pastOrFuture picks the applied vs planned wording for the dry-run/apply cleanup summary.
+func pastOrFuture(applied bool, past, future string) string {
+	if applied {
+		return past
+	}
+	return future
+}
+
+func historyCommand(con *client.Client) *cobra.Command {
+	historyCmd := &cobra.Command{
+		Use:   "history [id]",
+		Short: "Show a collapsed scan series: the surviving head and every run it superseded",
+		Long: `Browse the runs a 'scan cleanup' collapsed. With no argument it lists every series head
+that has absorbed at least one run; given a run's ID prefix it resolves that run's series head and
+shows the head together with all the (tombstoned) runs superseded under it — the instances hidden
+from the default 'scan list'.`,
+		RunE: func(command *cobra.Command, args []string) error {
+			// Read the surviving heads (server-side default filter) — the small set both branches
+			// resolve against, rather than pulling every tombstoned run and triaging client-side.
+			headsRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+				Scan:    &pb.Run{},
+				Filters: &scans.RunFilters{},
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+			heads := headsRes.GetScans()
+
+			// No argument: list every head that has collapsed at least one sibling.
+			if len(args) == 0 {
+				var collapsed []*pb.Run
+				for _, r := range heads {
+					if r.GetFormerRuns() > 0 {
+						collapsed = append(collapsed, r)
+					}
+				}
+				if len(collapsed) == 0 {
+					fmt.Println("No collapsed scan series yet (run `scan cleanup`).")
+					return nil
+				}
+				scan.SortRuns(collapsed)
+				table := display.Table(collapsed, scan.DisplayFields, scan.DisplayHeaders()...)
+				fmt.Println(table.Render())
+				return nil
+			}
+
+			// Argument(s): resolve each ID prefix to a head, then fetch exactly that head's
+			// superseded children from the server (SupersededBy filter) — one scoped query per series.
+			shown := 0
+			for _, arg := range args {
+				var head *pb.Run
+				for _, r := range heads {
+					if strings.HasPrefix(r.GetId(), aims.StripANSI(arg)) {
+						head = r
+						break
+					}
+				}
+				if head == nil {
+					continue
+				}
+
+				childRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+					Scan:    &pb.Run{},
+					Filters: &scans.RunFilters{SupersededBy: head.GetId(), IncludeSuperseded: true},
+				})
+				if err = aims.CheckError(err); err != nil {
+					return err
+				}
+				series := append([]*pb.Run{head}, childRes.GetScans()...)
+				scan.SortRuns(series)
+
+				if shown > 0 {
+					fmt.Println()
+				}
+				fmt.Printf("Series head %s (%s) — %d instance(s):\n",
+					display.FormatSmallID(head.GetId()), head.GetScanner(), len(series))
+				table := display.Table(series, scan.DisplayFields, scan.DisplayHeaders()...)
+				fmt.Println(table.Render())
+				shown++
+			}
+			if shown == 0 {
+				return fmt.Errorf("no matching series head (pass a head shown in `scan list`)")
+			}
+			return nil
+		},
+	}
+
+	carapace.Gen(historyCmd).PositionalAnyCompletion(CompleteByID(con))
+
+	return historyCmd
+}
+
 func showCommand(con *client.Client) *cobra.Command {
 	showCmd := &cobra.Command{
 		Use:   "show",
@@ -227,8 +396,9 @@ func showCommand(con *client.Client) *cobra.Command {
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
-					Hosts: true,
-					Ports: true,
+					Hosts:             true,
+					Ports:             true,
+					IncludeSuperseded: true, // `show` is id-addressed — a tombstoned run must still be viewable
 				},
 			})
 			if err = aims.CheckError(err); err != nil {
