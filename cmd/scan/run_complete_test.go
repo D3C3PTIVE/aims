@@ -28,6 +28,7 @@ import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
+	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
 // TestGuard: a panicking completion callback must not escape guard — it degrades to a message so the
@@ -572,6 +573,37 @@ func TestUrlHost(t *testing.T) {
 	}
 	if got := urlHost(mkHost(nil, []string{"10.0.0.5"}), svcPort("")); got != "10.0.0.5" {
 		t.Errorf("address fallback, got %q", got)
+	}
+}
+
+// TestPathsFromPort pins T3 path extraction: paths (and their labels) are pulled from http-* script
+// output only, in nmap's `|   /path: label` shape, deduped; non-http scripts and label-only lines
+// (http-title) yield nothing.
+func TestPathsFromPort(t *testing.T) {
+	p := &pb.Port{Number: 80, Scripts: []*nmap.Script{
+		{Id: "http-enum", Output: "  /icons/: Icons and images\n|   /robots.txt: Robots file\n|_  /admin/: Possible admin folder\n"},
+		{Id: "http-title", Output: "Site doesn't have a title (text/html)."},
+		{Id: "ssl-cert", Output: "|   /should-be-ignored: non-http script"},
+	}}
+
+	want := map[string]string{
+		"/icons/":     "Icons and images",
+		"/robots.txt": "Robots file",
+		"/admin/":     "Possible admin folder",
+	}
+	got := pathsFromPort(p)
+	if len(got) != len(want) {
+		t.Fatalf("want %d paths, got %d (%v)", len(want), len(got), got)
+	}
+	for _, pd := range got {
+		w, ok := want[pd[0]]
+		if !ok {
+			t.Errorf("unexpected path %q", pd[0])
+			continue
+		}
+		if pd[1] != w {
+			t.Errorf("path %q: want label %q, got %q", pd[0], w, pd[1])
+		}
 	}
 }
 

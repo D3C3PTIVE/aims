@@ -1036,10 +1036,16 @@ const (
 	tagURLHTTPS   = "https endpoints"
 	tagURLHTTP    = "http endpoints"
 	tagURLGuessed = "web (guessed ports)"
+	tagURLPaths   = "discovered paths"
+
+	// maxDiscoveredPaths caps the http-enum-derived path URLs offered, so a large enumeration can't
+	// flood the completion.
+	maxDiscoveredPaths = 40
 )
 
-// urlGroupOrder: agent-context relevance groups first, then https, http, and guessed-port endpoints.
-var urlGroupOrder = agentctx.PromotedOrder(tagURLHTTPS, tagURLHTTP, tagURLGuessed)
+// urlGroupOrder: agent-context relevance groups first, then the paths NSE actually discovered, then
+// the synthesized https/http/guessed roots.
+var urlGroupOrder = agentctx.PromotedOrder(tagURLPaths, tagURLHTTPS, tagURLHTTP, tagURLGuessed)
 
 // webPorts are ports treated as web endpoints even without a named http service (the "guessed" tier).
 var webPorts = map[uint32]bool{
@@ -1082,6 +1088,7 @@ func completeWebURL(con *client.Client) carapace.Action {
 func groupedURLs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 	buckets := make(map[string][]string)
 	seen := make(map[string]bool)
+	pathCount := 0
 
 	for _, h := range all {
 		rel := agentctx.RelevanceOfHost(h, agentHost)
@@ -1100,24 +1107,41 @@ func groupedURLs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 				continue
 			}
 			scheme := schemeOf(p)
-			url := buildURL(scheme, host, p.GetNumber())
-			if seen[url] {
-				continue
-			}
-			seen[url] = true
+			base := urlBase(scheme, host, p.GetNumber())
 
-			tag := rel.Tag()
-			if tag == "" {
-				switch {
-				case guessed:
-					tag = tagURLGuessed
-				case scheme == "https":
-					tag = tagURLHTTPS
-				default:
-					tag = tagURLHTTP
+			if root := base + "/"; !seen[root] {
+				seen[root] = true
+				tag := rel.Tag()
+				if tag == "" {
+					switch {
+					case guessed:
+						tag = tagURLGuessed
+					case scheme == "https":
+						tag = tagURLHTTPS
+					default:
+						tag = tagURLHTTP
+					}
 				}
+				buckets[tag] = append(buckets[tag], root, urlDesc(h, p))
 			}
-			buckets[tag] = append(buckets[tag], url, urlDesc(h, p))
+
+			// T3: real paths NSE discovered on this port (http-enum), appended to the base.
+			for _, pd := range pathsFromPort(p) {
+				if pathCount >= maxDiscoveredPaths {
+					break
+				}
+				pu := base + pd[0]
+				if seen[pu] {
+					continue
+				}
+				seen[pu] = true
+				pathCount++
+				desc := pd[1]
+				if desc == "" {
+					desc = "discovered path"
+				}
+				buckets[tagURLPaths] = append(buckets[tagURLPaths], pu, desc)
+			}
 		}
 	}
 
@@ -1174,9 +1198,9 @@ func urlHost(h *pb.Host, p *pb.Port) string {
 	return ""
 }
 
-// buildURL assembles scheme://host[:port]/ — the default port for the scheme is omitted, an IPv6
-// literal is bracketed.
-func buildURL(scheme, host string, port uint32) string {
+// urlBase assembles scheme://host[:port] with no trailing path — the default port for the scheme is
+// omitted, an IPv6 literal bracketed. A discovered path (which starts with "/") is appended directly.
+func urlBase(scheme, host string, port uint32) string {
 	if strings.Contains(host, ":") && net.ParseIP(host) != nil {
 		host = "[" + host + "]"
 	}
@@ -1188,7 +1212,39 @@ func buildURL(scheme, host string, port uint32) string {
 	if port != 0 && port != def {
 		host += ":" + strconv.Itoa(int(port))
 	}
-	return scheme + "://" + host + "/"
+	return scheme + "://" + host
+}
+
+// buildURL is urlBase with the root path "/".
+func buildURL(scheme, host string, port uint32) string {
+	return urlBase(scheme, host, port) + "/"
+}
+
+// nsePathRE extracts a discovered path and its label from an http-* NSE script's output line, e.g.
+//
+//	|   /admin/: Possible admin folder
+var nsePathRE = regexp.MustCompile(`(?m)^[\s|_]*(/[^\s:]+)\s*:[ \t]*(.*)$`)
+
+// pathsFromPort collects the (path, label) pairs an http-* script discovered on this port — mainly
+// http-enum. Deduplicated by path; a script that lists no paths (http-title, …) simply yields
+// nothing, so restricting to http-* Ids plus the path shape avoids false positives.
+func pathsFromPort(p *pb.Port) [][2]string {
+	var out [][2]string
+	seen := make(map[string]bool)
+	for _, s := range p.GetScripts() {
+		if !strings.HasPrefix(s.GetId(), "http") {
+			continue
+		}
+		for _, m := range nsePathRE.FindAllStringSubmatch(s.GetOutput(), -1) {
+			path := m[1]
+			if seen[path] {
+				continue
+			}
+			seen[path] = true
+			out = append(out, [2]string{path, strings.TrimSpace(m[2])})
+		}
+	}
+	return out
 }
 
 // urlDesc describes a synthesized URL by the service product/version and the owning host.
