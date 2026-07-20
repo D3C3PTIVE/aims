@@ -25,8 +25,10 @@ import (
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 
+	"github.com/d3c3ptive/aims/internal/db"
 	"github.com/d3c3ptive/aims/network/pb"
 	network "github.com/d3c3ptive/aims/network/pb/rpc"
+	"github.com/d3c3ptive/aims/provenance"
 )
 
 type server struct {
@@ -51,18 +53,21 @@ func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*ne
 
 	// Query
 	services := []*pb.ServiceORM{}
-	err = s.db.Where(service).First(&services).Error
-
-	servicespb := []*pb.Service{}
-	for _, service := range services {
-		pb, _ := service.ToPB(ctx)
-		servicespb = append(servicespb, &pb)
+	query := s.db.Where(service)
+	// Per-tool scoping: restrict to services contributed by a given tool via the
+	// service_sources provenance join. Empty Source is a no-op (all services).
+	if tool := req.GetSource(); tool != "" {
+		query = query.Scopes(provenance.WhereContributedBy("service_sources", "service_id", tool))
+	}
+	if err = query.First(&services).Error; err != nil {
+		return nil, err
 	}
 
-	// Response
-	res := &network.ReadServiceResponse{Services: servicespb}
-
-	return res, err
+	servicespb, err := db.ToPBs[*pb.ServiceORM, pb.Service](ctx, services)
+	if err != nil {
+		return nil, err
+	}
+	return &network.ReadServiceResponse{Services: servicespb}, nil
 }
 
 func (s *server) List(ctx context.Context, req *network.ReadServiceRequest) (*network.ReadServiceResponse, error) {
@@ -74,18 +79,15 @@ func (s *server) List(ctx context.Context, req *network.ReadServiceRequest) (*ne
 
 	// Query
 	services := []*pb.ServiceORM{}
-	err = s.db.Where(service).Find(&services).Error
-
-	servicespb := []*pb.Service{}
-	for _, service := range services {
-		pb, _ := service.ToPB(ctx)
-		servicespb = append(servicespb, &pb)
+	if err = s.db.Where(service).Find(&services).Error; err != nil {
+		return nil, err
 	}
 
-	// Response
-	res := &network.ReadServiceResponse{Services: servicespb}
-
-	return res, err
+	servicespb, err := db.ToPBs[*pb.ServiceORM, pb.Service](ctx, services)
+	if err != nil {
+		return nil, err
+	}
+	return &network.ReadServiceResponse{Services: servicespb}, nil
 }
 
 func (s *server) Upsert(ctx context.Context, req *network.UpsertServiceRequest) (*network.UpsertServiceResponse, error) {

@@ -52,11 +52,10 @@ import (
 // teamserver over RPC — correct whether the CLI is the in-process teamserver or a remote
 // teamclient. (NSE names are read from the local nmap script.db; see completeNSEScripts.)
 //
-// SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we deliberately
-// do NOT mirror nmap's hundreds of flags as typed cobra flags. The flag completion below stacks a
-// small curated set (AIMS attaches descriptions and grouping) on top of nmap's full flag long-tail,
-// which is bridged from the system's zsh `_nmap` completer via carapace-bridge (see
-// nmapFlagCompletions) — so passthrough stays complete without ever declaring the flags ourselves.
+// SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we declare none of
+// nmap's flags ourselves. The flag long-tail — values *and* descriptions — comes from the system's
+// zsh `_nmap` completer via carapace-bridge; AIMS adds only a per-value tag so those flags arrive
+// grouped the way `nmap --help` sections them (see nmapFlagCompletions).
 func completeRunNmap(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 && c.Args[n-1] == "--script" {
@@ -175,85 +174,61 @@ func localityOf(addr string) string {
 }
 
 //
-// [ Flags — curated, described, sub-grouped ] ---------------------------------------------------
+// [ Flags — bridged from zsh _nmap, tagged by AIMS ] --------------------------------------------
 //
 
-// flagGroup is a named sub-group of curated nmap flags rendered as one carapace tag group.
-// flags is a flat (flag, description, …) list for carapace.ActionValuesDescribed.
-type flagGroup struct {
-	tag   string
-	flags []string
-}
-
-// nmapFlagGroups is the curated, described flag set offered on top while the operator is typing a
-// `-flag`. It is intentionally small: AIMS mirrors none of nmap's flags as typed cobra flags
-// (SCAN.md), so this is only the highest-value handful, grouped so the operator sees scan types
-// apart from timing apart from output — with AIMS-authored descriptions the bridge can't guarantee.
-// The exhaustive long-tail is supplied by carapace-bridge underneath (see nmapFlagCompletions), so
-// this curated set is a hand-tuned "most useful first" layer, not the whole surface.
-func nmapFlagGroups() []flagGroup {
-	return []flagGroup{
-		{tag: "scan type", flags: []string{
-			"-sS", "TCP SYN (half-open) scan — the default, stealthy",
-			"-sT", "TCP connect scan (no raw-socket privilege needed)",
-			"-sU", "UDP scan",
-			"-sV", "Probe open ports for service/version info",
-			"-sC", "Run the default NSE script set (= --script=default)",
-			"-O", "Enable OS detection",
-			"-A", "Aggressive: OS detection, version, script scan, traceroute",
-		}},
-		{tag: "selection", flags: []string{
-			"-p", "Port ranges to scan (e.g. -p22,80,443 or -p1-65535)",
-			"--script", "Run NSE scripts by name, category, or wildcard",
-		}},
-		{tag: "timing", flags: []string{
-			"-T0", "paranoid — serial, slowest, IDS-evasive",
-			"-T1", "sneaky — serial, slow",
-			"-T2", "polite — less bandwidth/target load",
-			"-T3", "normal — the default timing",
-			"-T4", "aggressive — fast, assumes a reliable network",
-			"-T5", "insane — fastest, may sacrifice accuracy",
-		}},
-		{tag: "host discovery", flags: []string{
-			"-Pn", "Treat all hosts as online — skip host discovery",
-		}},
-		{tag: "output", flags: []string{
-			"-oX", "Write XML output to a file",
-			"-oN", "Write normal (human-readable) output to a file",
-			"-oG", "Write grepable output to a file",
-		}},
-	}
-}
-
-// nmapFlagCompletions renders the flag completion offered while typing a `-flag`: the curated,
-// sub-grouped, described set on top, then nmap's full flag long-tail underneath.
-//
-// The long-tail is bridged to the system's zsh `_nmap` completer (carapace-bridge). It is filtered
-// to drop the flags we already curate, so our authored descriptions and grouping win over the
-// bridge's plainer entries, and tagged as its own group so it sits below the curated set. The
-// bridge is best-effort: it spawns `zsh` per completion and needs nmap's `_nmap` zsh completion
-// present; if either is missing it yields nothing (or an error line) and the curated set still
-// stands. zsh is the chosen shell because nmap ships a rich `_nmap` (with descriptions, which
-// ActionZsh forwards) and this project's operators run zsh; ActionBash/ActionFish exist for other
-// shells if that assumption ever changes.
+// nmapFlagCompletions completes an nmap `-flag`. AIMS declares no nmap flags itself (SCAN.md):
+// the values and their descriptions come straight from the system's zsh `_nmap` completion via
+// carapace-bridge. All AIMS adds is what the bridge drops — a group tag per value, applied with
+// TagF over the classifier below, so the flags arrive sectioned like `nmap --help` instead of as
+// one flat list. carapace-bin has no nmap spec (checked), so the zsh bridge is the only source; it
+// spawns `zsh` per completion and needs `_nmap` present, yielding nothing if either is absent.
 func nmapFlagCompletions() carapace.Action {
-	groups := nmapFlagGroups()
-	actions := make([]carapace.Action, 0, len(groups)+1)
+	return bridge.ActionZsh("nmap").TagF(classifyNmapFlag)
+}
 
-	curated := make([]string, 0)
-	for _, g := range groups {
-		actions = append(actions, carapace.ActionValuesDescribed(g.flags...).Tag(g.tag))
-		for i := 0; i+1 < len(g.flags); i += 2 {
-			curated = append(curated, g.flags[i])
-		}
+// classifyNmapFlag buckets an nmap flag into the group nmap's own `--help` uses, matching on the
+// stable flag-name prefixes. It only ever returns a tag — never a description or value — so the
+// bridge's authoritative value+description is preserved untouched. It is deliberately heuristic:
+// an unrecognised token lands in a generic group rather than being dropped.
+func classifyNmapFlag(flag string) string {
+	switch {
+	case flag == "-sC" || strings.HasPrefix(flag, "--script"):
+		return "scripts (NSE)"
+	case flag == "-sn" || flag == "-sL":
+		return "host discovery"
+	case strings.HasPrefix(flag, "-sV") || flag == "-O" || flag == "-A" ||
+		strings.HasPrefix(flag, "--version") || strings.HasPrefix(flag, "--osscan"):
+		return "service / OS detection"
+	case strings.HasPrefix(flag, "-s"):
+		return "scan techniques"
+	case strings.HasPrefix(flag, "-T") || strings.HasPrefix(flag, "--min-") ||
+		strings.HasPrefix(flag, "--max-") || strings.HasPrefix(flag, "--host-timeout") ||
+		strings.HasPrefix(flag, "--scan-delay") || strings.HasSuffix(flag, "-rate"):
+		return "timing & performance"
+	case flag == "-p" || flag == "-F" || flag == "-r" ||
+		strings.HasPrefix(flag, "--top-ports") || strings.HasPrefix(flag, "--port-ratio") ||
+		strings.HasPrefix(flag, "--exclude-ports"):
+		return "port specification"
+	case strings.HasPrefix(flag, "-P") || flag == "-n" || flag == "-R" ||
+		strings.HasPrefix(flag, "--dns") || flag == "--system-dns" || flag == "--traceroute":
+		return "host discovery"
+	case strings.HasPrefix(flag, "-o") || flag == "-v" || flag == "-d" ||
+		strings.HasPrefix(flag, "--reason") || strings.HasPrefix(flag, "--open") ||
+		strings.HasPrefix(flag, "--packet-trace") || strings.HasPrefix(flag, "--stylesheet") ||
+		strings.HasPrefix(flag, "--append-output") || strings.HasPrefix(flag, "--resume"):
+		return "output"
+	case flag == "-f" || flag == "-D" || flag == "-S" || flag == "-e" || flag == "-g" ||
+		strings.HasPrefix(flag, "--source-port") || strings.HasPrefix(flag, "--data") ||
+		strings.HasPrefix(flag, "--spoof-mac") || flag == "--badsum" ||
+		strings.HasPrefix(flag, "--mtu") || strings.HasPrefix(flag, "--proxies") ||
+		strings.HasPrefix(flag, "--ttl"):
+		return "firewall / IDS evasion"
+	case strings.HasPrefix(flag, "-i") || strings.HasPrefix(flag, "--exclude"):
+		return "target specification"
+	default:
+		return "other nmap flags"
 	}
-
-	longTail := bridge.ActionZsh("nmap").
-		Filter(curated...).
-		Tag("nmap (full flag set)")
-	actions = append(actions, longTail)
-
-	return carapace.Batch(actions...).ToA()
 }
 
 // completeNSEScripts completes the `--script` argument with nmap's NSE script names and
@@ -286,25 +261,52 @@ func completeNSEScripts(con *client.Client) carapace.Action {
 			if len(scripts) == 0 && len(categories) == 0 {
 				return carapace.ActionMessage("no nmap script.db found (is nmap installed locally?)")
 			}
-
-			described := make([]string, 0, (len(categories)+len(scripts))*2)
-			for _, cat := range categories { // categories first — coarse selectors
-				described = append(described, cat, "category")
-			}
-			for _, s := range scripts {
-				described = append(described, s[0], s[1])
-			}
-
-			return carapace.ActionValuesDescribed(described...)
+			return groupedNSE(scripts, categories)
 		}))
 	})
+}
+
+// groupedNSE renders NSE completion as tag groups rather than descriptions. The category is NSE's
+// only real sub-structure, so it is the grouping axis: the coarse category *selectors* sit under a
+// "categories" tag, then every script is listed under each category it declares. A script is
+// genuinely in all of its categories, so e.g. http-title appears under safe, default and discovery
+// — carapace shows the same candidate in each group it belongs to. Descriptions are dropped on
+// purpose: they only ever repeated the category list, which the tag header now conveys.
+func groupedNSE(scripts []nseScript, categories []string) carapace.Action {
+	byCat := make(map[string][]string, len(categories))
+	for _, s := range scripts {
+		for _, c := range s.cats {
+			byCat[c] = append(byCat[c], s.name)
+		}
+	}
+
+	actions := make([]carapace.Action, 0, len(byCat)+1)
+	actions = append(actions, carapace.ActionValues(categories...).Tag("categories"))
+
+	cats := make([]string, 0, len(byCat))
+	for c := range byCat {
+		cats = append(cats, c)
+	}
+	sort.Strings(cats)
+	for _, c := range cats {
+		actions = append(actions, carapace.ActionValues(byCat[c]...).Tag(c))
+	}
+
+	return carapace.Batch(actions...).ToA()
 }
 
 var nseEntryRE = regexp.MustCompile(`filename\s*=\s*"([^"]+)\.nse".*categories\s*=\s*\{([^}]*)\}`)
 var nseCatRE = regexp.MustCompile(`"([^"]+)"`)
 
-// loadNSEScripts parses nmap's script.db into (script{name, "cat, cat"}, sorted categories).
-func loadNSEScripts() (scripts [][2]string, categories []string) {
+// nseScript is one NSE script: its bare name (the `.nse` suffix stripped) and the categories it
+// declares in script.db. The categories are the grouping axis for completion (see groupedNSE).
+type nseScript struct {
+	name string
+	cats []string
+}
+
+// loadNSEScripts parses nmap's script.db into (scripts, sorted category selectors).
+func loadNSEScripts() (scripts []nseScript, categories []string) {
 	path := findScriptDB()
 	if path == "" {
 		return nil, nil
@@ -320,9 +322,10 @@ func loadNSEScripts() (scripts [][2]string, categories []string) {
 }
 
 // parseScriptDB parses the `Entry { filename = "x.nse", categories = { "a", "b", } }` lines of
-// nmap's script.db into sorted (script{name, joined-categories}, categories) — including the
-// synthetic `all` selector nmap accepts but script.db does not list.
-func parseScriptDB(r io.Reader) (scripts [][2]string, categories []string) {
+// nmap's script.db into name-sorted scripts (each carrying its declared categories) and the sorted
+// union of category selectors — including the synthetic `all` selector nmap accepts but script.db
+// does not list.
+func parseScriptDB(r io.Reader) (scripts []nseScript, categories []string) {
 	catSet := map[string]bool{"all": true} // `all` is a valid selector but not a script.db category
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
@@ -335,14 +338,14 @@ func parseScriptDB(r io.Reader) (scripts [][2]string, categories []string) {
 			cats = append(cats, cm[1])
 			catSet[cm[1]] = true
 		}
-		scripts = append(scripts, [2]string{m[1], strings.Join(cats, ", ")})
+		scripts = append(scripts, nseScript{name: m[1], cats: cats})
 	}
 
 	for cat := range catSet {
 		categories = append(categories, cat)
 	}
 	sort.Strings(categories)
-	sort.Slice(scripts, func(i, j int) bool { return scripts[i][0] < scripts[j][0] })
+	sort.Slice(scripts, func(i, j int) bool { return scripts[i].name < scripts[j].name })
 
 	return scripts, categories
 }

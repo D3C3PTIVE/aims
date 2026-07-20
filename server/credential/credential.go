@@ -27,6 +27,8 @@ import (
 	"github.com/d3c3ptive/aims/credential"
 	credpb "github.com/d3c3ptive/aims/credential/pb"
 	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
+	"github.com/d3c3ptive/aims/internal/db"
+	"github.com/d3c3ptive/aims/provenance"
 )
 
 type server struct {
@@ -46,9 +48,21 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 	}
 
 	creds := []*credpb.CoreORM{}
-	err = s.db.Preload(clause.Associations).Where(&cred).First(&creds).Error
+	query := db.PreloadAll(s.db).Where(&cred)
+	// Per-tool scoping: restrict to credentials contributed by a given tool via the
+	// core_sources provenance join. Empty Source is a no-op (all credentials).
+	if tool := req.GetSource(); tool != "" {
+		query = query.Scopes(provenance.WhereContributedBy("core_sources", "core_id", tool))
+	}
+	if err = query.First(&creds).Error; err != nil {
+		return nil, err
+	}
 
-	return toResponse(ctx, creds), err
+	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, creds)
+	if err != nil {
+		return nil, err
+	}
+	return &credentials.ReadCredentialResponse{Credentials: pbs}, nil
 }
 
 // List returns all credentials matching the request filter, with their sub-credentials preloaded.
@@ -59,9 +73,15 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 	}
 
 	creds := []*credpb.CoreORM{}
-	err = s.db.Preload(clause.Associations).Where(&cred).Find(&creds).Error
+	if err = db.PreloadAll(s.db).Where(&cred).Find(&creds).Error; err != nil {
+		return nil, err
+	}
 
-	return toResponse(ctx, creds), err
+	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, creds)
+	if err != nil {
+		return nil, err
+	}
+	return &credentials.ReadCredentialResponse{Credentials: pbs}, nil
 }
 
 // Create inserts credentials that are genuinely new, skipping any whose (public, private, realm)
@@ -89,8 +109,11 @@ func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRe
 		created = append(created, &corm)
 	}
 
-	res := toResponse(ctx, created)
-	return &credentials.CreateCredentialResponse{Credentials: res.Credentials}, nil
+	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, created)
+	if err != nil {
+		return nil, err
+	}
+	return &credentials.CreateCredentialResponse{Credentials: pbs}, nil
 }
 
 // Upsert inserts or enriches credentials following the identity + merge model (CREDENTIALS.md
@@ -138,8 +161,11 @@ func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRe
 		out = append(out, &corm)
 	}
 
-	res := toResponse(ctx, out)
-	return &credentials.UpsertCredentialResponse{Credentials: res.Credentials}, nil
+	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, out)
+	if err != nil {
+		return nil, err
+	}
+	return &credentials.UpsertCredentialResponse{Credentials: pbs}, nil
 }
 
 // Delete removes credentials (and their owned sub-credentials) by Id when provided, else by
@@ -173,8 +199,11 @@ func (s *server) Delete(ctx context.Context, req *credentials.DeleteCredentialRe
 		deleted = append(deleted, target)
 	}
 
-	res := toResponse(ctx, deleted)
-	return &credentials.DeleteCredentialResponse{Credentials: res.Credentials}, nil
+	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, deleted)
+	if err != nil {
+		return nil, err
+	}
+	return &credentials.DeleteCredentialResponse{Credentials: pbs}, nil
 }
 
 //
@@ -185,7 +214,7 @@ func (s *server) Delete(ctx context.Context, req *credentials.DeleteCredentialRe
 // merging happen against complete objects.
 func (s *server) loadAll(ctx context.Context) ([]*credpb.CoreORM, error) {
 	var cores []*credpb.CoreORM
-	err := s.db.Preload(clause.Associations).Find(&cores).Error
+	err := db.PreloadAll(s.db).Find(&cores).Error
 	return cores, err
 }
 
@@ -215,13 +244,4 @@ func removeCore(in []*credpb.CoreORM, drop *credpb.CoreORM) []*credpb.CoreORM {
 		}
 	}
 	return out
-}
-
-func toResponse(ctx context.Context, creds []*credpb.CoreORM) *credentials.ReadCredentialResponse {
-	credspb := make([]*credpb.Core, 0, len(creds))
-	for _, cred := range creds {
-		pb, _ := cred.ToPB(ctx)
-		credspb = append(credspb, &pb)
-	}
-	return &credentials.ReadCredentialResponse{Credentials: credspb}
 }

@@ -40,21 +40,22 @@ func TestParseScriptDB(t *testing.T) {
 		t.Fatalf("want 4 scripts parsed, got %d (%v)", len(scripts), scripts)
 	}
 
-	// Scripts are sorted by name; names carry the .nse stripped.
+	// Scripts are sorted by name; names carry the .nse stripped, and each keeps its own category
+	// slice (the grouping axis) rather than a joined string.
 	want := map[string]string{
-		"acarsd-info":      "discovery, safe",
-		"afp-brute":        "brute, intrusive",
-		"http-title":       "default, discovery, safe",
-		"smb-os-discovery": "default, discovery, safe",
+		"acarsd-info":      "discovery,safe",
+		"afp-brute":        "brute,intrusive",
+		"http-title":       "default,discovery,safe",
+		"smb-os-discovery": "default,discovery,safe",
 	}
 	for _, s := range scripts {
-		desc, ok := want[s[0]]
+		cats, ok := want[s.name]
 		if !ok {
-			t.Errorf("unexpected script %q", s[0])
+			t.Errorf("unexpected script %q", s.name)
 			continue
 		}
-		if s[1] != desc {
-			t.Errorf("script %q: want categories %q, got %q", s[0], desc, s[1])
+		if got := strings.Join(s.cats, ","); got != cats {
+			t.Errorf("script %q: want categories %q, got %q", s.name, cats, got)
 		}
 	}
 
@@ -147,47 +148,41 @@ func TestHostLocality(t *testing.T) {
 	}
 }
 
-// TestNmapFlagGroups guards the curated flag set: every group is a well-formed described list
-// (even length, no empty flag or description), tags are unique, and the highest-value flags the
-// design contract calls out are actually present.
-func TestNmapFlagGroups(t *testing.T) {
-	groups := nmapFlagGroups()
-	if len(groups) == 0 {
-		t.Fatal("no flag groups defined")
+// TestClassifyNmapFlag pins the flag grouping. AIMS no longer defines nmap flags (the bridge
+// supplies value + description); it only assigns each a group tag, so this guards the classifier
+// that turns the bridge's flat list into nmap --help-style sections. The tricky cases are the ones
+// that share a prefix with a broader bucket: -sV/-sC/-sn must not fall into the generic "-s" scan
+// techniques group.
+func TestClassifyNmapFlag(t *testing.T) {
+	cases := map[string]string{
+		"-sS":           "scan techniques",
+		"-sU":           "scan techniques",
+		"-sV":           "service / OS detection",
+		"-O":            "service / OS detection",
+		"-A":            "service / OS detection",
+		"-sC":           "scripts (NSE)",
+		"--script":      "scripts (NSE)",
+		"--script-help": "scripts (NSE)",
+		"-T4":           "timing & performance",
+		"--min-rate":    "timing & performance",
+		"--max-retries": "timing & performance",
+		"-p":            "port specification",
+		"-F":            "port specification",
+		"-Pn":           "host discovery",
+		"-sn":           "host discovery",
+		"--traceroute":  "host discovery",
+		"-oX":           "output",
+		"-v":            "output",
+		"-f":            "firewall / IDS evasion",
+		"--spoof-mac":   "firewall / IDS evasion",
+		"-iL":           "target specification",
+		"--exclude":     "target specification",
+		"-6":            "other nmap flags",
+		"--datadir":     "other nmap flags",
 	}
-
-	seenTag := map[string]bool{}
-	seenFlag := map[string]bool{}
-	for _, g := range groups {
-		if g.tag == "" {
-			t.Error("group with empty tag")
-		}
-		if seenTag[g.tag] {
-			t.Errorf("duplicate group tag %q", g.tag)
-		}
-		seenTag[g.tag] = true
-
-		if len(g.flags)%2 != 0 {
-			t.Errorf("group %q: flags must be (value, description) pairs, got odd length %d", g.tag, len(g.flags))
-		}
-		for i := 0; i+1 < len(g.flags); i += 2 {
-			flag, desc := g.flags[i], g.flags[i+1]
-			if !strings.HasPrefix(flag, "-") {
-				t.Errorf("group %q: %q is not a flag (want a leading -)", g.tag, flag)
-			}
-			if strings.TrimSpace(desc) == "" {
-				t.Errorf("group %q: flag %q has an empty description", g.tag, flag)
-			}
-			if seenFlag[flag] {
-				t.Errorf("flag %q listed in more than one group", flag)
-			}
-			seenFlag[flag] = true
-		}
-	}
-
-	for _, must := range []string{"-sS", "-sV", "-sC", "-O", "-A", "-p", "--script", "-Pn", "-T4", "-oX"} {
-		if !seenFlag[must] {
-			t.Errorf("curated flag set is missing %q", must)
+	for flag, want := range cases {
+		if got := classifyNmapFlag(flag); got != want {
+			t.Errorf("classifyNmapFlag(%q) = %q, want %q", flag, got, want)
 		}
 	}
 }

@@ -6,10 +6,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	pb "github.com/d3c3ptive/aims/c2/pb"
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
+	"github.com/d3c3ptive/aims/internal/db"
 )
 
 type server struct {
@@ -22,11 +22,11 @@ func New(db *gorm.DB) *server {
 }
 
 func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.CreateAgentResponse, error) {
-	var agents []pb.AgentORM
+	var agents []*pb.AgentORM
 
 	for _, h := range req.GetAgents() {
 		horm, _ := h.ToORM(ctx)
-		agents = append(agents, horm)
+		agents = append(agents, &horm)
 	}
 
 	// Filter agents to add according to AIMS criteria first.
@@ -38,16 +38,11 @@ func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.Cr
 
 	err := s.db.Create(&filtered).Error
 
-	var agentspb []*pb.Agent
-	for _, horm := range agents {
-		hpb, _ := horm.ToPB(ctx)
-		agentspb = append(agentspb, &hpb)
+	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.CreateAgentResponse{Agents: agentspb}
-
-	return res, err
+	return &c2.CreateAgentResponse{Agents: agentspb}, err
 }
 
 func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
@@ -62,16 +57,11 @@ func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	database := Preloads(s.db, &c2.AgentFilters{})
 	err = database.Where(cred).First(&agents).Error
 
-	agentspb := []*pb.Agent{}
-	for _, cred := range agents {
-		credpb, _ := cred.ToPB(ctx)
-		agentspb = append(agentspb, &credpb)
+	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.ReadAgentResponse{Agents: agentspb}
-
-	return res, err
+	return &c2.ReadAgentResponse{Agents: agentspb}, err
 }
 
 func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
@@ -86,16 +76,11 @@ func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	database := Preloads(s.db, &c2.AgentFilters{})
 	err = database.Where(cred).Find(&agents).Error
 
-	agentspb := []*pb.Agent{}
-	for _, cred := range agents {
-		pb, _ := cred.ToPB(ctx)
-		agentspb = append(agentspb, &pb)
+	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.ReadAgentResponse{Agents: agentspb}
-
-	return res, err
+	return &c2.ReadAgentResponse{Agents: agentspb}, err
 }
 
 func (s *server) Upsert(context.Context, *c2.UpsertAgentRequest) (*c2.UpsertAgentResponse, error) {
@@ -106,38 +91,15 @@ func (s *server) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.DeleteAgen
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteAgent not implemented")
 }
 
-// Preloads loads a given database with preload agent association clauses before querying.
+// Preloads loads the agent associations the c2 read paths need. Beyond the agent's top-level
+// relations (clause.Associations, via db.PreloadAll) it names the nested Host.* chain bring's
+// prompt route summary reads — the agent's host, its traceroute hops and its hop distance — which
+// clause.Associations does not reach on its own.
 func Preloads(database *gorm.DB, filters *c2.AgentFilters) *gorm.DB {
-	if filters == nil {
-		filters = &c2.AgentFilters{}
-	}
-
-	filts := map[string]bool{
-		"Channels": true,
-		// Nested associations bring's prompt route summary reads: the agent's host, its
-		// traceroute hops and its hop distance. clause.Associations only preloads the agent's
-		// top-level relations (Host included), so the Host.* chain must be named explicitly.
-		"Host.Trace.Hops": true,
-		"Host.Distance":   true,
-	}
-
-	preloaded := database.Preload(clause.Associations)
-
-	for name, load := range filts {
-		if !load {
-			continue
-		}
-
-		preloaded = preloaded.Preload(name)
-	}
-
-	return preloaded
+	return db.PreloadAll(database,
+		"Channels",
+		"Host.Trace.Hops",
+		"Host.Distance",
+	)
 }
 
-func getFilters(filts *c2.AgentFilters) *c2.AgentFilters {
-	if filts != nil {
-		return filts
-	}
-
-	return &c2.AgentFilters{}
-}

@@ -73,11 +73,9 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 		database = database.Find(&dbHosts)
 	}
 
-	hostspb := []*pb.Host{}
-
-	for _, host := range dbHosts {
-		pb, _ := host.ToPB(ctx)
-		hostspb = append(hostspb, &pb)
+	hostspb, err := db.ToPBs[*pb.HostORM, pb.Host](ctx, dbHosts)
+	if err != nil {
+		return nil, err
 	}
 
 	// Response
@@ -201,15 +199,7 @@ func (s *server) loadHostsPB(ctx context.Context) ([]*pb.Host, error) {
 		return nil, err
 	}
 
-	out := make([]*pb.Host, 0, len(dbHosts))
-	for _, o := range dbHosts {
-		p, err := o.ToPB(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, &p)
-	}
-	return out, nil
+	return db.ToPBs[*pb.HostORM, pb.Host](ctx, dbHosts)
 }
 
 // ingestPreloads names the nested associations the host merge reads into; first-level ones are

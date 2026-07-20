@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	host "github.com/d3c3ptive/aims/host/pb"
+	"github.com/d3c3ptive/aims/internal/util"
 	network "github.com/d3c3ptive/aims/network/pb"
 	"github.com/d3c3ptive/aims/provenance"
 	"github.com/d3c3ptive/aims/scan/pb/nmap"
@@ -104,17 +105,17 @@ func MergeHost(dst, src *host.Host) (changed bool) {
 	}
 
 	// Fill-only scalars: a known value is never clobbered by an empty one.
-	changed = fillStr(&dst.MAC, src.MAC) || changed
-	changed = fillStr(&dst.Comm, src.Comm) || changed
-	changed = fillStr(&dst.OSName, src.OSName) || changed
-	changed = fillStr(&dst.OSFlavor, src.OSFlavor) || changed
-	changed = fillStr(&dst.OSSp, src.OSSp) || changed
-	changed = fillStr(&dst.OSLang, src.OSLang) || changed
-	changed = fillStr(&dst.OSFamily, src.OSFamily) || changed
-	changed = fillStr(&dst.Arch, src.Arch) || changed
-	changed = fillStr(&dst.Purpose, src.Purpose) || changed
-	changed = fillStr(&dst.Info, src.Info) || changed
-	changed = fillStr(&dst.Comment, src.Comment) || changed
+	changed = util.Fill(&dst.MAC, src.MAC) || changed
+	changed = util.Fill(&dst.Comm, src.Comm) || changed
+	changed = util.Fill(&dst.OSName, src.OSName) || changed
+	changed = util.Fill(&dst.OSFlavor, src.OSFlavor) || changed
+	changed = util.Fill(&dst.OSSp, src.OSSp) || changed
+	changed = util.Fill(&dst.OSLang, src.OSLang) || changed
+	changed = util.Fill(&dst.OSFamily, src.OSFamily) || changed
+	changed = util.Fill(&dst.Arch, src.Arch) || changed
+	changed = util.Fill(&dst.Purpose, src.Purpose) || changed
+	changed = util.Fill(&dst.Info, src.Info) || changed
+	changed = util.Fill(&dst.Comment, src.Comment) || changed
 
 	// First-wins scan window: keep the earliest observed start time.
 	if src.StartTime != 0 && (dst.StartTime == 0 || src.StartTime < dst.StartTime) {
@@ -257,7 +258,7 @@ func mergePortInto(dst, src *host.Port) (changed bool) {
 		return false
 	}
 
-	changed = fillStr(&dst.Owner, src.Owner) || changed
+	changed = util.Fill(&dst.Owner, src.Owner) || changed
 
 	// Service: fill-only field merge; adopt wholesale if absent.
 	if dst.Service == nil && src.Service != nil {
@@ -297,19 +298,19 @@ func mergeServiceInto(dst, src *network.Service) (changed bool) {
 	// All fill-only: one scan may leave Product/Version blank that another fills in.
 	// A genuine conflict (two different products on one port) is rare and keeps the
 	// existing value rather than clobbering — surfacing it is a future enhancement.
-	changed = fillStr(&dst.Name, src.Name) || changed
-	changed = fillStr(&dst.Product, src.Product) || changed
-	changed = fillStr(&dst.Version, src.Version) || changed
-	changed = fillStr(&dst.ExtraInfo, src.ExtraInfo) || changed
-	changed = fillStr(&dst.Method, src.Method) || changed
-	changed = fillStr(&dst.DeviceType, src.DeviceType) || changed
-	changed = fillStr(&dst.Hostname, src.Hostname) || changed
-	changed = fillStr(&dst.OSType, src.OSType) || changed
-	changed = fillStr(&dst.RPCNum, src.RPCNum) || changed
-	changed = fillStr(&dst.ServiceFP, src.ServiceFP) || changed
-	changed = fillStr(&dst.Tunnel, src.Tunnel) || changed
-	changed = fillStr(&dst.LowVersion, src.LowVersion) || changed
-	changed = fillStr(&dst.HighVersion, src.HighVersion) || changed
+	changed = util.Fill(&dst.Name, src.Name) || changed
+	changed = util.Fill(&dst.Product, src.Product) || changed
+	changed = util.Fill(&dst.Version, src.Version) || changed
+	changed = util.Fill(&dst.ExtraInfo, src.ExtraInfo) || changed
+	changed = util.Fill(&dst.Method, src.Method) || changed
+	changed = util.Fill(&dst.DeviceType, src.DeviceType) || changed
+	changed = util.Fill(&dst.Hostname, src.Hostname) || changed
+	changed = util.Fill(&dst.OSType, src.OSType) || changed
+	changed = util.Fill(&dst.RPCNum, src.RPCNum) || changed
+	changed = util.Fill(&dst.ServiceFP, src.ServiceFP) || changed
+	changed = util.Fill(&dst.Tunnel, src.Tunnel) || changed
+	changed = util.Fill(&dst.LowVersion, src.LowVersion) || changed
+	changed = util.Fill(&dst.HighVersion, src.HighVersion) || changed
 
 	// Provenance union: a service reported by several tools accrues each tool's Source.
 	if merged, grew := provenance.MergeSources(dst.Sources, src.Sources); grew {
@@ -379,18 +380,4 @@ func scriptKey(s *nmap.Script) string {
 	}
 	sum := sha256.Sum256([]byte(s.Name + "\x00" + strings.TrimSpace(s.Output)))
 	return hex.EncodeToString(sum[:])
-}
-
-//
-// Small field-class helpers --------------------------------------------------
-//
-
-// fillStr writes src into *dst only if *dst is empty and src is not (the fill-only
-// rule). Mirrors credential/merge.go's fill so the two domains behave identically.
-func fillStr(dst *string, src string) bool {
-	if *dst == "" && src != "" {
-		*dst = src
-		return true
-	}
-	return false
 }

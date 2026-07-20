@@ -20,6 +20,7 @@ package credential
 
 import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
+	"github.com/d3c3ptive/aims/internal/util"
 	"github.com/d3c3ptive/aims/provenance"
 )
 
@@ -43,13 +44,13 @@ func MergeCore(dst, src *credential.CoreORM) (changed bool) {
 
 	// Public: fill-only Claims/Data.
 	if dst.Public != nil && src.Public != nil {
-		changed = fill(&dst.Public.Claims, src.Public.Claims) || changed
-		changed = fill(&dst.Public.Data, src.Public.Data) || changed
+		changed = util.Fill(&dst.Public.Claims, src.Public.Claims) || changed
+		changed = util.Fill(&dst.Public.Data, src.Public.Data) || changed
 	}
 
 	// Private: fill-only JTRFormat (a cracker may identify the format after the fact).
 	if dst.Private != nil && src.Private != nil {
-		changed = fill(&dst.Private.JTRFormat, src.Private.JTRFormat) || changed
+		changed = util.Fill(&dst.Private.JTRFormat, src.Private.JTRFormat) || changed
 	}
 
 	// Sources: union — accumulate src's contributions that dst does not already carry, so
@@ -60,13 +61,4 @@ func MergeCore(dst, src *credential.CoreORM) (changed bool) {
 	}
 
 	return changed
-}
-
-// fill writes src into *dst only if *dst is empty and src is not (the fill-only rule).
-func fill(dst *string, src string) bool {
-	if *dst == "" && src != "" {
-		*dst = src
-		return true
-	}
-	return false
 }

@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/d3c3ptive/aims/c2/pb"
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
+	"github.com/d3c3ptive/aims/internal/db"
 )
 
 type channelServer struct {
@@ -21,11 +22,11 @@ func NewChannelServer(db *gorm.DB) *channelServer {
 }
 
 func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest) (*c2.CreateChannelResponse, error) {
-	var channelsORM []pb.ChannelORM
+	var channelsORM []*pb.ChannelORM
 
 	for _, h := range req.GetChannels() {
 		horm, _ := h.ToORM(ctx)
-		channelsORM = append(channelsORM, horm)
+		channelsORM = append(channelsORM, &horm)
 	}
 
 	// TODO: filter channels to add according to AIMS criteria first (dedup on
@@ -33,16 +34,11 @@ func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest
 	// additive insert of the incoming channels.
 	err := s.db.Create(&channelsORM).Error
 
-	var chanspb []*pb.Channel
-	for _, horm := range channelsORM {
-		hpb, _ := horm.ToPB(ctx)
-		chanspb = append(chanspb, &hpb)
+	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, channelsORM)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.CreateChannelResponse{Channels: chanspb}
-
-	return res, err
+	return &c2.CreateChannelResponse{Channels: chanspb}, err
 }
 
 func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*c2.ReadChannelResponse, error) {
@@ -56,16 +52,11 @@ func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*
 	chans := []*pb.ChannelORM{}
 	err = s.db.Where(cred).First(&chans).Error
 
-	chanspb := []*pb.Channel{}
-	for _, cred := range chans {
-		pb, _ := cred.ToPB(ctx)
-		chanspb = append(chanspb, &pb)
+	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, chans)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.ReadChannelResponse{Channels: chanspb}
-
-	return res, err
+	return &c2.ReadChannelResponse{Channels: chanspb}, err
 }
 
 func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*c2.ReadChannelResponse, error) {
@@ -79,16 +70,11 @@ func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*
 	chans := []*pb.ChannelORM{}
 	err = s.db.Where(cred).Find(&chans).Error
 
-	chanspb := []*pb.Channel{}
-	for _, cred := range chans {
-		pb, _ := cred.ToPB(ctx)
-		chanspb = append(chanspb, &pb)
+	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, chans)
+	if convErr != nil {
+		return nil, convErr
 	}
-
-	// Response
-	res := &c2.ReadChannelResponse{Channels: chanspb}
-
-	return res, err
+	return &c2.ReadChannelResponse{Channels: chanspb}, err
 }
 
 func (s *channelServer) Upsert(context.Context, *c2.UpsertChannelRequest) (*c2.UpsertChannelResponse, error) {

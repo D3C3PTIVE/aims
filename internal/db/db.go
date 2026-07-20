@@ -19,21 +19,54 @@ package db
 */
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// Preload loads a given database with preload hosts association clauses before querying.
+// Preload loads a database with the base clause.Associations preload plus every association named
+// with a true value in filts (a false entry is skipped, so callers can gate a preload on a request
+// flag). It is the map-driven form used when the set of associations is conditional; PreloadAll is
+// the plainer variadic form for the unconditional case.
 func Preload(database *gorm.DB, filts map[string]bool) *gorm.DB {
-	preloaded := database.Preload(clause.Associations)
-
+	names := make([]string, 0, len(filts))
 	for name, load := range filts {
-		if !load {
-			continue
+		if load {
+			names = append(names, name)
 		}
+	}
+	return PreloadAll(database, names...)
+}
 
+// PreloadAll loads a database with the base clause.Associations preload plus each named
+// association, unconditionally. It is the single place association preloading is expressed, so the
+// per-domain servers do not each re-implement the clause.Associations + range loop.
+func PreloadAll(database *gorm.DB, names ...string) *gorm.DB {
+	preloaded := database.Preload(clause.Associations)
+	for _, name := range names {
 		preloaded = preloaded.Preload(name)
 	}
-
 	return preloaded
+}
+
+// pbConvertible is anything the ORM layer can turn into its protobuf twin: every *ORM type emitted
+// by protoc-gen-gorm carries a ToPB(ctx) (PB, error). P is the protobuf value type.
+type pbConvertible[P any] interface {
+	ToPB(context.Context) (P, error)
+}
+
+// ToPBs converts a slice of ORM rows to pointers to their protobuf twins, returning the first
+// conversion error rather than swallowing it. It replaces the identical ORM→PB range loop the
+// domain servers each hand-rolled (and which discarded the ToPB error with `pb, _ :=`).
+func ToPBs[O pbConvertible[P], P any](ctx context.Context, in []O) ([]*P, error) {
+	out := make([]*P, 0, len(in))
+	for _, o := range in {
+		p, err := o.ToPB(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, &p)
+	}
+	return out, nil
 }

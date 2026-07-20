@@ -23,6 +23,17 @@ import (
 	"time"
 )
 
+// Fill writes src into *dst only if *dst is empty and src is not, returning whether it wrote.
+// This is the fill-only merge rule shared by every domain's field-class merge: a known value is
+// never clobbered by an empty one. Callers OR the result into their `changed` accumulator.
+func Fill(dst *string, src string) bool {
+	if *dst == "" && src != "" {
+		*dst = src
+		return true
+	}
+	return false
+}
+
 // FormatDateDelta - Generate formatted date string of the time delta between then and now.
 func FormatDateDelta(t time.Time, includeDate bool, color bool) string {
 	const (
