@@ -165,8 +165,8 @@ The companion docs carry the detail:
 
 ## Building & regenerating
 
-- **Canonical module path:** `github.com/d3c3ptive/aims`. (The local checkout may sit under
-  `maxlandon/aims`; that path is being migrated away — always use `d3c3ptive` imports.)
+- **Canonical module path:** `github.com/d3c3ptive/aims` — module, remote, and local checkout are
+  all on `d3c3ptive`. Always use `d3c3ptive` imports.
 - **Build / vet:** `go build ./...` — deps are published (no local replaces). First build pulls
   a large tree (gRPC, teamserver, nmap fork) — expect a slow initial download.
 - **Optional build tags:** `-tags maltego` enables the `AsEntity()` Maltego integration;

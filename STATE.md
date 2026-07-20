@@ -117,6 +117,6 @@ Verified 2026-07-20 against source. CLAUDE.md's table carries the same status wi
 - Codegen config lives at the **repo root**, not `proto/`: `buf.yaml`, `buf.lock`,
   `buf.work.yaml`, `buf.gen-gorm.yaml`, `buf.gen-grpc.yaml`, `maltego-tags.sh`, and the
   gotemplate under `proto/template/`. `make gen` runs `buf generate` (×2) + `maltego-tags.sh`.
-- Canonical module path: **`github.com/d3c3ptive/aims`** (repo migrating to the `d3c3ptive`
-  GitHub org; the `maxlandon` checkout path is going away). Note the `maxlandon/gondor` *dep*
-  is a separate repo and part of the same namespace-migration question.
+- Canonical module path: **`github.com/d3c3ptive/aims`** (module, GitHub remote, and local
+  checkout all on `d3c3ptive`). Note the `maxlandon/gondor` *dep* is a separate repo and the last
+  remaining `maxlandon` trace — part of the same namespace-migration question.

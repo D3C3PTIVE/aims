@@ -125,11 +125,11 @@ gives multi-user auth, transports, and RPC plumbing for free.
 
 ## Build / regenerate
 
-- **Canonical module path is `github.com/d3c3ptive/aims`.** The local checkout currently sits
-  under `.../maxlandon/aims`, but the repo is being migrated to the `d3c3ptive` GitHub org and
-  the `maxlandon` path is going away — always use `d3c3ptive` import paths. (One dependency,
-  `github.com/maxlandon/gondor` used for the Maltego integration, is still `maxlandon`-namespaced;
-  it is a *separate* repo and would need its own migration/replacement decision.)
+- **Canonical module path is `github.com/d3c3ptive/aims`.** Module path, GitHub remote, and the
+  local checkout (`.../d3c3ptive/aims`) are all on `d3c3ptive` now — always use `d3c3ptive` import
+  paths. (One dependency, `github.com/maxlandon/gondor` used for the Maltego integration, is still
+  `maxlandon`-namespaced; it is a *separate* repo and would need its own migration/replacement
+  decision — the last remaining `maxlandon` trace.)
 - **Codegen config lives at the repo ROOT** (not in `proto/`): `buf.yaml`, `buf.lock`,
   `buf.work.yaml`, `buf.gen-gorm.yaml`, `buf.gen-grpc.yaml`, `maltego-tags.sh`, plus the
   gotemplate under `proto/template/{{.File.Name|dir}}/{{.File.Name|base}}.gorm.go.tmpl`

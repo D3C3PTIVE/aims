@@ -97,9 +97,9 @@ The command tree, flags, and completions exist, but several handlers are no-ops.
 
 ## Cross-cutting workstreams (do alongside the phases)
 
-- **Org migration to `d3c3ptive`.** Module path is already `github.com/d3c3ptive/aims`
-  (good). When the GitHub repo moves: verify `buf.gen-*.yaml` `go_package_prefix` (already
-  `d3c3ptive`), and resolve the **`maxlandon/gondor`** dependency (fork to `d3c3ptive/gondor`
+- **Org migration to `d3c3ptive`.** Done: module path, GitHub remote, and local checkout are all
+  `d3c3ptive` (aims and the nmap fork both relocated); `buf.gen-*.yaml` `go_package_prefix` is
+  `d3c3ptive`. Remaining: resolve the **`maxlandon/gondor`** dependency (fork to `d3c3ptive/gondor`
   or drop) so no `maxlandon` trace remains — this dovetails with Phase 0 option (B).
 - **Testing.** Growing from a small base. Done so far: the host ingest tests
   (`server/host/host_test.go`, Create/Upsert dedup+merge against the server struct) and an

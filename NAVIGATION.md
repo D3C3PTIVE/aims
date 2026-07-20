@@ -161,8 +161,8 @@ is tagged). Background: memory `[[aims-team-transport-factoring]]`.
 
 ## Gotchas worth knowing before you touch anything
 
-- **Canonical import path is `github.com/d3c3ptive/aims`** even though the checkout sits under
-  `maxlandon/aims` (org migration in progress). Always write `d3c3ptive` imports.
+- **Canonical import path is `github.com/d3c3ptive/aims`** — module, remote, and local checkout
+  (`d3c3ptive/aims`) are all on `d3c3ptive`. Always write `d3c3ptive` imports.
 - **Plain `go build` works** — all deps are pinned to published versions (no local replaces). A
   git-ignored local `go.work` (`use .`) at the repo root shadows any ancestor workspace on the dev
   machine, so the build resolves against this module's `go.mod` directly.
