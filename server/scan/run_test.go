@@ -23,6 +23,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -104,4 +105,83 @@ func TestRunUnknownScanner(t *testing.T) {
 	if err := s.Run(&scanrpcpb.RunScanRequest{Scanner: "nope"}, stream); err == nil {
 		t.Error("Run with unknown scanner should error")
 	}
+}
+
+// TestJobsAttachStopLive exercises the job model against ONE persistent server instance — the
+// piece the all-in-one CLI can't cover (its per-command teamserver is ephemeral). A background
+// scan of an unreachable host stays running long enough to: appear in Jobs, be re-followed by
+// Attach, and be cancelled by Stop (after which it is no longer running). Guarded (needs nmap).
+func TestJobsAttachStopLive(t *testing.T) {
+	if os.Getenv("AIMS_NMAP_IT") == "" {
+		t.Skip("set AIMS_NMAP_IT=1 to run (requires the nmap binary)")
+	}
+
+	s, _, _ := newTestServer(t)
+
+	// Detached scan of a TEST-NET address that drops packets, so nmap sits waiting (bounded by
+	// --host-timeout as a backstop) and the job is observably running across the calls below.
+	fg := &fakeRunStream{ctx: context.Background()}
+	err := s.Run(&scanrpcpb.RunScanRequest{
+		Scanner:    "nmap",
+		Args:       []string{"-sT", "-p", "1-50", "--host-timeout", "20s"},
+		Targets:    []*scanpb.Target{{Address: "192.0.2.1"}},
+		Background: true,
+	}, fg)
+	if err != nil {
+		t.Fatalf("Run (background): %v", err)
+	}
+
+	fg.mu.Lock()
+	jobID := fg.updates[0].GetJobId()
+	fg.mu.Unlock()
+	if jobID == "" {
+		t.Fatal("background Run should emit a JobId frame")
+	}
+
+	// Jobs lists it as running.
+	if !jobListed(t, s, jobID) {
+		t.Fatalf("job %s not listed as running", jobID)
+	}
+
+	// Attach re-follows the stream; it returns once the job ends (i.e. after Stop).
+	att := &fakeRunStream{ctx: context.Background()}
+	attachDone := make(chan error, 1)
+	go func() { attachDone <- s.Attach(&scanrpcpb.AttachRequest{JobId: jobID}, att) }()
+
+	// Stop cancels the job.
+	stopRes, err := s.Stop(context.Background(), &scanrpcpb.StopRequest{JobId: jobID})
+	if err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if !stopRes.GetStopped() {
+		t.Error("Stop should report Stopped=true for a running job")
+	}
+
+	select {
+	case err := <-attachDone:
+		if err != nil {
+			t.Errorf("Attach returned error: %v", err)
+		}
+	case <-time.After(25 * time.Second):
+		t.Fatal("Attach did not return after Stop")
+	}
+
+	// After Stop, the job is no longer running.
+	if jobListed(t, s, jobID) {
+		t.Errorf("job %s still listed as running after Stop", jobID)
+	}
+}
+
+func jobListed(t *testing.T, s *server, jobID string) bool {
+	t.Helper()
+	res, err := s.Jobs(context.Background(), &scanrpcpb.JobsRequest{})
+	if err != nil {
+		t.Fatalf("Jobs: %v", err)
+	}
+	for _, j := range res.GetJobs() {
+		if j.GetId() == jobID {
+			return true
+		}
+	}
+	return false
 }
