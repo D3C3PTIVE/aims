@@ -19,20 +19,11 @@ package scan
 */
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
-	"github.com/d3c3ptive/aims/cmd/display"
-	hostpb "github.com/d3c3ptive/aims/host/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
@@ -63,8 +54,11 @@ func runNmapCommand(con *client.Client) *cobra.Command {
 		Long: "Run an nmap scan by passing arguments straight through to nmap. The scan runs on the\n" +
 			"teamserver and streams back; everything after `nmap` is forwarded verbatim (no `--`):\n\n" +
 			"    aims scan run nmap -sT -sV -p1-1000 scanme.nmap.org\n\n" +
-			"Foreground by default (Ctrl-C detaches; the scan keeps running). Add --background to\n" +
-			"submit and return immediately. XML output is added automatically; results are stored.",
+			"Foreground by default: a live dashboard (progress bar + hosts as they are found) when\n" +
+			"stdout is a terminal, a plain line log when piped. Ctrl-C detaches (the scan keeps\n" +
+			"running). aims-owned flags: --background submit and return with a job id; --quiet print\n" +
+			"only the final summary; --json stream each update as a line of JSON (ndjson). XML output\n" +
+			"is added automatically; results are stored.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
 			return runNmap(command, con, args)
@@ -90,8 +84,10 @@ func runMasscanCommand(con *client.Client) *cobra.Command {
 		Long: "Run a masscan scan by passing arguments straight through to masscan. The scan runs on\n" +
 			"the teamserver and streams back; everything after `masscan` is forwarded verbatim:\n\n" +
 			"    aims scan run masscan -p1-65535 --rate 10000 10.0.0.0/24\n\n" +
-			"Foreground by default (Ctrl-C detaches; the scan keeps running). Add --background to\n" +
-			"submit and return immediately. XML output is added automatically; results are stored.",
+			"Foreground by default: a live dashboard when stdout is a terminal, a plain line log when\n" +
+			"piped. Ctrl-C detaches (the scan keeps running). aims-owned flags: --background (job id +\n" +
+			"return), --quiet (final summary only), --json (ndjson stream). XML output is added\n" +
+			"automatically; results are stored.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
 			return runScanner(command, con, "masscan", args)
@@ -118,91 +114,33 @@ func runScanner(command *cobra.Command, con *client.Client, scanner string, args
 		return command.Help()
 	}
 
-	// --background/--detach is aims-owned. With DisableFlagParsing on there is no cobra flag to
-	// bind, so strip it by hand (long form only — a scanner's -d may mean something else) and
-	// forward everything else verbatim.
-	background := false
+	// --background/--detach, --quiet and --json are aims-owned. With DisableFlagParsing on there is
+	// no cobra flag to bind, so strip them by hand (long form only — a scanner's short flags may
+	// mean something else) and forward everything else verbatim.
+	opts := streamOpts{scanner: scanner}
 	scanArgs := make([]string, 0, len(args))
 	for _, a := range args {
 		switch a {
 		case "--background", "--detach":
-			background = true
+			opts.background = true
+		case "--quiet":
+			opts.quiet = true
+		case "--json", "--ndjson":
+			opts.json = true
 		default:
 			scanArgs = append(scanArgs, a)
 		}
 	}
+	opts.args = scanArgs
 
 	stream, err := con.Scans.Run(command.Context(), &scans.RunScanRequest{
 		Scanner:    scanner,
 		Args:       scanArgs,
-		Background: background,
+		Background: opts.background,
 	})
 	if err = aims.CheckError(err); err != nil {
 		return err
 	}
 
-	return streamScan(stream, background)
-}
-
-// updateReceiver is the common receive side of the Run and Attach client streams, so one
-// renderer serves both `scan run` and `scan attach`.
-type updateReceiver interface {
-	Recv() (*scans.RunUpdate, error)
-}
-
-// streamScan renders a running scan's RunUpdate frames. Foreground: progress + hosts as they are
-// found, then the stored result. Background: print the job id and return (the server keeps
-// running). Ctrl-C cancels the client context, which the server treats as a detach — the scan
-// keeps running and can be re-followed with `scan attach`.
-func streamScan(stream updateReceiver, background bool) error {
-	for {
-		update, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
-				fmt.Println("\nDetached; the scan keeps running (see `scan jobs`).")
-				return nil
-			}
-			return aims.CheckError(err)
-		}
-
-		switch u := update.GetUpdate().(type) {
-		case *scans.RunUpdate_JobId:
-			if background {
-				fmt.Printf("Scan job %s started (running in background).\n", display.FormatSmallID(u.JobId))
-				return nil
-			}
-			fmt.Printf("Scan job %s — Ctrl-C detaches (the scan keeps running).\n", display.FormatSmallID(u.JobId))
-		case *scans.RunUpdate_Progress:
-			p := u.Progress
-			fmt.Printf("\r  %-28s %5.1f%%   ", p.GetTask(), p.GetPercent())
-		case *scans.RunUpdate_Host:
-			fmt.Printf("\r[+] %-60s\n", hostLine(u.Host))
-		case *scans.RunUpdate_Final:
-			saved := u.Final
-			fmt.Printf("\nScan complete: %s — %d host(s) stored.\n",
-				display.FormatSmallID(saved.GetId()), len(saved.GetHosts()))
-			return nil
-		case *scans.RunUpdate_Error:
-			return fmt.Errorf("scan error: %s", u.Error)
-		}
-	}
-}
-
-func hostLine(h *hostpb.Host) string {
-	label := "?"
-	if len(h.GetAddresses()) > 0 && h.GetAddresses()[0].GetAddr() != "" {
-		label = h.GetAddresses()[0].GetAddr()
-	} else if len(h.GetHostnames()) > 0 {
-		label = h.GetHostnames()[0].GetName()
-	}
-	open := 0
-	for _, p := range h.GetPorts() {
-		if p.GetState().GetState() == "open" {
-			open++
-		}
-	}
-	return fmt.Sprintf("%s (%d open port(s))", label, open)
+	return renderScan(stream, opts)
 }

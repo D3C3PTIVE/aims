@@ -71,7 +71,7 @@ func attachCommand(con *client.Client) *cobra.Command {
 			if err = aims.CheckError(err); err != nil {
 				return err
 			}
-			return streamScan(stream, false)
+			return renderScan(stream, streamOpts{scanner: "attach " + display.FormatSmallID(id)})
 		},
 	}
 	carapace.Gen(cmd).PositionalCompletion(completeJobs(con))
