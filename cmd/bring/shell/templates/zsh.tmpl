@@ -49,6 +49,23 @@ if [[ -z "${_aims_saved_rprompt+set}" ]]; then
     typeset -g _aims_saved_rprompt="${RPROMPT-}"
 fi
 
+# _aims_server_palette: the colors the server segment is tinted with, picked by a stable hash of the
+# version so each server/version keeps its own consistent, distinguishable color — you can tell which
+# teamserver you're on at a glance. Cyan (6) is deliberately absent: the scan segment owns it.
+typeset -ga _aims_server_palette=(2 5 4 3 208 129)
+
+# _aims_hash_index maps a string to a 1-based index into _aims_server_palette by summing its character
+# codes — pure zsh, no subprocess. It is stable for a given string, so the color changes only when the
+# version does. The result is returned in $REPLY (zsh out-param convention) to avoid a fork per poll.
+_aims_hash_index() {
+    local s="$1" i sum=0 c
+    for (( i = 1; i <= ${#s}; i++ )); do
+        c="$s[i]"
+        (( sum += #c ))
+    done
+    (( REPLY = sum % $#_aims_server_palette + 1 ))
+}
+
 # _aims_prompt_poll refreshes the cached server/scan figures (throttled) and rebuilds RPROMPT.
 # Registered as a precmd hook, it runs before each prompt; between polls it just re-renders the cache.
 _aims_prompt_poll() {
@@ -78,20 +95,26 @@ _aims_prompt_poll() {
             local scans="${line%%$'\t'*}" rest="${line#*$'\t'}"
             local ver="${rest%%$'\t'*}" conn="${rest##*$'\t'}"
             [[ "$scans" == <-> ]] && typeset -g _aims_scan_count="$scans"
-            [[ "$ver" == <->.<->.<-> ]] && typeset -g _aims_server_version="$ver"
+            if [[ "$ver" == <->.<->.<-> ]]; then
+                typeset -g _aims_server_version="$ver"
+                # Tint follows the version: recompute the palette index only when a version parses.
+                _aims_hash_index "$ver"
+                typeset -g _aims_server_color="${_aims_server_palette[REPLY]}"
+            fi
             [[ "$conn" == <-> ]] && typeset -g _aims_server_conn="$conn"
         fi
     fi
 
     local seg=""
     if (( server_on )) && [[ -n "${_aims_server_version-}" ]]; then
-        # Server identity, always shown while connected: "aims v0.4.0", plus the connected-operator
-        # count, labelled so a bare number never floats unexplained: "·2 ops" (singular "·1 op").
-        seg="%F{green}aims v${_aims_server_version}%f"
+        # Server identity, always shown while connected: "aims v0.4.0", tinted with the version-derived
+        # color so each server looks distinct. The operator count follows in a muted grey — labelled so
+        # a bare number never floats unexplained: "·2 ops" (singular "·1 op").
+        seg="%F{${_aims_server_color:-green}}aims v${_aims_server_version}%f"
         if [[ -n "${_aims_server_conn-}" ]]; then
             local onoun=ops
             (( _aims_server_conn == 1 )) && onoun=op
-            seg="${seg} %F{green}·${_aims_server_conn} ${onoun}%f"
+            seg="${seg} %F{244}·${_aims_server_conn} ${onoun}%f"
         fi
         seg="${seg} "
     fi

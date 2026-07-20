@@ -428,6 +428,45 @@ func TestZshServerIndicatorDisabled(t *testing.T) {
 	}
 }
 
+// serverColor extracts the `%F{...}` color token immediately preceding the "aims v" server segment,
+// so a test can assert how that segment is tinted without hardcoding the palette.
+func serverColor(rprompt string) string {
+	i := strings.Index(rprompt, "aims v")
+	if i < 0 {
+		return ""
+	}
+	prefix := rprompt[:i]
+	j := strings.LastIndex(prefix, "%F{")
+	if j < 0 {
+		return ""
+	}
+	end := strings.Index(prefix[j:], "}")
+	if end < 0 {
+		return ""
+	}
+	return prefix[j : j+end+1]
+}
+
+// TestZshServerColorVariesByVersion checks the server segment is tinted with a color derived from the
+// version, so two different versions render in different colors (stable per version).
+func TestZshServerColorVariesByVersion(t *testing.T) {
+	color := func(ver string) string {
+		t.Setenv("AIMS_TEST_SERVER_VERSION", ver)
+		t.Setenv("AIMS_TEST_SERVER_CONN", "1")
+		r, _ := runZshScript(t, nil, `RPROMPT='%~'`+"\n"+promptPollRunner)
+		c := serverColor(r["RPROMPT"])
+		if c == "" {
+			t.Fatalf("version %s: no %%F{...} color found before 'aims v' in RPROMPT %q", ver, r["RPROMPT"])
+		}
+		return c
+	}
+
+	// Two versions whose character sums land on different palette slots.
+	if a, b := color("0.4.0"), color("0.5.1"); a == b {
+		t.Errorf("server color did not vary by version: both %q rendered as %q", "0.4.0/0.5.1", a)
+	}
+}
+
 // TestZshPromptCombined checks both right-prompt segments render together from a single poll: the
 // server identity + operators followed by the running-scan indicator.
 func TestZshPromptCombined(t *testing.T) {
