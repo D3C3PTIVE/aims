@@ -23,11 +23,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/d3c3ptive/aims/cmd/agentctx"
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
 )
+
+// TestGuard: a panicking completion callback must not escape guard — it degrades to a message so the
+// _carapace subprocess never crashes and hangs the shell.
+func TestGuard(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("guard let a panic escape the callback: %v", r)
+		}
+	}()
+	cb := guard("test", func(carapace.Context) carapace.Action {
+		panic("boom")
+	})
+	_ = cb(carapace.Context{}) // must return an action, not panic
+}
 
 // A faithful slice of nmap's real script.db format.
 const scriptDBSample = `Entry { filename = "acarsd-info.nse", categories = { "discovery", "safe", } }
