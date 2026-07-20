@@ -34,7 +34,7 @@ Three modes:
 
 ## Measured numbers
 
-`GOWORK=off go test -run xxx -bench=BenchmarkCompleteHosts ./cmd/aims/` — run below at
+`go test -run xxx -bench=BenchmarkCompleteHosts ./cmd/aims/` — run below at
 `-benchtime=10x` on an AMD Ryzen AI 9 HX 370 (pure-Go wasm sqlite, in-memory DB):
 
 ```

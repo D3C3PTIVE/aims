@@ -99,7 +99,7 @@ Key responsibilities to know about:
 | `internal/db/` | Generic persistence helpers: `FilterNew[T]` (dedup on insert), `Preload` (build association preload clauses from a filter map), per-domain `identical.go` comparators. The shared primitive the ingest fold reuses. |
 | `internal/util/` | Small shared utilities. |
 | `proto/` | **Codegen *support*, not the defs** (defs live in each `<domain>/pb/`). `proto/options/gorm.proto` (the `(gorm.field)` relation options), `proto/types/`, the `proto/template/…gorm.go.tmpl` gotemplate that emits the DB-helper files, and `proto/README.md`. The buf configs themselves are at the **repo root** (`buf.*.yaml`). |
-| `contrib/` | Deploy tooling: `contrib/systemd/aims-teamserver.service` (systemd **user** unit) and `contrib/qubes/` (qrexec install service + README) for running the teamserver as a persistent service in a Qubes AppVM. |
+| `contrib/` | Deploy tooling: `contrib/systemd/aims-teamserver.service` (systemd **user** unit) for running the teamserver as a persistent service. |
 | `testdata/` | Fixtures (nmap XML, etc.) for ingest/roundtrip tests. |
 
 ## Boot mode: client vs. server
@@ -139,7 +139,7 @@ is tagged). Background: memory `[[aims-team-transport-factoring]]`.
 | Change transport/auth/mTLS | **`reeflective/team/transports/grpc/`** (not in this repo); aims-side wiring in `server/transport/server.go` + `client/client.go` |
 | Change client-vs-server boot behavior | `cmd/aims/root.go` + `reeflective/team/boot` |
 | Regenerate code from proto | `make gen` (buf ×2 + `protoc-go-inject-tag`); root `buf.*.yaml`; deps via `make deps` |
-| Build / run | `GOWORK=off go build -o aims ./cmd/aims` (the `go.work` context needs `GOWORK=off`) |
+| Build / run | `go build -o aims ./cmd/aims` (deps published; a git-ignored local `go.work` shadows any ancestor workspace) |
 
 ## Documentation index
 
@@ -158,13 +158,14 @@ is tagged). Background: memory `[[aims-team-transport-factoring]]`.
 | [`BRING.md`](./BRING.md) | Sourcing a C2 agent context into the shell |
 | `server/transport/README.md` | Teamserver construction + boot helpers |
 | `proto/README.md` · `cmd/completers/COMPLETERS.md` · `cmd/aims/BENCH_COMPLETIONS.md` | Package-local notes |
-| `contrib/qubes/README.md` | Qubes teamserver deploy tooling |
 
 ## Gotchas worth knowing before you touch anything
 
 - **Canonical import path is `github.com/d3c3ptive/aims`** even though the checkout sits under
   `maxlandon/aims` (org migration in progress). Always write `d3c3ptive` imports.
-- **`GOWORK=off` is mandatory** — the repo is intentionally excluded from the `go.work` context.
+- **Plain `go build` works** — all deps are pinned to published versions (no local replaces). A
+  git-ignored local `go.work` (`use .`) at the repo root shadows any ancestor workspace on the dev
+  machine, so the build resolves against this module's `go.mod` directly.
 - **Optional build tags:** `-tags maltego` (the `AsEntity()` integration; gondor dep still
   broken) and `-tags tailscale` (tsnet transport; breaks under new Go toolchains). Both off by
   default.

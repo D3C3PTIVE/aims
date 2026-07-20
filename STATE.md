@@ -32,7 +32,7 @@ CLI/display/completion polish pass. See CLAUDE.md for the live per-domain detail
 
 The original gondor/maltego blocker is resolved (isolated behind a build tag), along with a
 cascade of ~1-year dependency drift it was masking, and the `reeflective/team` v0.3.2 migration
-is done. Current state of `GOWORK=off go build ./...`:
+is done. Current state of `go build ./...`:
 
 - ✅ **The whole tree builds — including `cmd/aims`.** Every domain (`host`, `network`,
   `credential`, `scan/nmap`, `c2`), the generated `pb` layer, all per-domain gRPC servers, the

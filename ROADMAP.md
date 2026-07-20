@@ -26,7 +26,7 @@
 The tree builds and the `aims` binary runs. gondor/maltego was isolated behind `//go:build
 maltego` (option A) and the Tailscale transport behind `//go:build tailscale`; the
 `reeflective/team` v0.3.2 migration and the ~1-year dependency drift it masked are resolved.
-`GOWORK=off go build ./...` is green; `make build`/`make install` recipes exist. (Deferred: a
+`go build ./...` is green; `make build`/`make install` recipes exist. (Deferred: a
 fixed `d3c3ptive/gondor` fork to make Maltego always-on — folds into the org migration below.)
 
 ### Phase 1 — Correctness & hygiene sweep ✅ DONE

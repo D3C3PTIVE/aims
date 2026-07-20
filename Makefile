@@ -21,15 +21,15 @@ K := $(foreach exec,$(EXECUTABLES),\
 
 .PHONY: build
 build:
-	# Build the aims binary. GOWORK=off is required because this module is
-	# commented out of the surrounding go.work (plain `go build` errors).
-	GOWORK=off $(GO) build -o aims ./cmd/aims
+	# Build the aims binary. All deps are published (no local replaces), so a
+	# plain build works. On a machine with an ancestor go.work that excludes
+	# this module, a local go.work (`use .`, git-ignored) shadows it.
+	$(GO) build -o aims ./cmd/aims
 
 .PHONY: install
 install:
-	# Install the aims binary into $(GOBIN) (or $(GOPATH)/bin). GOWORK=off is
-	# required for the same reason as build.
-	GOWORK=off $(GO) install ./cmd/aims
+	# Install the aims binary into $(GOBIN) (or $(GOPATH)/bin).
+	$(GO) install ./cmd/aims
 
 .PHONY: deps
 deps:

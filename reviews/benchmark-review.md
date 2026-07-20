@@ -1,7 +1,7 @@
 # Benchmark health & new-benchmark design — AIMS
 
 > 2026-07-20. Numbers captured from live runs on `dev`@`8b2c9f5`
-> (`GOWORK=off go test -bench . -benchmem`, machine has 4 cores → `-4` suffix).
+> (`go test -bench . -benchmem`, machine has 4 cores → `-4` suffix).
 > The benchmark agent was stopped mid-run (disk pressure); the measurements below were
 > captured before the stop, and the design section reflects the code it inspected.
 >

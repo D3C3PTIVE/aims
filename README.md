@@ -17,18 +17,18 @@ It ships as three things at once:
 
 > **Status.** The data model and generated layer are mature. The user-facing server/CLI is a
 > vertical slice that fills out domain by domain — see the [status matrix](#status) below and
-> [`STATE.md`](./STATE.md) for the live detail. `GOWORK=off go build ./...` builds the whole
+> [`STATE.md`](./STATE.md) for the live detail. A plain `go build ./...` builds the whole
 > tree and the `aims` binary runs.
 
 ---
 
 ## Quickstart
 
-**Requirements:** Go 1.24+. The repo lives under a `go.work` context, so build with `GOWORK=off`.
+**Requirements:** Go 1.24+. All dependencies are pinned to published versions, so a plain build works.
 
 ```sh
 # Build the binary
-GOWORK=off go build -o aims ./cmd/aims
+go build -o aims ./cmd/aims
 
 # The binary is a self-contained teamserver + in-process client + CLI.
 # First run migrates the embedded database automatically.
@@ -167,8 +167,8 @@ The companion docs carry the detail:
 
 - **Canonical module path:** `github.com/d3c3ptive/aims`. (The local checkout may sit under
   `maxlandon/aims`; that path is being migrated away — always use `d3c3ptive` imports.)
-- **Build / vet:** `GOWORK=off go build ./...` (the `go.work` context requires `GOWORK=off`).
-  First build pulls a large tree (gRPC, teamserver, nmap fork) — expect a slow initial download.
+- **Build / vet:** `go build ./...` — deps are published (no local replaces). First build pulls
+  a large tree (gRPC, teamserver, nmap fork) — expect a slow initial download.
 - **Optional build tags:** `-tags maltego` enables the `AsEntity()` Maltego integration;
   `-tags tailscale` enables the Tailscale transport. Both are opt-in and off by default.
 - **Regenerate from proto:** `make gen` (buf: go + gorm + gotemplate, then go-grpc, then

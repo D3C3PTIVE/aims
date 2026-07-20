@@ -27,7 +27,7 @@ installed and `make gen` works (the provenance `Source` field is present in gene
 `~/code/github.com/maxlandon/nmap`; a zgrab2 fork (JSON output) sits at
 `~/code/github.com/maxlandon/zgrab2` for the Phase-1 JSON→NSE demonstrator.
 
-Standing constraints: build with `GOWORK=off go build ./...`; run tests one package at a time with
+Standing constraints: build with `go build ./...`; run tests one package at a time with
 `GOFLAGS=-vet=off`; commit ONLY my own files (stage explicitly, never `git add -A` — other agents
 edit the tree concurrently); completions/commands reach data ONLY through the teamclient RPC, never
 the DB directly.
@@ -71,7 +71,7 @@ used** — its nmap-compatible XML teaches nothing over nmap; the leverage is th
   nested object/array/scalar JSON; and idempotence (ingest+fold the same bytes twice → host count
   stable). No external binary needed — ingest is bytes→Run, fixtures suffice.
 
-**Verify:** `GOWORK=off go build ./...`; `GOFLAGS=-vet=off go test ./scan/ingest/`.
+**Verify:** `go build ./...`; `GOFLAGS=-vet=off go test ./scan/ingest/`.
 
 ---
 
@@ -107,7 +107,7 @@ interface so a scanner can be run against them. `scan.Target{Address,Domain,Tag,
 and `scan/drive/scanner.go` (`Scanner` + `Nmap`, `scan/drive/scanner_test.go` covers the
 no-targets guard; the live nmap path needs the binary, deferred like `run_integration_test.go`).
 
-**Verify:** `GOWORK=off go build ./scan/ ./scan/drive/`; `go test ./scan/` and `./scan/drive/`.
+**Verify:** `go build ./scan/ ./scan/drive/`; `go test ./scan/` and `./scan/drive/`.
 
 ---
 

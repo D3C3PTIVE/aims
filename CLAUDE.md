@@ -8,7 +8,7 @@
 > [`SCAN.md`](./SCAN.md) — scan model & scanner-plug substrate ·
 > [`ROADMAP.md`](./ROADMAP.md) — re-entry plan.
 >
-> ✅ **Build status: the whole tree builds and the `aims` binary runs.** `GOWORK=off go build ./...`
+> ✅ **Build status: the whole tree builds and the `aims` binary runs.** A plain `go build ./...`
 > compiles every domain, the generated `pb` layer, all per-domain gRPC servers, `server/transport`,
 > the `client`, and all CLI packages including `cmd/aims`. The `maltego`/`gondor` blocker is gated
 > behind a `maltego` build tag and the heavy Tailscale transport (gvisor, breaks on Go 1.26) behind
@@ -141,11 +141,12 @@ gives multi-user auth, transports, and RPC plumbing for free.
     `./maltego-tags.sh` which runs `protoc-go-inject-tag` over every `*.pb.go` to apply the
     `// @gotags:` comments (xml/display/etc.). `managed.go_package_prefix` is pinned to
     `github.com/d3c3ptive/aims`.
-- Building: this working copy is inside a `go.work` context, so plain `go build ./...`
-  errors with *"directory prefix … does not contain modules listed in go.work"*. Use
-  **`GOWORK=off go build ./...`** (or `go vet`) to build against `go.mod` directly. First
-  build pulls a large tree (tailscale, gvisor, gRPC) — expect a slow initial `go mod download`.
-- Go 1.21. Deps resolve from the module cache (no `vendor/` present despite the README).
+- Building: a plain `go build ./...` (or `go vet`) works — all deps are pinned to published
+  versions in `go.mod` (no local `replace` directives). If a developer has an ancestor
+  `go.work` that excludes this module, a git-ignored local `go.work` (`use .`) at the repo root
+  shadows it. First build pulls a large tree (tailscale, gvisor, gRPC) — expect a slow initial
+  `go mod download`.
+- Go 1.24. Deps resolve from the module cache (no `vendor/` present despite the README).
 
 ## Current state (investigated 2026-07-19)
 

@@ -1,4 +1,13 @@
 
+# Go workspace file — a local one-module `use .` shadows any ancestor go.work on
+# the dev machine so a plain `go build` resolves against this module's go.mod.
+# Machine-local insulation, not source (per Go convention).
+go.work
+go.work.sum
+
 # Executables
 cmd/aims/aims
 /aims
+
+# Local Qubes deploy tooling (personal environment; kept out of the repo for now)
+contrib/qubes/

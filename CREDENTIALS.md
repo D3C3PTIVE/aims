@@ -306,7 +306,7 @@ the four-class merge engine (#3). Services then only declare their identity key 
 
 ## 9. Status (implemented 2026-07-19)
 
-Vertical slice built and green (`GOWORK=off go build ./...` on the core; 11 unit tests pass):
+Vertical slice built and green (`go build ./...` on the core; 11 unit tests pass):
 
 - `credential/identity.go` — value-identity per sub-entity, the `CoreIdentity` triple,
   `AreCredentialsIdentical`, `AbsorbsPartial`.
