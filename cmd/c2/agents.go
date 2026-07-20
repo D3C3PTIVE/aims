@@ -56,7 +56,7 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 			}
 
 			if len(res.GetAgents()) == 0 {
-				fmt.Printf("No c2 in database.\n")
+				fmt.Printf("No agents in database.\n")
 				return nil
 			}
 
