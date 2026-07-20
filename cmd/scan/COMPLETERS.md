@@ -58,10 +58,12 @@ Ordered by (reuse × completability × frequency), highest first.
    so ports open on the agent's host, then its subnet, float to the top ("what's open around here").
    Cached, cache key carries the agent id.
 
-3. **Credential secret** — `completeSecret(con)`. Freq ~23; reuse across every auth/brute tool
-   (hydra, medusa, NSE `*-brute`). AIMS's whole point is credential reuse, so offering known
-   passwords/hashes from the creds store is on-mission. Needs a creds-by-secret completer alongside
-   the existing by-username/by-id. Sensitive — gate on the same RPC path, never touch the DB direct.
+3. **Credential secret — ✅ BUILT** (`completeSecret`, run_complete.go). Wired into NSE
+   `*.password`/`*.passphrase` (new "secret" kind); reusable by any auth/brute tool. Offers the
+   plaintext secret as the value (that's the point of reuse — cf. Sliver's
+   GetPlaintextCredsByHashType), grouped by credential type (PrivateType), described by who it
+   belongs to. First `RelevanceOfHostID` consumer: credentials with a login on the agent's host
+   (via the Logins service) are promoted to the top. Cached, key carries the agent id.
 
 4. **Web URL / endpoint** — `completeWebURL(con)`. Highest frequency (~84) but hardest: synthesize
    `scheme://host:port/` from the DB's known **web services** (http/https ports on known hosts)
@@ -149,8 +151,9 @@ identically:
 - **Efficiency** — one cached agent-host fetch per context (not per keystroke); the subnet test is a
   prefix compare; no extra RPC on the hot path.
 
-Consumers wired: `completeTargets` (host id + subnet) and `completePortValue` (port takes the
-closest host's relevance). Still to wire (same pattern): credential-secret, web-URL, subnet.
+Consumers wired: `completeTargets` (host id + subnet), `completePortValue` (port takes the closest
+host's relevance), and `completeSecret` (first `RelevanceOfHostID` user — creds with a login on the
+agent host). Still to wire (same pattern): web-URL, subnet.
 
 # Interface completion — local (built) + agent-host (design)
 
@@ -205,3 +208,23 @@ target promotion.
   implied.
 - **Wiring** — an alternative in the target slot (a CIDR is a valid nmap target) and any CIDR-taking
   flag (`--exclude`, target files). Cap + cache; classifier already routes address/target slots.
+
+# Idea: type-list completers (enum vocabularies)
+
+Some value slots take a token from a fixed vocabulary — a hash type, a protocol, an output format, a
+service name. These make cheap, high-precision completers: a static described list, no DB, no
+context. Worth harvesting a vocabulary we already have rather than hand-typing it.
+
+- **Hash types — the motivating case.** AIMS's `completeHashType` offers 4 coarse tokens; the Sliver
+  fork's `clientpb.HashType` enum is the full **hashcat-mode catalog (124 values: MD5=0, SHA1=100,
+  SHA2-256=1400, …)**, and Sliver exposes `GetCredsByHashType` / `GetPlaintextCredsByHashType` /
+  `CredsSniffHashType`. Rich and standard — but it lives in Sliver's protobuf, and AIMS is the
+  *upstream* model, so it must not be imported downward. Options: (a) copy the (name → mode) list
+  into an AIMS static table so an AIMS hash-type slot can offer all 124; (b) keep the rich hash-type
+  completer on the Sliver side, where the enum already lives, and wire it into AIMS value slots
+  there. `completeSecret` already groups by the coarse AIMS `PrivateType`; a mode-level completer is
+  complementary, for slots that name a hashcat mode.
+- **General pattern.** When a new scanner arg is a *type token*, first look for an existing
+  enum/list (a proto enum, an `/etc/*` file, a tool's `--list` output) before hand-writing
+  candidates. Describe each token; tag by family when the list is large (as the 124 hash modes
+  would want).

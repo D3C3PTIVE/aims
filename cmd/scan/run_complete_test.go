@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/d3c3ptive/aims/cmd/agentctx"
+	credential "github.com/d3c3ptive/aims/credential/pb"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
 )
@@ -299,6 +300,9 @@ func TestNSEArgValueKind(t *testing.T) {
 		"snmp.interface":          "interface",
 		"smtp.port":               "port",
 		"port":                    "port",
+		"smbpassword":             "secret",
+		"mssql.password":          "secret",
+		"ssh.passphrase":          "secret",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
@@ -419,6 +423,62 @@ func TestCollectOpenPorts(t *testing.T) {
 		if got[i-1].number > got[i].number {
 			t.Errorf("collectOpenPorts not sorted by number: %v", got)
 			break
+		}
+	}
+}
+
+// TestSecretDesc: a secret is described by who owns it (username @ realm) and its type — never by
+// the secret value itself.
+func TestSecretDesc(t *testing.T) {
+	cases := []struct {
+		name string
+		core *credential.Core
+		want string
+	}{
+		{
+			"user-realm-hash",
+			&credential.Core{
+				Public:  &credential.Public{Username: "administrator"},
+				Realm:   &credential.Realm{Value: "CORP"},
+				Private: &credential.Private{Type: credential.PrivateType_NTLMHash, Data: "aad3b..."},
+			},
+			"administrator @ CORP · NTLM hash",
+		},
+		{
+			"user-password",
+			&credential.Core{
+				Public:  &credential.Public{Username: "root"},
+				Private: &credential.Private{Type: credential.PrivateType_Password, Data: "hunter2"},
+			},
+			"root · password",
+		},
+		{
+			"no-user-jwt",
+			&credential.Core{Private: &credential.Private{Type: credential.PrivateType_JWT, Data: "ey..."}},
+			"JWT",
+		},
+	}
+	for _, c := range cases {
+		if got := secretDesc(c.core); got != c.want {
+			t.Errorf("%s: secretDesc = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestSecretTypeGroup: each private type lands in its group, unknown types default to passwords.
+func TestSecretTypeGroup(t *testing.T) {
+	cases := map[credential.PrivateType]string{
+		credential.PrivateType_Password:         "passwords",
+		credential.PrivateType_NTLMHash:         "NTLM hashes",
+		credential.PrivateType_PostgresMD5:      "PostgreSQL hashes",
+		credential.PrivateType_ReplayableHash:   "replayable hashes",
+		credential.PrivateType_NonReplayableHash: "non-replayable hashes",
+		credential.PrivateType_Key:              "keys",
+		credential.PrivateType_JWT:              "JWTs",
+	}
+	for typ, want := range cases {
+		if got := secretTypeGroup(typ); got != want {
+			t.Errorf("secretTypeGroup(%v) = %q, want %q", typ, got, want)
 		}
 	}
 }

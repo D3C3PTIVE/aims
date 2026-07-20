@@ -38,6 +38,8 @@ import (
 	"github.com/d3c3ptive/aims/cmd/agentctx"
 	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/display"
+	credential "github.com/d3c3ptive/aims/credential/pb"
+	credrpc "github.com/d3c3ptive/aims/credential/pb/rpc"
 	"github.com/d3c3ptive/aims/host"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hostrpc "github.com/d3c3ptive/aims/host/pb/rpc"
@@ -578,6 +580,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return completeInterface()
 	case "port":
 		return completePortValue(con)
+	case "secret":
+		return completeSecret(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -609,6 +613,8 @@ func nseArgValueKind(key string) string {
 		return "interface"
 	case base == "port":
 		return "port"
+	case strings.Contains(base, "password") || strings.Contains(base, "passphrase"):
+		return "secret"
 	default:
 		return ""
 	}
@@ -835,6 +841,165 @@ func commonPorts() []namedPort {
 		{995, "pop3s"}, {1433, "mssql"}, {1521, "oracle"}, {3306, "mysql"},
 		{3389, "rdp"}, {5432, "postgresql"}, {5900, "vnc"}, {6379, "redis"},
 		{8080, "http-proxy"}, {8443, "https-alt"}, {27017, "mongodb"},
+	}
+}
+
+//
+// [ Secrets — known credentials, typed and agent-promoted ] -------------------------------------
+//
+
+// completeSecret completes a secret value — an NSE `*.password`/`*.passphrase` arg, and any
+// brute/auth tool's secret flag later — from the credential store, so known passwords/hashes can be
+// reused (AIMS's whole point). Secrets are grouped by credential type (the PrivateType axis), and
+// the credentials used on the current agent's host are promoted to the top via the relevance layer
+// (RelevanceOfHostID over the Logins that attach a credential to a host). Cached; key carries the
+// agent id.
+//
+// Note: this deliberately surfaces plaintext secrets as completion values — that is the point of
+// credential reuse, and the operator owns the store (cf. Sliver's GetPlaintextCredsByHashType).
+func completeSecret(con *client.Client) carapace.Action {
+	name := "scan:secret"
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
+			return msg
+		}
+
+		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		if len(res.GetCredentials()) == 0 {
+			return carapace.ActionMessage("no credentials in database")
+		}
+
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedSecrets(res.GetCredentials(), agentHostCredIDs(con, agentHost))
+	}))
+}
+
+// agentHostCredIDs returns the set of credential ids that have a login on the current agent's host —
+// the credentials to promote. It reads the Logins service filtered by the agent host id and keeps
+// those the relevance layer marks AgentHost. Empty (nil) when no context is loaded.
+func agentHostCredIDs(con *client.Client, agentHost *pb.Host) map[string]bool {
+	if agentHost == nil {
+		return nil
+	}
+	res, err := con.Logins.List(context.Background(), &credrpc.ReadLoginRequest{
+		Login: &credential.Login{HostId: agentHost.GetId()},
+	})
+	if err != nil {
+		return nil
+	}
+
+	ids := make(map[string]bool)
+	for _, l := range res.GetLogins() {
+		if agentctx.RelevanceOfHostID(l.GetHostId(), agentHost) != agentctx.AgentHost {
+			continue
+		}
+		if id := l.GetCore().GetId(); id != "" {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
+// groupedSecrets renders credentials that carry a usable secret as tagged, described carapace
+// groups: those used on the agent host are promoted to the context group, the rest grouped by
+// credential type. The candidate is the secret itself; the description carries who it belongs to.
+func groupedSecrets(creds []*credential.Core, agentCreds map[string]bool) carapace.Action {
+	buckets := make(map[string][]string)
+	for _, c := range creds {
+		data := c.GetPrivate().GetData()
+		if data == "" {
+			continue // no usable secret (bare username / blank)
+		}
+		tag := secretTypeGroup(c.GetPrivate().GetType())
+		if agentCreds[c.GetId()] {
+			tag = agentctx.TagContext
+		}
+		buckets[tag] = append(buckets[tag], data, secretDesc(c))
+	}
+
+	actions := make([]carapace.Action, 0, len(secretGroupOrder)+1)
+	for _, tag := range secretGroupOrder {
+		if pairs := buckets[tag]; len(pairs) > 0 {
+			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
+		}
+	}
+	if len(actions) == 0 {
+		return carapace.ActionMessage("no reusable secrets in database")
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// secretGroupOrder: the agent-context group first (PromotedOrder), then the credential-type groups.
+var secretGroupOrder = agentctx.PromotedOrder(
+	"passwords", "NTLM hashes", "replayable hashes",
+	"non-replayable hashes", "PostgreSQL hashes", "keys", "JWTs",
+)
+
+// secretTypeGroup maps a credential's private type to its group tag. AIMS's PrivateType is the
+// coarse axis available here; a finer hash vocabulary (e.g. hashcat modes) would be a type-list
+// completer of its own — see COMPLETERS.md.
+func secretTypeGroup(t credential.PrivateType) string {
+	switch t {
+	case credential.PrivateType_NTLMHash:
+		return "NTLM hashes"
+	case credential.PrivateType_PostgresMD5:
+		return "PostgreSQL hashes"
+	case credential.PrivateType_ReplayableHash:
+		return "replayable hashes"
+	case credential.PrivateType_NonReplayableHash:
+		return "non-replayable hashes"
+	case credential.PrivateType_Key:
+		return "keys"
+	case credential.PrivateType_JWT:
+		return "JWTs"
+	default:
+		return "passwords"
+	}
+}
+
+// secretDesc describes a secret candidate by who it belongs to (username @ realm) and its type, so
+// the operator picks the right one without reading the secret itself.
+func secretDesc(c *credential.Core) string {
+	who := c.GetPublic().GetUsername()
+	if r := c.GetRealm().GetValue(); r != "" {
+		if who != "" {
+			who += " @ " + r
+		} else {
+			who = "@" + r
+		}
+	}
+
+	label := secretTypeLabel(c.GetPrivate().GetType())
+	if who != "" {
+		return who + " · " + label
+	}
+	return label
+}
+
+// secretTypeLabel is the singular per-credential type label used in a secret's description.
+func secretTypeLabel(t credential.PrivateType) string {
+	switch t {
+	case credential.PrivateType_NTLMHash:
+		return "NTLM hash"
+	case credential.PrivateType_PostgresMD5:
+		return "PostgreSQL hash"
+	case credential.PrivateType_ReplayableHash:
+		return "replayable hash"
+	case credential.PrivateType_NonReplayableHash:
+		return "non-replayable hash"
+	case credential.PrivateType_Key:
+		return "key"
+	case credential.PrivateType_JWT:
+		return "JWT"
+	default:
+		return "password"
 	}
 }
 
