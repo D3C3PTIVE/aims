@@ -98,6 +98,67 @@ func guard(label string, fn carapace.CompletionCallback) carapace.CompletionCall
 	}
 }
 
+// cachedCompleter is the shared shell every DB-backed completer wears: an agent-scoped on-disk cache
+// (the agent id is folded into the cache name so a different loaded context is a distinct entry), a
+// guard so a panic degrades to a message, and the teamclient connect. body does the actual read +
+// render — it only runs on a cache miss with a live connection, never touching the DB directly.
+func cachedCompleter(con *client.Client, name, label string, body func() carapace.Action) carapace.Action {
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard(label, func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
+			return msg
+		}
+		return body()
+	})))
+}
+
+// cachedHostCompleter specialises cachedCompleter for the host-set-backed completers (targets, ports,
+// URLs, domains): it does the Hosts.Read with the given filters and resolves the agent host once,
+// then hands both to render. emptyHostsMsg, when non-empty, short-circuits an empty database with
+// that message; pass "" to let render own the empty case (e.g. groupedPorts says "no ports known").
+func cachedHostCompleter(con *client.Client, name, label string, filters *hostrpc.HostFilters, emptyHostsMsg string, render func(hosts []*pb.Host, agentHost *pb.Host) carapace.Action) carapace.Action {
+	return cachedCompleter(con, name, label, func() carapace.Action {
+		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{Host: &pb.Host{}, Filters: filters})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		if emptyHostsMsg != "" && len(res.GetHosts()) == 0 {
+			return carapace.ActionMessage(emptyHostsMsg)
+		}
+		agentHost, _ := agentctx.CurrentHost(con)
+		return render(res.GetHosts(), agentHost)
+	})
+}
+
+// renderGroups turns tag→(value, description…) buckets into a batched action — one tagged carapace
+// group per tag in order, empty groups skipped, each group passed through the optional decorate funcs
+// (e.g. a NoSpace). When nothing rendered it returns emptyMsg as an ActionMessage, or an empty action
+// when emptyMsg is "" (so the group contributes nothing to a shared slot). This is the shared tail of
+// every grouped completer (targets, ports, subnets, URLs, domains).
+func renderGroups(order []string, buckets map[string][]string, emptyMsg string, decorate ...func(carapace.Action) carapace.Action) carapace.Action {
+	actions := make([]carapace.Action, 0, len(order))
+	for _, tag := range order {
+		pairs := buckets[tag]
+		if len(pairs) == 0 {
+			continue
+		}
+		a := carapace.ActionValuesDescribed(pairs...).Tag(tag)
+		for _, d := range decorate {
+			a = d(a)
+		}
+		actions = append(actions, a)
+	}
+	if len(actions) == 0 {
+		if emptyMsg == "" {
+			return carapace.ActionValues()
+		}
+		return carapace.ActionMessage(emptyMsg)
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
 //
 // [ Targets — DB hosts, sub-grouped by locality ] -----------------------------------------------
 //
@@ -135,43 +196,18 @@ func completeTargets(con *client.Client) carapace.Action {
 
 // cachedTargets is the cached whole-host-set candidate action behind completeTargets. It is a
 // scan-local completion (not a call into cmd/hosts) precisely because the shared
-// hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it; the read
-// still goes through the teamclient RPC, never the DB directly. Wrapped in the shared on-disk
-// completion cache so a burst of Tabs doesn't re-fetch the whole host set each keystroke.
-//
-// When an agent context is loaded, the grouping is relative to that agent's host, so the cache name
-// carries the agent id — a different loaded agent gets a distinct entry, and repeated Tabs at the
-// same context stay a hit. The agent id comes from the cheap env read (agentctx.Current); the full
-// agent host is resolved once per cache-miss inside the callback.
+// hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it. The
+// caching, agent-scoping and teamclient read are the shared cachedHostCompleter shell.
 func cachedTargets(con *client.Client) carapace.Action {
-	name := "scan:nmap:targets"
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("targets", func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{Host: &pb.Host{}})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-		if len(res.GetHosts()) == 0 {
-			return carapace.ActionMessage("no hosts in database")
-		}
-
-		// The agent's host is the base for context-aware grouping; nil when no context is loaded.
-		agentHost, _ := agentctx.CurrentHost(con)
-
-		// A CIDR is a valid nmap target, so the target slot offers individual hosts *and* the
-		// subnets clustered from them (both promoted by agent context).
-		return carapace.Batch(
-			groupedTargets(res.GetHosts(), agentHost),
-			groupedSubnets(res.GetHosts(), agentHost),
-		).ToA()
-	})))
+	// A CIDR is a valid nmap target, so the target slot offers individual hosts *and* the subnets
+	// clustered from them (both promoted by agent context). The agent host is nil with no context.
+	return cachedHostCompleter(con, "scan:nmap:targets", "targets", nil, "no hosts in database",
+		func(hosts []*pb.Host, agentHost *pb.Host) carapace.Action {
+			return carapace.Batch(
+				groupedTargets(hosts, agentHost),
+				groupedSubnets(hosts, agentHost),
+			).ToA()
+		})
 }
 
 // groupedTargets partitions hosts into sub-groups and renders each as its own tagged carapace
@@ -187,22 +223,17 @@ func groupedTargets(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		buckets[tag] = append(buckets[tag], h)
 	}
 
-	actions := make([]carapace.Action, 0, len(targetGroupOrder))
-	for _, tag := range targetGroupOrder {
-		group := buckets[tag]
-		if len(group) == 0 {
-			continue
-		}
-
+	// Convert each host group to (candidate, description) pairs through the shared display engine —
+	// the hostname is the inserted value, the address the fallback — then render the tagged groups.
+	described := make(map[string][]string, len(buckets))
+	for tag, group := range buckets {
 		options := host.Completions()
 		options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))
 		options = append(options, display.WithSplitCandidate(","))
-
-		pairs := display.Completions(group, host.DisplayFields, options...)
-		actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
+		described[tag] = display.Completions(group, host.DisplayFields, options...)
 	}
 
-	return carapace.Batch(actions...).ToA()
+	return renderGroups(targetGroupOrder, described, "")
 }
 
 // targetTag chooses a host's completion group. With an agent context loaded (agentHost non-nil),
@@ -735,27 +766,8 @@ func completePortValue(con *client.Client) carapace.Action {
 }
 
 func cachedPorts(con *client.Client) carapace.Action {
-	name := "scan:nmap:ports"
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("ports", func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{
-			Host:    &pb.Host{},
-			Filters: &hostrpc.HostFilters{Ports: true},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedPorts(res.GetHosts(), agentHost)
-	})))
+	return cachedHostCompleter(con, "scan:nmap:ports", "ports",
+		&hostrpc.HostFilters{Ports: true}, "", groupedPorts)
 }
 
 // portInfo aggregates one open port number across the host set: its service name and protocol
@@ -826,16 +838,7 @@ func groupedPorts(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		buckets[tagPortsCommon] = append(buckets[tagPortsCommon], strconv.Itoa(int(cp.number)), cp.name+" (well-known)")
 	}
 
-	actions := make([]carapace.Action, 0, len(portGroupOrder))
-	for _, tag := range portGroupOrder {
-		if pairs := buckets[tag]; len(pairs) > 0 {
-			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
-		}
-	}
-	if len(actions) == 0 {
-		return carapace.ActionMessage("no ports known")
-	}
-	return carapace.Batch(actions...).ToA()
+	return renderGroups(portGroupOrder, buckets, "no ports known")
 }
 
 // portDesc describes a DB port: its service (or protocol), and how many hosts have it open.
@@ -887,16 +890,7 @@ func commonPorts() []namedPort {
 // Note: this deliberately surfaces plaintext secrets as completion values — that is the point of
 // credential reuse, and the operator owns the store (cf. Sliver's GetPlaintextCredsByHashType).
 func completeSecret(con *client.Client) carapace.Action {
-	name := "scan:secret"
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("secret", func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
+	return cachedCompleter(con, "scan:secret", "secret", func() carapace.Action {
 		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
@@ -907,7 +901,7 @@ func completeSecret(con *client.Client) carapace.Action {
 
 		agentHost, _ := agentctx.CurrentHost(con)
 		return groupedSecrets(res.GetCredentials(), agentHostCredIDs(con, agentHost))
-	})))
+	})
 }
 
 // agentHostCredIDs returns the set of credential ids that have a login on the current agent's host —
@@ -1063,27 +1057,8 @@ var webPorts = map[uint32]bool{
 // via the relevance layer; the rest are grouped by scheme (with un-fingerprinted web ports flagged
 // as guesses). Cached; the cache key carries the agent id.
 func completeWebURL(con *client.Client) carapace.Action {
-	name := "scan:nmap:urls"
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("web-url", func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{
-			Host:    &pb.Host{},
-			Filters: &hostrpc.HostFilters{Ports: true},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedURLs(res.GetHosts(), agentHost)
-	})))
+	return cachedHostCompleter(con, "scan:nmap:urls", "web-url",
+		&hostrpc.HostFilters{Ports: true}, "", groupedURLs)
 }
 
 // groupedURLs synthesizes a URL per open web port and renders them as promoted, described groups.
@@ -1149,16 +1124,8 @@ func groupedURLs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		}
 	}
 
-	actions := make([]carapace.Action, 0, len(urlGroupOrder))
-	for _, tag := range urlGroupOrder {
-		if pairs := buckets[tag]; len(pairs) > 0 {
-			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag).NoSpace('/'))
-		}
-	}
-	if len(actions) == 0 {
-		return carapace.ActionMessage("no web services in database")
-	}
-	return carapace.Batch(actions...).ToA()
+	return renderGroups(urlGroupOrder, buckets, "no web services in database",
+		func(a carapace.Action) carapace.Action { return a.NoSpace('/') })
 }
 
 // isNamedWeb reports whether a port carries a named http/https service (any service name containing
@@ -1382,16 +1349,7 @@ func groupedSubnets(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		buckets[tag] = append(buckets[tag], si.cidr, subnetDesc(si))
 	}
 
-	actions := make([]carapace.Action, 0, len(subnetGroupOrder))
-	for _, tag := range subnetGroupOrder {
-		if pairs := buckets[tag]; len(pairs) > 0 {
-			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
-		}
-	}
-	if len(actions) == 0 {
-		return carapace.ActionValues()
-	}
-	return carapace.Batch(actions...).ToA()
+	return renderGroups(subnetGroupOrder, buckets, "")
 }
 
 // subnetTag ranks a subnet: the agent's own subnets first, then routable last, else private split by
@@ -1466,27 +1424,7 @@ var domainGroupOrder = agentctx.PromotedOrder(tagDomainRegistered, tagDomainSub)
 // The value is intentionally *not* a full host FQDN (that is the target completer's job) — it is the
 // zone an operator hands to a brute/transfer tool to enumerate.
 func completeDomain(con *client.Client) carapace.Action {
-	name := "scan:domains"
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("domain", func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{Host: &pb.Host{}})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-		if len(res.GetHosts()) == 0 {
-			return carapace.ActionMessage("no hosts in database")
-		}
-
-		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedDomains(res.GetHosts(), agentHost)
-	})))
+	return cachedHostCompleter(con, "scan:domains", "domain", nil, "no hosts in database", groupedDomains)
 }
 
 // domainInfo aggregates one candidate zone: its name, how many known hosts have a name under it, and
@@ -1571,16 +1509,7 @@ func groupedDomains(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		buckets[domainTag(di)] = append(buckets[domainTag(di)], di.name, domainDesc(di))
 	}
 
-	actions := make([]carapace.Action, 0, len(domainGroupOrder))
-	for _, tag := range domainGroupOrder {
-		if pairs := buckets[tag]; len(pairs) > 0 {
-			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
-		}
-	}
-	if len(actions) == 0 {
-		return carapace.ActionMessage("no domains in database")
-	}
-	return carapace.Batch(actions...).ToA()
+	return renderGroups(domainGroupOrder, buckets, "no domains in database")
 }
 
 // domainTag groups a zone: the agent-context relevance group if any, else registered (one dot, an
