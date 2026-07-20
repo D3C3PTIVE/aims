@@ -40,74 +40,55 @@ type Host pb.Host
 //
 
 // DisplayHeaders returns all weighted table headers for a table of hosts.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Hostnames", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Addresses", 1)
-
-	add("Status", 2)
-	add("Hops", 2)
-
-	add("Arch", 3)
-	add("MAC", 3)
-	add("Purpose", 3)
-
-	return headers
+func DisplayHeaders() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Hostnames", 1).
+		Add("OS Name", 1).
+		Add("OS Family", 1).
+		Add("Addresses", 1).
+		Add("Status", 2).
+		Add("Hops", 2).
+		Add("Arch", 3).
+		Add("MAC", 3).
+		Add("Purpose", 3).
+		Options()
 }
 
 // DetailHeaders returns the headers for a detailed host view.
 func DisplayDetails() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	// Core
-	add("ID", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Arch", 1)
-	add("Status", 1)
-
-	// Network
-	add("Hostnames", 2)
-	add("Addresses", 2)
-	add("Hops", 2)
-
-	// Hardware
-	add("Extra Ports", 3)
-	add("Purpose", 3)
-	add("MAC", 3)
-	add("Virtual Host", 3)
-
-	// Tools
-	add("Comment", 4)
-	add("Scripts", 4)
-	add("Sources", 4)
-
-	return headers
+	return display.Headers().
+		// Core
+		Add("ID", 1).
+		Add("OS Name", 1).
+		Add("OS Family", 1).
+		Add("Arch", 1).
+		Add("Status", 1).
+		// Network
+		Add("Hostnames", 2).
+		Add("Addresses", 2).
+		Add("Hops", 2).
+		// Hardware
+		Add("Extra Ports", 3).
+		Add("Purpose", 3).
+		Add("MAC", 3).
+		Add("Virtual Host", 3).
+		// Tools
+		Add("Comment", 4).
+		Add("Scripts", 4).
+		Add("Sources", 4).
+		Options()
 }
 
 // Completions returns some columns to be combined into
 // completion candidates and/or their descriptions.
 func Completions() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Hostnames", 1)
-	add("OS Name", 1)
-	add("Addresses", 1)
-
-	return headers
+	return display.Headers().
+		Add("ID", 1).
+		Add("Hostnames", 1).
+		Add("OS Name", 1).
+		Add("Addresses", 1).
+		Options()
 }
 
 // Fields maps field names to their value generators.

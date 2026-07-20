@@ -53,73 +53,54 @@ func (s *Service) ToPB() *network.Service {
 }
 
 // TableHeaders returns all weighted table headers for a table of services/ports.
-func Headers() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
+func Headers() []display.Options {
 	// Weights are the responsive-drop priority (see cmd/display.adaptTableSize): weight-1 columns
 	// are the always-kept floor, higher weights drop first on narrow terminals. Extra Info in
 	// particular can be very wide (long mod_ssl banners), so it is the first to go — which is what
 	// stops it forcing the whole row past the terminal width and triggering the "~~" truncation.
-	add("Num", 1)
-	add("Proto", 1) // Combined transport/application protocol when possible
-	add("Product", 1)
-	add("State", 1) // Combined or relevant port/service state
-
-	add("Reason", 2)
-	add("Method", 2)
-
-	add("Extra Info", 3)
-
-	return headers
+	return display.Headers().
+		Add("Num", 1).
+		Add("Proto", 1). // Combined transport/application protocol when possible
+		Add("Product", 1).
+		Add("State", 1). // Combined or relevant port/service state
+		Add("Reason", 2).
+		Add("Method", 2).
+		Add("Extra Info", 3).
+		Options()
 }
 
 // DetailHeaders returns the headers for a detailed service view.
 func Details() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	// Core
-	add("ID", 1)
-	add("Num", 1)
-	add("Proto", 1)
-	add("Product", 1)
-	add("Version", 1)
-
-	add("State", 2)
-	add("Reason", 2)
-	add("Method", 2)
-
-	// Network
-	add("Device type", 2)
-	add("Info", 3)
-	add("Extra Info", 3)
-
-	// Tools
-	add("Scripts", 4)
-	add("Fingerprint", 4)
-
-	return headers
+	return display.Headers().
+		// Core
+		Add("ID", 1).
+		Add("Num", 1).
+		Add("Proto", 1).
+		Add("Product", 1).
+		Add("Version", 1).
+		Add("State", 2).
+		Add("Reason", 2).
+		Add("Method", 2).
+		// Network
+		Add("Device type", 2).
+		Add("Info", 3).
+		Add("Extra Info", 3).
+		// Tools
+		Add("Scripts", 4).
+		Add("Fingerprint", 4).
+		Options()
 }
 
 // Completions returns some columns to be combined into
 // completion candidates and/or their descriptions.
 func Completions() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Num", 1)
-	add("Proto", 1)
-	add("Product", 1)
-	add("State", 1)
-
-	return headers
+	return display.Headers().
+		Add("ID", 1).
+		Add("Num", 1).
+		Add("Proto", 1).
+		Add("Product", 1).
+		Add("State", 1).
+		Options()
 }
 
 // DisplayFields maps field names to their value generators.
