@@ -298,33 +298,35 @@ func TestParseNSEArgs(t *testing.T) {
 // are wordlist files, not usernames; passvar/passlimit/useragent are free-form, not files or creds.
 func TestNSEArgValueKind(t *testing.T) {
 	cases := map[string]string{
-		"http-enum.host":           "host",
-		"ssl.host":                 "host",
-		"target":                   "host",
-		"mssql.username":           "username",
-		"smbusername":              "username",
-		"userdb":                   "file",
-		"passdb":                   "file",
-		"brute.outputfile":         "file",
-		"smtp.domain":              "domain",
-		"http-enum.basepath":       "",
-		"http-form-brute.passvar":  "",
-		"unpwdb.passlimit":         "",
-		"http.useragent":           "",
-		"creds.global":             "",
-		"broadcast-*.interface":    "interface",
-		"snmp.interface":           "interface",
-		"smtp.port":                "port",
-		"port":                     "port",
-		"smbpassword":              "secret",
-		"mssql.password":           "secret",
-		"ssh.passphrase":           "secret",
-		"http-enum.url":            "url",
-		"spider.uri":               "url",
-		"dns-brute.domain":         "domain",
-		"ldap.domains":             "domain",
-		"smbdomain":                "domain",
-		"http-domino.withindomain": "domain",
+		"http-enum.host":            "host",
+		"ssl.host":                  "host",
+		"target":                    "host",
+		"mssql.username":            "username",
+		"smbusername":               "username",
+		"userdb":                    "file",
+		"passdb":                    "file",
+		"brute.outputfile":          "file",
+		"smtp.domain":               "domain",
+		"http-enum.basepath":        "",
+		"http-form-brute.passvar":   "",
+		"unpwdb.passlimit":          "",
+		"http.useragent":            "",
+		"creds.global":              "",
+		"broadcast-*.interface":     "interface",
+		"snmp.interface":            "interface",
+		"smtp.port":                 "port",
+		"port":                      "port",
+		"smbpassword":               "secret",
+		"mssql.password":            "secret",
+		"ssh.passphrase":            "secret",
+		"http-enum.url":             "url",
+		"spider.uri":                "url",
+		"dns-brute.domain":          "domain",
+		"ldap.domains":              "domain",
+		"smbdomain":                 "domain",
+		"http-domino.withindomain":  "domain",
+		"broadcast-wake-on-lan.MAC": "mac",
+		"targets-mac.mac":           "mac",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
@@ -886,6 +888,150 @@ func TestDomainDesc(t *testing.T) {
 	}
 	if got := domainDesc(&domainInfo{hosts: 1}); got != "1 known host" {
 		t.Errorf("domainDesc(1) = %q, want %q", got, "1 known host")
+	}
+}
+
+// mkCred builds a credential.Core for the username/MAC tests.
+func mkCred(id, user, realm string, typ credential.PrivateType, secret string) *credential.Core {
+	c := &credential.Core{
+		Id:      id,
+		Public:  &credential.Public{Username: user},
+		Private: &credential.Private{Type: typ, Data: secret},
+	}
+	if realm != "" {
+		c.Realm = &credential.Realm{Value: realm}
+	}
+	return c
+}
+
+// TestUsernameScore: an agent-host login (+2) outranks one carrying a secret (+1) outranks a bare
+// username — so the dedup keeps the most useful credential per username.
+func TestUsernameScore(t *testing.T) {
+	agentCreds := map[string]bool{"a": true}
+	bare := mkCred("z", "u", "", credential.PrivateType_Password, "")
+	withSecret := mkCred("y", "u", "", credential.PrivateType_Password, "pw")
+	onAgent := mkCred("a", "u", "", credential.PrivateType_Password, "")
+	if s := usernameScore(bare, agentCreds); s != 0 {
+		t.Errorf("bare score = %d, want 0", s)
+	}
+	if s := usernameScore(withSecret, agentCreds); s != 1 {
+		t.Errorf("with-secret score = %d, want 1", s)
+	}
+	if s := usernameScore(onAgent, agentCreds); s != 2 {
+		t.Errorf("agent-host score = %d, want 2", s)
+	}
+}
+
+// TestUsernameTag: agent-host logins are promoted; the rest split on whether a usable secret is held.
+func TestUsernameTag(t *testing.T) {
+	if got := usernameTag(mkCred("a", "u", "", credential.PrivateType_Password, ""), true); got != agentctx.TagContext {
+		t.Errorf("agent-host username tag = %q, want %q", got, agentctx.TagContext)
+	}
+	if got := usernameTag(mkCred("b", "u", "", credential.PrivateType_NTLMHash, "aad3b"), false); got != tagUserWithSecret {
+		t.Errorf("with-secret tag = %q, want %q", got, tagUserWithSecret)
+	}
+	if got := usernameTag(mkCred("c", "u", "", credential.PrivateType_Password, ""), false); got != tagUserNoSecret {
+		t.Errorf("no-secret tag = %q, want %q", got, tagUserNoSecret)
+	}
+}
+
+// TestUsernameDesc: the description names the paired secret (type + "known") and the realm — or "no
+// secret" when the username stands alone.
+func TestUsernameDesc(t *testing.T) {
+	cases := []struct {
+		core *credential.Core
+		want string
+	}{
+		{mkCred("a", "admin", "CORP", credential.PrivateType_NTLMHash, "aad3b"), "NTLM hash known @ CORP"},
+		{mkCred("b", "root", "", credential.PrivateType_Password, "pw"), "password known"},
+		{mkCred("c", "svc", "CORP", credential.PrivateType_Password, ""), "no secret @ CORP"},
+	}
+	for _, c := range cases {
+		if got := usernameDesc(c.core); got != c.want {
+			t.Errorf("usernameDesc(%s) = %q, want %q", c.core.GetPublic().GetUsername(), got, c.want)
+		}
+	}
+}
+
+// TestCollectMACs pins MAC gathering from both sources (Host.MAC and a type=="mac" address with a
+// vendor), normalised-dedup across hosts, and the highest-relevance host winning the label.
+func TestCollectMACs(t *testing.T) {
+	host := func(id, addr, mac string, macAddrs ...*network.Address) *pb.Host {
+		h := &pb.Host{Id: id, MAC: mac}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		h.Addresses = append(h.Addresses, macAddrs...)
+		return h
+	}
+	agent := host("agent", "10.0.0.10", "AA:BB:CC:00:00:01")
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", "", &network.Address{Addr: "aa:bb:cc:00:00:01", Type: "mac", Vendor: "VMware"}), // same MAC (case), same /24 → Nearby, adds vendor
+		host("c", "8.8.8.8", "DE:AD:BE:EF:00:02"),
+	}
+
+	byMAC := map[string]*macInfo{}
+	for _, mi := range collectMACs(all, agent) {
+		byMAC[mi.mac] = mi
+	}
+
+	if mi := byMAC["aa:bb:cc:00:00:01"]; mi == nil || mi.rel != agentctx.AgentHost || mi.vendor != "VMware" {
+		t.Errorf("shared MAC: got %+v, want rel=AgentHost vendor=VMware", mi)
+	}
+	if mi := byMAC["de:ad:be:ef:00:02"]; mi == nil || mi.rel != agentctx.Normal {
+		t.Errorf("distant MAC: got %+v, want rel=Normal", mi)
+	}
+	if _, ok := byMAC["AA:BB:CC:00:00:01"]; ok {
+		t.Error("MAC must be normalised to lowercase (no upper-case duplicate)")
+	}
+}
+
+// TestMacDesc: vendor and host joined, with sensible fallbacks.
+func TestMacDesc(t *testing.T) {
+	cases := []struct {
+		mi   *macInfo
+		want string
+	}{
+		{&macInfo{vendor: "VMware", host: "web01"}, "VMware · web01"},
+		{&macInfo{host: "10.0.0.5"}, "10.0.0.5"},
+		{&macInfo{}, "known MAC"},
+	}
+	for _, c := range cases {
+		if got := macDesc(c.mi); got != c.want {
+			t.Errorf("macDesc(%+v) = %q, want %q", c.mi, got, c.want)
+		}
+	}
+}
+
+// TestServiceNameGroup: the DB's open-port service names come first (described by their port), then
+// the curated well-known names, deduplicated by name — the named tokens nmap's `-p` accepts.
+func TestServiceNameGroup(t *testing.T) {
+	ports := []*portInfo{
+		{number: 22, proto: "tcp", service: "ssh"},
+		{number: 8081, proto: "tcp", service: "http"},
+		{number: 9999, proto: "tcp", service: ""}, // no service name → skipped
+	}
+	got := serviceNameGroup(ports)
+
+	// Flatten (name→desc) for lookup.
+	desc := map[string]string{}
+	for i := 0; i+1 < len(got); i += 2 {
+		desc[got[i]] = got[i+1]
+	}
+	if desc["ssh"] != "22/tcp" {
+		t.Errorf("ssh desc = %q, want 22/tcp", desc["ssh"])
+	}
+	if desc["http"] != "8081/tcp" {
+		t.Errorf("http desc = %q, want 8081/tcp (the DB port, not the well-known 80)", desc["http"])
+	}
+	// A curated name not among the DB ports is still offered (well-known).
+	if _, ok := desc["mysql"]; !ok {
+		t.Errorf("curated well-known name mysql missing from %v", got)
+	}
+	// No empty-name token leaked in from the serviceless port.
+	if _, ok := desc[""]; ok {
+		t.Error("a port with no service name must not produce an empty token")
 	}
 }
 

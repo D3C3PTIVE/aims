@@ -36,7 +36,6 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/agentctx"
-	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/display"
 	credential "github.com/d3c3ptive/aims/credential/pb"
 	credrpc "github.com/d3c3ptive/aims/credential/pb/rpc"
@@ -73,7 +72,9 @@ func completeRunNmap(con *client.Client) carapace.Action {
 			case "-e":
 				return completeInterface()
 			case "-p":
-				return completePortValue(con)
+				return completePortSpec(con)
+			case "--spoof-mac":
+				return completeMAC(con)
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
@@ -472,6 +473,8 @@ func completeRunMasscan(con *client.Client) carapace.Action {
 				return completePortValue(con)
 			case "-e", "--interface", "--adapter":
 				return completeInterface()
+			case "--router-mac", "--adapter-mac", "--spoof-mac":
+				return completeMAC(con)
 			case "--exclude", "--range":
 				return completeTargets(con) // a host or CIDR — the target completer offers both
 			case "-iL", "--excludefile", "-oX", "-oJ", "-oL", "-oG":
@@ -724,7 +727,7 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 	case "host":
 		return completeTargets(con)
 	case "username":
-		return credentials.CompleteByUsername(con)
+		return completeUsername(con)
 	case "file":
 		return carapace.ActionFiles()
 	case "interface":
@@ -737,6 +740,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return completeWebURL(con)
 	case "domain":
 		return completeDomain(con)
+	case "mac":
+		return completeMAC(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -774,6 +779,8 @@ func nseArgValueKind(key string) string {
 		return "url"
 	case base == "domain" || base == "domains" || strings.HasSuffix(base, "domain"):
 		return "domain"
+	case base == "mac" || strings.HasSuffix(base, "mac"):
+		return "mac"
 	default:
 		return ""
 	}
@@ -846,27 +853,46 @@ func interfaceLabel(loopback bool, addrs []net.Addr) string {
 //
 
 const (
-	tagPortsDB     = "open ports (database)"
-	tagPortsCommon = "common ports"
+	tagPortsDB      = "open ports (database)"
+	tagPortsCommon  = "common ports"
+	tagPortsService = "service names"
 )
 
 // portGroupOrder: agent-context relevance groups first (agentctx.PromotedOrder), then the other DB
-// ports, then the curated well-known ports.
-var portGroupOrder = agentctx.PromotedOrder(tagPortsDB, tagPortsCommon)
+// ports, then the curated well-known ports, then the named-service tokens (nmap `-p http` — the
+// "service names" group is only ever populated for nmap; masscan/NSE port slots keep it empty).
+var portGroupOrder = agentctx.PromotedOrder(tagPortsDB, tagPortsCommon, tagPortsService)
 
-// completePortValue completes a port value — nmap's `-p` (comma-separated) and NSE `*.port` — from
-// the DB's known open ports plus a curated set of well-known ports. Ports open on the current
-// agent's host, then on its subnet neighbours, are promoted via the shared relevance layer, so the
-// operator sees "what's open around here" first. Cached; the cache key carries the agent id.
+// completePortValue completes a numeric port value — masscan's `-p`/`--ports` and NSE `*.port` — from
+// the DB's known open ports plus a curated set of well-known ports. Ports open on the current agent's
+// host, then on its subnet neighbours, are promoted via the shared relevance layer, so the operator
+// sees "what's open around here" first. Cached; the cache key carries the agent id.
 func completePortValue(con *client.Client) carapace.Action {
+	return completePortValueMode(con, false)
+}
+
+// completePortSpec is completePortValue plus named-service tokens (ssh, http, …), for nmap's `-p`,
+// which — unlike masscan — accepts a service name and expands it via nmap-services. The service group
+// renders last, after the numeric ports.
+func completePortSpec(con *client.Client) carapace.Action {
+	return completePortValueMode(con, true)
+}
+
+func completePortValueMode(con *client.Client, withServices bool) carapace.Action {
 	return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
-		return cachedPorts(con)
+		return cachedPorts(con, withServices)
 	})
 }
 
-func cachedPorts(con *client.Client) carapace.Action {
-	return cachedHostCompleter(con, "scan:nmap:ports", "ports",
-		&hostrpc.HostFilters{Ports: true}, "", groupedPorts)
+func cachedPorts(con *client.Client, withServices bool) carapace.Action {
+	name := "scan:nmap:ports"
+	if withServices {
+		name += ":svc"
+	}
+	return cachedHostCompleter(con, name, "ports", &hostrpc.HostFilters{Ports: true}, "",
+		func(hosts []*pb.Host, agentHost *pb.Host) carapace.Action {
+			return groupedPorts(hosts, agentHost, withServices)
+		})
 }
 
 // portInfo aggregates one open port number across the host set: its service name and protocol
@@ -917,11 +943,12 @@ func collectOpenPorts(all []*pb.Host, agentHost *pb.Host) []*portInfo {
 // groupedPorts renders the aggregated open ports as promoted, described carapace groups, then adds
 // the curated well-known ports not already present under a "common ports" group — so completion is
 // useful even against an empty database.
-func groupedPorts(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+func groupedPorts(all []*pb.Host, agentHost *pb.Host, withServices bool) carapace.Action {
 	buckets := make(map[string][]string)
 	seen := make(map[uint32]bool)
 
-	for _, pi := range collectOpenPorts(all, agentHost) {
+	ports := collectOpenPorts(all, agentHost)
+	for _, pi := range ports {
 		tag := pi.rel.Tag()
 		if tag == "" {
 			tag = tagPortsDB
@@ -937,7 +964,34 @@ func groupedPorts(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 		buckets[tagPortsCommon] = append(buckets[tagPortsCommon], strconv.Itoa(int(cp.number)), cp.name+" (well-known)")
 	}
 
+	// nmap `-p` also accepts service names (expanded via nmap-services); offer the names known from
+	// the DB's open ports and the curated set as their own group. masscan/NSE pass withServices=false.
+	if withServices {
+		buckets[tagPortsService] = serviceNameGroup(ports)
+	}
+
 	return renderGroups(portGroupOrder, buckets, "no ports known")
+}
+
+// serviceNameGroup builds the (name, description) pairs for the "service names" group of nmap's `-p`:
+// the distinct service names seen on the DB's open ports (described by their port), then the curated
+// well-known names not already present. Deduplicated by name, first-seen order preserved.
+func serviceNameGroup(ports []*portInfo) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, pi := range ports {
+		if pi.service != "" && !seen[pi.service] {
+			seen[pi.service] = true
+			out = append(out, pi.service, strconv.Itoa(int(pi.number))+"/"+pi.proto)
+		}
+	}
+	for _, cp := range commonPorts() {
+		if !seen[cp.name] {
+			seen[cp.name] = true
+			out = append(out, cp.name, strconv.Itoa(int(cp.number))+" (well-known)")
+		}
+	}
+	return out
 }
 
 // portDesc describes a DB port: its service (or protocol), and how many hosts have it open.
@@ -1123,6 +1177,229 @@ func secretTypeLabel(t credential.PrivateType) string {
 	default:
 		return "password"
 	}
+}
+
+//
+// [ Usernames — credential logins, paired with their secret, agent-promoted ] -------------------
+//
+
+const (
+	tagUserWithSecret = "with known secret"
+	tagUserNoSecret   = "username only"
+)
+
+// usernameGroupOrder: the agent-context group first (PromotedOrder), then usernames whose password/
+// hash we hold, then the bare usernames.
+var usernameGroupOrder = agentctx.PromotedOrder(tagUserWithSecret, tagUserNoSecret)
+
+// completeUsername completes a username value — an NSE `*.username`/`*.user` arg, and any auth tool's
+// user flag later — from the credential store, and is the username half of the credential pair: each
+// candidate is described by the secret it is paired with (its type and realm), so the operator picks
+// a username *knowing* whether its password is on hand. It mirrors completeSecret's agent-context
+// promotion on the username axis — usernames whose login is on the agent's host lead. This replaces
+// the flat credentials.CompleteByUsername for scan slots. Cached; the key carries the agent id.
+func completeUsername(con *client.Client) carapace.Action {
+	return cachedCompleter(con, "scan:username", "username", func() carapace.Action {
+		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		if len(res.GetCredentials()) == 0 {
+			return carapace.ActionMessage("no credentials in database")
+		}
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedUsernames(res.GetCredentials(), agentHostCredIDs(con, agentHost))
+	})
+}
+
+// groupedUsernames renders distinct usernames as tagged, described groups. A username can appear on
+// several credentials; the one kept per username is the most useful — an agent-host login outranks a
+// login with a secret outranks a bare one (usernameScore) — and its group and description come from
+// that credential. The username is the inserted value; the description names the paired secret.
+func groupedUsernames(creds []*credential.Core, agentCreds map[string]bool) carapace.Action {
+	best := make(map[string]*credential.Core)
+	for _, c := range creds {
+		u := c.GetPublic().GetUsername()
+		if u == "" {
+			continue
+		}
+		if cur, ok := best[u]; !ok || usernameScore(c, agentCreds) > usernameScore(cur, agentCreds) {
+			best[u] = c
+		}
+	}
+	if len(best) == 0 {
+		return carapace.ActionMessage("no usernames in database")
+	}
+
+	users := make([]string, 0, len(best))
+	for u := range best {
+		users = append(users, u)
+	}
+	sort.Strings(users)
+
+	buckets := make(map[string][]string)
+	for _, u := range users {
+		c := best[u]
+		tag := usernameTag(c, agentCreds[c.GetId()])
+		buckets[tag] = append(buckets[tag], u, usernameDesc(c))
+	}
+	return renderGroups(usernameGroupOrder, buckets, "no usernames in database")
+}
+
+// usernameScore ranks the candidates for one username so the most useful wins the dedup: an agent-host
+// login (+2) over a login carrying a secret (+1) over a bare username.
+func usernameScore(c *credential.Core, agentCreds map[string]bool) int {
+	score := 0
+	if agentCreds[c.GetId()] {
+		score += 2
+	}
+	if c.GetPrivate().GetData() != "" {
+		score++
+	}
+	return score
+}
+
+// usernameTag groups a username: promoted to the agent-context group when its login is on the agent's
+// host, else split by whether a usable secret is on hand for it.
+func usernameTag(c *credential.Core, isAgent bool) string {
+	if isAgent {
+		return agentctx.TagContext
+	}
+	if c.GetPrivate().GetData() != "" {
+		return tagUserWithSecret
+	}
+	return tagUserNoSecret
+}
+
+// usernameDesc describes a username by the secret it is paired with (type, "known"/"no secret") and
+// its realm — the other half of the credential pair.
+func usernameDesc(c *credential.Core) string {
+	var parts []string
+	if c.GetPrivate().GetData() != "" {
+		parts = append(parts, secretTypeLabel(c.GetPrivate().GetType())+" known")
+	} else {
+		parts = append(parts, "no secret")
+	}
+	if r := c.GetRealm().GetValue(); r != "" {
+		parts = append(parts, "@ "+r)
+	}
+	return strings.Join(parts, " ")
+}
+
+//
+// [ MAC addresses — from DB hosts, vendor-described, agent-promoted ] ---------------------------
+//
+
+const tagMACKnown = "known MAC addresses"
+
+// macGroupOrder: agent-context relevance groups first, then all other known MACs.
+var macGroupOrder = agentctx.PromotedOrder(tagMACKnown)
+
+// completeMAC completes a MAC-address value — nmap's `--spoof-mac`, masscan's `--router-mac`/
+// `--adapter-mac`/`--spoof-mac`, and an NSE `*.mac` arg — from the MACs already in the database (the
+// `Host.MAC` field and any address of type "mac", which carries an OUI vendor). MACs on the agent's
+// host, then its subnet, are promoted via the relevance layer. Cached; the key carries the agent id.
+func completeMAC(con *client.Client) carapace.Action {
+	return cachedHostCompleter(con, "scan:macs", "mac", nil, "no hosts in database", groupedMACs)
+}
+
+// macInfo aggregates one MAC across the host set: its vendor (first seen), an owning-host label, and
+// the closest agent-context relevance of any host that carries it.
+type macInfo struct {
+	mac    string
+	vendor string
+	host   string
+	rel    agentctx.Relevance
+}
+
+// collectMACs gathers every host's MACs — the Host.MAC field plus any address of type "mac" (which
+// also carries a vendor) — deduplicated by normalised MAC, keeping the highest agent-context
+// relevance of any host that has it. Sorted by MAC.
+func collectMACs(all []*pb.Host, agentHost *pb.Host) []*macInfo {
+	byMAC := make(map[string]*macInfo)
+	add := func(mac, vendor string, rel agentctx.Relevance, host string) {
+		mac = strings.ToLower(strings.TrimSpace(mac))
+		if mac == "" {
+			return
+		}
+		mi := byMAC[mac]
+		if mi == nil {
+			mi = &macInfo{mac: mac}
+			byMAC[mac] = mi
+		}
+		if mi.vendor == "" {
+			mi.vendor = vendor
+		}
+		if mi.host == "" || rel > mi.rel {
+			mi.host = host // first seen, or a higher-relevance host takes over the label
+		}
+		if rel > mi.rel {
+			mi.rel = rel
+		}
+	}
+
+	for _, h := range all {
+		rel := agentctx.RelevanceOfHost(h, agentHost)
+		label := hostShortLabel(h)
+		add(h.GetMAC(), "", rel, label)
+		for _, a := range h.GetAddresses() {
+			if strings.EqualFold(a.GetType(), "mac") {
+				add(a.GetAddr(), a.GetVendor(), rel, label)
+			}
+		}
+	}
+
+	out := make([]*macInfo, 0, len(byMAC))
+	for _, mi := range byMAC {
+		out = append(out, mi)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].mac < out[j].mac })
+	return out
+}
+
+// groupedMACs renders the known MACs as promoted, described groups: the MAC is the inserted value,
+// the description its vendor and owning host.
+func groupedMACs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+	buckets := make(map[string][]string)
+	for _, mi := range collectMACs(all, agentHost) {
+		tag := mi.rel.Tag()
+		if tag == "" {
+			tag = tagMACKnown
+		}
+		buckets[tag] = append(buckets[tag], mi.mac, macDesc(mi))
+	}
+	return renderGroups(macGroupOrder, buckets, "no MAC addresses in database")
+}
+
+// macDesc describes a MAC by its vendor (when known) and the host it belongs to.
+func macDesc(mi *macInfo) string {
+	var parts []string
+	if mi.vendor != "" {
+		parts = append(parts, mi.vendor)
+	}
+	if mi.host != "" {
+		parts = append(parts, mi.host)
+	}
+	if len(parts) == 0 {
+		return "known MAC"
+	}
+	return strings.Join(parts, " · ")
+}
+
+// hostShortLabel is a compact host identifier for a description: its first hostname, else its first
+// address, else "?".
+func hostShortLabel(h *pb.Host) string {
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			return hn.GetName()
+		}
+	}
+	for _, a := range h.GetAddresses() {
+		if a.GetAddr() != "" {
+			return a.GetAddr()
+		}
+	}
+	return "?"
 }
 
 //

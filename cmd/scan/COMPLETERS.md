@@ -24,12 +24,20 @@ All in `run_complete.go`, all cross-scanner:
 | file          | `carapace.ActionFiles()`     | filesystem                                                    |
 | host / target | `completeTargets`            | DB hosts, locality-grouped, agent-promoted; excludes typed args |
 | subnet        | `groupedSubnets`             | DB addresses clustered /24-/64 + agent/gateway seeds (folded into targets) |
-| port          | `completePortValue`          | DB open ports (by number) + curated well-known set           |
-| username      | `credentials.CompleteByUsername` | DB credentials                                            |
-| secret        | `completeSecret`             | DB credential plaintext, grouped by type                     |
+| port (number) | `completePortValue`          | DB open ports (by number) + curated well-known set           |
+| port (nmap `-p`) | `completePortSpec`        | the above + a "service names" group (nmap-services tokens; masscan/NSE stay numeric) |
+| username      | `completeUsername`           | DB credentials, paired with their secret (type/realm), agent-promoted |
+| secret        | `completeSecret`             | DB credential plaintext, grouped by type, agent-promoted     |
+| MAC           | `completeMAC`                | DB `Host.MAC` + type=="mac" addresses (vendor-described), agent-promoted |
 | interface     | `completeInterface`          | local `net.Interfaces()`, up/down (not agent-context — local NICs) |
 | web URL       | `completeWebURL`             | synthesized `scheme://host[:port]/` from DB web services + http-enum paths |
 | domain        | `completeDomain`             | parent zones of DB hostnames                                 |
+
+The **username** and **secret** completers are the two halves of the credential pair: each describes
+its counterpart (a username by the secret it carries; a secret by its owner) so either axis picks
+the same login knowingly. **MAC** is consumed by nmap `--spoof-mac`, masscan `--router-mac`/
+`--adapter-mac`/`--spoof-mac`, and NSE `*.mac`. The nmap `-p` **service-names** group is nmap-only —
+masscan's `-p` is numeric, so it uses `completePortValue`.
 
 Two cross-cutting mechanisms these share:
 
