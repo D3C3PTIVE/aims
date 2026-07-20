@@ -21,7 +21,6 @@ package c2
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
@@ -33,7 +32,6 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
-	"github.com/d3c3ptive/aims/scan"
 )
 
 // AgentsCommands returns all agent management commands.
@@ -62,8 +60,8 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 				return nil
 			}
 
-			// Generate the table of hosts.
-			table := display.Table(res.GetAgents(), core.DisplayFields, core.DisplayHeaders()...)
+			// Generate the table of agents.
+			table := display.Table(res.GetAgents(), core.DisplayFieldsAgent, core.DisplayHeadersAgent()...)
 			fmt.Println(table.Render())
 
 			return nil
@@ -78,7 +76,7 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			tasks, _ := command.Flags().GetBool("tasks")
 
-			options := scan.DisplayDetails()
+			options := core.DisplayDetailsAgent()
 
 			if tasks {
 				options = append(options, display.WithHeader("Tasks Details", 3))
@@ -89,13 +87,16 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 				Agent:   &pb.Agent{},
 				Filters: &c2.AgentFilters{},
 			})
-			err = aims.CheckError(err)
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
 
-			// Display
+			// Display: with no args show every agent, else those whose ID has a given prefix.
 			for _, h := range res.GetAgents() {
-				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, core.DisplayFields, options...))
+				if len(args) > 0 && !aims.MatchesAnyPrefix(h.Id, args) {
+					continue
 				}
+				fmt.Println(display.Details(h, core.DisplayFieldsAgent, options...))
 			}
 
 			return nil
@@ -114,9 +115,9 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 	return scanCmd
 }
 
-// CompleteByID returns hosts completions with their smallened IDs as keys.
+// CompleteByID returns agent completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	return aims.CacheCompletion(client, "agents:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -129,16 +130,11 @@ func CompleteByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
-		options := core.Completions()
+		options := core.CompletionsAgent()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
-		results := display.Completions(res.Agents, core.DisplayFields, options...)
+		results := display.Completions(res.Agents, core.DisplayFieldsAgent, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("agents ")
-	})
-}
-
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
+	}))
 }

@@ -52,8 +52,8 @@ func (s *Service) ToPB() *network.Service {
 	return (*network.Service)(s)
 }
 
-// TableHeaders returns all weighted table headers for a table of services/ports.
-func Headers() []display.Options {
+// DisplayHeaders returns all weighted table headers for a table of services/ports.
+func DisplayHeaders() []display.Options {
 	// Weights are the responsive-drop priority (see cmd/display.adaptTableSize): weight-1 columns
 	// are the always-kept floor, higher weights drop first on narrow terminals. Extra Info in
 	// particular can be very wide (long mod_ssl banners), so it is the first to go — which is what
@@ -69,8 +69,8 @@ func Headers() []display.Options {
 		Options()
 }
 
-// DetailHeaders returns the headers for a detailed service view.
-func Details() []display.Options {
+// DisplayDetails returns the headers for a detailed service view.
+func DisplayDetails() []display.Options {
 	return display.Headers().
 		// Core
 		Add("ID", 1).

@@ -29,14 +29,9 @@ func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.Cr
 		agents = append(agents, &horm)
 	}
 
-	// Filter agents to add according to AIMS criteria first.
-	dbAgents := []*pb.AgentORM{}
-	database := Preloads(s.db, &c2.AgentFilters{})
-	database.Find(&dbAgents)
-	// filtered := core.FilterIdenticalAgent(agents, dbAgents)
-	filtered := agents
-
-	err := s.db.Create(&filtered).Error
+	// TODO: filter agents to add according to AIMS criteria first (dedup against
+	// existing rows), as the host domain does via host.IngestHosts.
+	err := s.db.Create(&agents).Error
 
 	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
 	if convErr != nil {
@@ -102,4 +97,3 @@ func Preloads(database *gorm.DB, filters *c2.AgentFilters) *gorm.DB {
 		"Host.Distance",
 	)
 }
-

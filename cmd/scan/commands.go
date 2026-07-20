@@ -77,9 +77,11 @@ func Commands(con *client.Client) *cobra.Command {
 	return scanCmd
 }
 
-// CompleteByID returns hosts completions with their smallened IDs as keys.
+// CompleteByID returns scan completions with their smallened IDs as keys. The live-DB read is
+// wrapped in CacheCompletion (once, filter many); the per-invocation Filter(c.Args...) that drops
+// already-selected IDs is applied OUTSIDE the cache, since the cache key is static.
 func CompleteByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	cached := aims.CacheCompletion(client, "scans:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -98,7 +100,11 @@ func CompleteByID(client *client.Client) carapace.Action {
 
 		results := display.Completions(res.Scans, scan.DisplayFields, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("scans").Filter(c.Args...)
+		return carapace.ActionValuesDescribed(results...).Tag("scans")
+	}))
+
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		return cached.Filter(c.Args...)
 	})
 }
 

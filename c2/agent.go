@@ -38,8 +38,8 @@ type Agent c2.Agent
 // [ Display Functions ] --------------------------------------------------
 //
 
-// DisplayHeaders returns all weighted table headers for a table of.Agents.
-func DisplayHeaders() []display.Options {
+// DisplayHeadersAgent returns all weighted table headers for a table of.Agents.
+func DisplayHeadersAgent() []display.Options {
 	return display.Headers().
 		Add("ID", 1).
 		Add("Tool", 1).
@@ -53,7 +53,7 @@ func DisplayHeaders() []display.Options {
 }
 
 // DetailHeaders returns the headers for a detailed.Agent view.
-func DisplayDetails() []display.Options {
+func DisplayDetailsAgent() []display.Options {
 	return display.Headers().
 		// Core
 		Add("ID", 1).
@@ -72,9 +72,9 @@ func DisplayDetails() []display.Options {
 		Options()
 }
 
-// Completions returns some columns to be combined into
+// CompletionsAgent returns some columns to be combined into
 // completion candidates and/or their descriptions.
-func Completions() []display.Options {
+func CompletionsAgent() []display.Options {
 	return display.Headers().
 		Add("ID", 1).
 		Add("Name", 1).
@@ -85,7 +85,7 @@ func Completions() []display.Options {
 }
 
 // Fields maps field names to their value generators.
-var DisplayFields = map[string]func(h *c2.Agent) string{
+var DisplayFieldsAgent = map[string]func(h *c2.Agent) string{
 	"ID": func(h *c2.Agent) string {
 		id := display.FormatSmallID(h.Id)
 		// If dead and behind checkin, red
