@@ -94,12 +94,27 @@ const (
 // targetGroupOrder fixes the order sub-groups are presented in.
 var targetGroupOrder = []string{tagRoutable, tagPrivate, tagLoopback, tagNoAddr}
 
-// completeTargets completes the nmap target slot with known hosts, sub-grouped by address
-// locality. It is a scan-local completion (not a call into cmd/hosts) precisely because the
-// shared hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it;
-// the read still goes through the teamclient RPC, never the DB directly. Wrapped in the shared
-// on-disk completion cache so a burst of Tabs doesn't re-fetch the whole host set each keystroke.
+// completeTargets completes a target slot with known hosts, sub-grouped by address locality, and
+// drops any target already present on the command line. It is the shared target completer — the
+// nmap positional target slot and NSE host-valued script args both use it — so excluding
+// already-chosen targets happens here, once, for every reuse site.
+//
+// The exclusion (Filter against c.Args) is applied *outside* the cache: cachedTargets stores the
+// whole host set once, and each keystroke filters that set against the live arguments. Filtering by
+// exact token is safe against the DisableFlagParsing arg stream — flags and flag-values (-sS, a
+// --script value) never equal a host candidate.
 func completeTargets(con *client.Client) carapace.Action {
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		return cachedTargets(con).Filter(c.Args...)
+	})
+}
+
+// cachedTargets is the cached whole-host-set candidate action behind completeTargets. It is a
+// scan-local completion (not a call into cmd/hosts) precisely because the shared
+// hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it; the read
+// still goes through the teamclient RPC, never the DB directly. Wrapped in the shared on-disk
+// completion cache so a burst of Tabs doesn't re-fetch the whole host set each keystroke.
+func cachedTargets(con *client.Client) carapace.Action {
 	return aims.CacheCompletion(con, "scan:nmap:targets", carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
