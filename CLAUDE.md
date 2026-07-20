@@ -173,7 +173,7 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 | network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; server CRUD still stubbed |
 | credential Credentials | ✅ | ✅ | Upsert ✅ · Delete ✅ | full slice done (merge, display, completions, CLI); Delete resolves by identity when no ID given — the worked Delete example |
 | credential Logins | ❌ | ❌ | ❌ | all methods stubbed |
-| scan Scans | ✅ | ✅ | ❌ stub | DB-level host fold done (via `host.IngestHosts` + `run_hosts` join, cross-run host unification); list/show CLI slice done (new `Detail` renderer, `runState` live axis). Upsert/Delete/List still stubbed; no `scan rm` CLI yet |
+| scan Scans | ✅ | ✅ | Upsert/Delete/List ✅ | Full CRUD. DB-level host fold (via `host.IngestHosts` + `run_hosts` join, cross-run host unification). Delete clears run_hosts so shared hosts survive; Upsert is idempotent insert-or-return-existing. CLI: `list`/`show` (new `Detail` renderer, `runState` live axis) + `rm` (running-scan guard via `scan.IsRunning`) |
 | c2 Agents/Channels | ✅ | ✅ | ❌ stub | see type-name note below |
 
 ### Known rough edges / gotchas
@@ -201,13 +201,14 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 ### Suggested re-entry points if resuming
 
 1. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services. Worked
-   examples to copy: credential Create/Upsert/**Delete** (full CRUD) and host Create/Upsert. Still
-   stubs: host Delete (scaffolding present, ends in Unimplemented at `server/host/host.go:480`),
-   scan Upsert/Delete/List, network Create/Upsert/Delete, and both c2 Upsert/Delete. The DB-level
-   ingest fold — including deep in-place child enrichment (`saveMergedHost`/`saveMergedPorts`) — is
-   DONE and is the shared primitive these should reuse.
-2. Wire the CLI **`rm`** handlers to the new `Delete` RPCs (`scan rm` doesn't exist yet; `hosts rm`
-   `RunE` is a stub).
+   examples to copy: credential Create/Upsert/**Delete** (full CRUD), **scan Create/Read/List/Upsert/
+   Delete** (full CRUD as of this session), and host Create/Upsert. Still stubs: host Delete
+   (scaffolding present, ends in Unimplemented at `server/host/host.go:480`), network Create/Upsert/
+   Delete, and both c2 Upsert/Delete. The DB-level ingest fold — including deep in-place child
+   enrichment (`saveMergedHost`/`saveMergedPorts`) — is DONE and is the shared primitive these
+   should reuse. For scan Delete, note the run_hosts-shared-host invariant (unlink, don't delete).
+2. Wire the remaining CLI **`rm`** handlers to their `Delete` RPCs (`scan rm` is done — reference for
+   the ID-prefix + running-scan-guard pattern; `hosts rm` `RunE` is still a stub).
 3. The scanner-plug substrate (SCAN.md Part C) — all genuinely absent: live/streaming scans
    (`Scans` is unary-only, `scan run nmap` blocks to completion), the `Ingestor`/`Scanner` plug
    interfaces, the stored-`Host`/`Service` → `Target` bridge, and run-to-run diff.

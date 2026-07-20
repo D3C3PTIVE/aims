@@ -67,7 +67,7 @@ production-grade; the verbs (ingest-anything, target, stream, fold, diff) are th
 | **Any scanner other than nmap** | ❌ absent | no adapter interface; `Result.Data`'s *"add a branch case in the Go scan package"* (`result.proto:31-36`) was never written |
 | Live / streaming scans | ❌ absent | `Scans` service is unary-only (`scans.proto` has no `stream`); `scan run nmap` blocks to completion (`cmd/scan/run.go`); yet `scan.go` `getTasks` already splits *running* vs *done* tasks for display |
 | Run-to-run diff | ❌ absent | but Runs are timestamped + hosts dedup, so it is a query away |
-| Upsert / Delete / List RPC | ❌ stub | `server/scan/scan.go:287-298` (`codes.Unimplemented`) |
+| Upsert / Delete / List RPC | ✅ done | `server/scan/scan.go` — List delegates to Read; Delete removes by Id, clearing run_hosts (shared hosts survive); Upsert is idempotent insert-or-return-existing. Plus `scan rm` CLI (running-scan guard via `scan.IsRunning`) |
 
 ### DB-level fold — REALIZED (was: "in-memory only")
 
@@ -95,8 +95,10 @@ The DB-level, additive-and-idempotent fold (DEDUP.md §0 prime directive) is now
 Tests: `server/host/host_test.go`, `server/scan/scan_test.go`, `scan/fold_test.go`,
 `scan/identical_test.go`. See DEDUP.md and the `aims-ingest-merge-fold` project note.
 
-**What actually remains here:** the fold runs on `Create`; the `Scans` `Upsert`/`Delete`/`List`
-RPCs are still stubs (`server/scan/scan.go:287-298`).
+**Scan CRUD is now complete:** `Create`/`Read`/`List`/`Upsert`/`Delete` are all implemented
+(`server/scan/scan.go`), with `scan list`/`show`/`rm` on the CLI. What remains for the domain is
+the scanner-plug substrate (Part C): live/streaming scans, non-nmap ingestors, the hosts-as-targets
+bridge, and run-to-run diff — all still absent.
 
 ### The object catalog (for reference)
 

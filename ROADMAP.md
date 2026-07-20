@@ -38,8 +38,8 @@ Only residual: the c2 Agents server is still the generic `type server` vs Channe
 
 ### Phase 2 — Complete the gRPC CRUD (the core functional gap; in progress)
 
-**Done:** host (Create/Read/Upsert) and credential (**full CRUD**); scan Create/Read. **Still
-stubbed:** host Delete; network Create/Upsert/Delete; scan Upsert/Delete/List; c2 Upsert/Delete;
+**Done:** scan (**full CRUD**) and credential (**full CRUD**); host (Create/Read/Upsert). **Still
+stubbed:** host Delete; network Create/Upsert/Delete; c2 Upsert/Delete;
 and the entirely-stubbed Users and Logins services. The RPC protos define **Create / Read /
 Upsert / Delete** (List folds into Read via `*Filters`; Update via Upsert).
 
@@ -55,7 +55,7 @@ Remaining task list:
 | host **Users** | all: `Create/Read/Upsert/Delete` | fully stubbed; mirror Hosts |
 | network Services | `Create`, `Upsert`, `Delete` | Read/List done; reuse the shared `host` fold for dedup |
 | credential **Logins** | all | fully stubbed |
-| scan Scans | `Upsert`, `Delete`, `List` | Create/Read done — Create folds hosts via `host.IngestHosts` + `run_hosts` join (cross-run unification). `Upsert`/`Delete`/`List` still `Unimplemented` (`server/scan/scan.go:289-297`) |
+| scan Scans | ✅ **done** | Full CRUD. Create folds hosts via `host.IngestHosts` + `run_hosts` join (cross-run unification); Delete unlinks the shared join (hosts survive); Upsert idempotent; List delegates to Read. CLI `scan rm` with a running-scan guard. |
 | c2 Agents/Channels | `Upsert`, `Delete` | mirror credential/host |
 
 Cross-cutting for this phase:

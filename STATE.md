@@ -80,7 +80,7 @@ Verified 2026-07-20 against source. CLAUDE.md's table carries the same status wi
 | network **Services** | ✅ | ❌ stub | ❌ stub | ❌ stub | Read/List + display/CLI slice done; mutations Unimplemented |
 | credential **Credentials** | ✅ | ✅ | ✅ | ✅ | full CRUD; Delete resolves by identity when no ID given |
 | credential **Logins** | ❌ | ❌ | ❌ | ❌ | all methods stubbed |
-| scan **Scans** | ✅ | ✅ (host fold + `run_hosts` join) | ❌ stub | ❌ stub | Upsert/Delete/List `Unimplemented` (`server/scan/scan.go:289-297`); list/show CLI slice done |
+| scan **Scans** | ✅ | ✅ (host fold + `run_hosts` join) | ✅ | ✅ | **full CRUD**; Delete unlinks run_hosts so shared hosts survive; Upsert idempotent. CLI: list/show/rm (running-scan guard) |
 | c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | ❌ stub | type-name asymmetry, see below |
 
 ## Known rough edges / gotchas
