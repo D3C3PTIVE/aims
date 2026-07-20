@@ -232,18 +232,14 @@ assume, defer.
   zgrab adapter now stamps `Status{up}` + port `State{open}` evidence, clearing the `Status` sites),
   but the **`h.OS.Matches` deref still crashes** OS-less hosts. Fix belongs in the host-domain display
   (guard nil `OS`/`Status`), which an agent is actively editing (`c609f7c`) — coordinate, don't clobber.
-- **Dedup / cascade / relationships at Upsert/Update are under-verified** for scan/host/service when
-  the contributor is not nmap. Open questions to actually test, not assume:
-  - Does `host.IngestHosts`/`MergeHost` correctly merge a *zgrab* host into an existing *nmap* host
-    for the same IP (union of ports/scripts, no dup, no clobbered evidence)? Only proven for
-    nmap↔nmap so far.
-  - Do the many2many joins (`run_hosts`, and host→ports/scripts belongs_to) cascade correctly on
-    Upsert and Delete when children arrive from a second tool? GORM `FullSaveAssociations` vs. the
-    `saveMergedHost`/`saveMergedPorts` hand-written write-back (see `aims-gorm-pb-orm-fk-loss` memory).
-  - Is a re-imported zgrab file idempotent at the DB level (not just in-memory fold)? Unit test
-    covers the in-memory fold; the persisted round-trip is untested for non-nmap.
-  - Port/Service identity across tools: `SamePort` keys on (proto, number) only — a zgrab port with
-    `Protocol:"tcp"` must line up with an nmap port that may store protocol differently.
+- **Dedup / cascade / relationships at Upsert/Delete — ✅ VERIFIED cross-tool** (`345feb0`,
+  `server/scan/crosstool_test.go`): a zgrab host merges into an existing nmap host for the same IP
+  (union ports/scripts, nmap evidence preserved); a re-observed host tree across two distinct runs
+  is DB-level idempotent (one host/port/script, both runs link the shared row); deleting one tool's
+  run unlinks only its `run_hosts` join and leaves the shared host + both tools' ports/scripts.
+  No bugs found — the fold + `run_hosts` unification + Delete-unlink behave correctly across tools.
+  (Note: `SamePort` keys on (proto, number); the tests use `Protocol:"tcp"` on both sides — a tool
+  that spells the protocol differently would still be a mismatch, but no such tool is wired.)
 - **`server/scan.Read` loaded hosts UNSCOPED.** ✅ *Fixed* (`24b6bfd`): the per-run
   `database.Find(&run.Hosts)` (whole-table Find → every run got all hosts) is replaced by preloading
   the host subtree through the `run_hosts` many2many in the main query (`Preload("Hosts")` scopes per
