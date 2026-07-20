@@ -188,10 +188,14 @@ Shipped scope (T1 + T2, vhost-preferred, paths deferred):
 - **Host** — service vhost (`Service.Hostname`) › a host hostname › an address; IPv6 bracketed;
   default port omitted.
 - **Only `url`/`uri` route here.** `path`/`basepath` stay free-form — they want a path component,
-  not a full URL. That is the deferred **T3 path enrichment**: extract discovered paths/titles from
-  `Port.Scripts`/`HostScripts` *output text* (http-enum, http-title) by regex — fragile, unstructured,
-  so a separate future completer.
+  not a full URL.
 - Grouped by scheme, agent host/subnet endpoints promoted via the relevance layer; `NoSpace('/')`.
+- **T3 path enrichment — ✅ BUILT.** `pathsFromPort` pulls the paths NSE actually discovered from a
+  port's `http-*` script output (mainly `http-enum`), in nmap's `|   /path: label` shape, and offers
+  `scheme://host/path` under a `discovered paths` group (ranked just below the agent-context groups,
+  above the synthesized roots). Restricted to `http-*` script Ids + the path shape to avoid false
+  positives; deduped and capped at 40 so a big enumeration can't flood completion. Real known-good
+  paths, not guesses — the highest-value URL candidates when a scan has run them.
 
 # Smart subnet completer — ✅ BUILT (`completeSubnet` via `groupedSubnets`, run_complete.go)
 
@@ -232,3 +236,32 @@ context. Worth harvesting a vocabulary we already have rather than hand-typing i
   enum/list (a proto enum, an `/etc/*` file, a tool's `--list` output) before hand-writing
   candidates. Describe each token; tag by family when the list is large (as the 124 hash modes
   would want).
+
+## For / against (verdict: selectively worth it; the hashcat-124 case argues *against* copying)
+
+**For:**
+- **Precision** — a fixed vocabulary means every candidate is valid; no wrong suggestions.
+- **Cheap** — static list, no DB/RPC/context, trivial latency, no cache.
+- **Memory aid** — surfaces accepted values the operator won't recall (124 hashcat modes, output
+  formats, scan types), each with a one-line description.
+- **Cross-tool reuse** — one vocabulary serves many tools (hashcat modes → hashcat/john; protocols →
+  many).
+
+**Against:**
+- **Drift** — a copied list chases upstream (hashcat adds modes every release); we'd own the
+  staleness.
+- **Dependency direction** — the richest list (Sliver's `HashType`) is *downstream*; AIMS is the
+  upstream model and must not import it. Copying inverts ownership of the canonical list.
+- **Marginal for common tokens** — for values the operator knows (`ntlm`, `tcp`) completion saves
+  little; the value is in the obscure long tail only.
+- **Noise** — a 124-item dump overwhelms unless tag-grouped by family — more design.
+- **Redundant with the tool's own completion** — many tools ship completion (hashcat, carapace-bin
+  specs) a bridge already taps (as we do for nmap's zsh `_nmap`); building our own duplicates it.
+
+**Verdict.** Build a type-list completer only when (a) the vocab is stable/small *or* the value is
+high (obscure tokens), (b) no existing tool completion covers it, and (c) it can live at the right
+layer without a bad dependency. For **hashcat modes specifically: do not copy 124 values into
+AIMS** — prefer a carapace-bin/bridge spec for hashcat, or a mode completer on the Sliver side where
+the enum already lives. For **AIMS-native type slots** (its own `PrivateType`, nmap scan types,
+output formats) a small hand-curated described list is worth it — exactly what `completeHashType`
+(4 tokens) and the curated nmap flag set already do.
