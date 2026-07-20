@@ -143,14 +143,26 @@ re-deriving tags in each:
   completers — exactly the "efficient tag/classification system depending on the current agent
   context" the design calls for.
 
-# Design: network-interface completer (build first)
+# Interface completion — local (built) + agent-host (design)
 
-- `completeInterface()` — local `net.Interfaces()` → addresses, plus `any` / `localhost`. Tag by
-  state (up/down) and/or address family (v4/v6). Zero RPC, ~zero latency, purely local.
-- **Deliberately not agent-context aware**: interfaces belong to the *operator's* box where the
-  completion process runs; the loaded agent may be a remote machine. Do not promote interfaces by
-  agent context — conflating "local machine" with "the current agent's machine" would be wrong.
-- Wires into nmap `-e` and NSE `*.interface`, plus masscan/tcpdump/arp-scan/bettercap.
+Two distinct sources, and the distinction is the point:
+
+- **Local interfaces — built** (`completeInterface`, run_complete.go). `net.Interfaces()` on the box
+  the completion process runs on, grouped up/down, described by addresses. This is the correct
+  source for nmap `-e`, which selects a *local* interface to send from, and it is context-independent
+  by nature — the loaded agent may be a remote machine, so its NICs are not the operator's. Wires
+  into `-e` and NSE `*.interface`, and reusable by masscan/tcpdump/arp-scan/bettercap.
+- **Agent-host source — design.** When a context is loaded, surface the *agent host's* network
+  identity. Model caveat: hosts store `network.Address` (Addr/Type/Vendor) — **bare addresses, no
+  interface names** — so the agent-host analog offers the host's addresses / subnet, not named NICs.
+  That is really the host/address axis, so it is delivered by the classification layer **promoting
+  the agent host's addresses** in the target/host/address completers (a target, a source address, an
+  NSE host arg), rather than a second literal interface list.
+
+So: `completeInterface` stays local. If AIMS later stores per-host interface *records* (names), it
+gains an agent-host tag group (`local` vs `this agent's host`) and becomes a concrete consumer of
+the Relevance×Group layer; until then, "the current agent's addresses" is served by address-valued
+completers under context promotion.
 
 # Design: web-URL completer
 
