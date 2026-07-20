@@ -152,6 +152,33 @@ func TestIngestFoldIdempotent(t *testing.T) {
 	}
 }
 
+// TestZgrabRunIdentity: zgrab has no nmap-style run metadata, so the ingestor stamps the raw
+// output as RawXML — the run identity. Same bytes → same identity (idempotent re-import);
+// different bytes → different identity (distinct runs, not collapsed by AreScansIdentical).
+func TestZgrabRunIdentity(t *testing.T) {
+	a, err := Ingest("zgrab2", []byte(zgrabFixture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.RawXML == "" {
+		t.Fatal("zgrab run should carry RawXML as its identity")
+	}
+
+	same, _ := Ingest("zgrab2", []byte(zgrabFixture))
+	if same.RawXML != a.RawXML {
+		t.Error("re-ingesting the same bytes must yield the same identity")
+	}
+
+	other := `{"ip":"9.9.9.9","data":{"ssh":{"status":"success","protocol":"ssh","result":{"x":1}}}}`
+	b, err := Ingest("zgrab2", []byte(other))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.RawXML == a.RawXML {
+		t.Error("different zgrab files must have different RawXML identity")
+	}
+}
+
 func TestJSONToScriptShapes(t *testing.T) {
 	var v any
 	dec := json.NewDecoder(bytes.NewReader([]byte(
