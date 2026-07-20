@@ -204,6 +204,21 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	run := &scan.Run{}
 	run.Scanner = job.scanner
 
+	// snapshot upserts the accumulating run under the JOB id, so `scan show <job-id>` and
+	// `watch scan show` reflect live state as hosts arrive (persistRun upserts by Id — see
+	// scan.go). Snapshots skip provenance stamping (done once at the final persist so the Source
+	// rows aren't re-minted each tick) and are throttled so a fast scan doesn't hammer the DB.
+	snapshot := func() {
+		pbRun := run.ToPB()
+		pbRun.Id = job.id
+		pbRun.Scanner = job.scanner
+		_, _ = s.persistRun(context.Background(), pbRun)
+	}
+
+	// Persist an initial (empty) snapshot immediately so the run is visible as soon as it starts.
+	snapshot()
+	lastSnap := time.Now()
+
 	for results != nil || progress != nil {
 		select {
 		case r, ok := <-results:
@@ -214,6 +229,10 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 			_ = run.AddResult((*scan.Result)(r))
 			if r.GetHost() != nil {
 				job.broadcast(hostUpdate(r.GetHost()))
+			}
+			if time.Since(lastSnap) > 1500*time.Millisecond {
+				snapshot()
+				lastSnap = time.Now()
 			}
 		case p, ok := <-progress:
 			if !ok {
@@ -226,10 +245,14 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		}
 	}
 
-	// Persist under a fresh context so a cancelled (Stop) scan still saves the partial results it
-	// found. stampScanProvenance + persistRun are the exact Create path (host unification).
+	// Final persist (fresh context so a cancelled/Stopped scan still saves its partial results):
+	// stamp provenance once, then upsert the authoritative stored run under the same job Id.
+	// Mark it finished so stateOf reads "done" (a streamed run carries no nmap runstats, so
+	// without this the completed run would linger as "queued"). Set once, on the final write.
 	pbRun := run.ToPB()
+	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
+	pbRun.Stats = &scanpb.Stats{Finished: &scanpb.Finished{Time: time.Now().Unix(), Exit: "success"}}
 	stampScanProvenance(pbRun)
 
 	stored, err := s.persistRun(context.Background(), pbRun)

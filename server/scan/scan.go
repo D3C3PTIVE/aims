@@ -135,8 +135,13 @@ func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, 
 		// makes Create write only the run_hosts join entries (the host records are left as the
 		// already-persisted shared rows), and the join insert is OnConflict-DoNothing, so
 		// re-linking a host a run already references is idempotent.
+		//
+		// OnConflict{UpdateAll} makes this an UPSERT by run Id: a fresh-Id run (Create/Upsert
+		// import path) simply inserts, but a run persisted repeatedly under the same Id (a live
+		// streaming scan snapshotting itself as hosts arrive, see run.go) updates in place rather
+		// than erroring on the primary key. The run's non-host children are re-linked idempotently.
 		runORM.Hosts = sharedStubs(sharedHosts)
-		if err := tx.Omit("Hosts.*").Create(&runORM).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Omit("Hosts.*").Create(&runORM).Error; err != nil {
 			return err
 		}
 
