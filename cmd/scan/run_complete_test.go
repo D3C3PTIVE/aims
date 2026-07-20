@@ -300,3 +300,66 @@ func TestNSEArgValueKind(t *testing.T) {
 		}
 	}
 }
+
+// TestScriptSelectorsFromArgs checks we recover the --script selection from the raw token stream in
+// both `--script v` and `--script=v` forms, split on commas, without mistaking --script-args or
+// --script-help for --script.
+func TestScriptSelectorsFromArgs(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{"spaced", []string{"10.0.0.1", "--script", "http-title,safe", "--script-args"}, []string{"http-title", "safe"}},
+		{"equals", []string{"--script=http-*", "--script-args"}, []string{"http-*"}},
+		{"none", []string{"10.0.0.1", "--script-args"}, nil},
+		{"not-confused-by-siblings", []string{"--script-help", "--script-args", "--script-updatedb"}, nil},
+		{"trims-and-drops-empty", []string{"--script", "a, ,b,"}, []string{"a", "b"}},
+		{"multiple-flags", []string{"--script", "vuln", "--script=auth"}, []string{"vuln", "auth"}},
+	}
+	for _, c := range cases {
+		got := scriptSelectorsFromArgs(c.args)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: scriptSelectorsFromArgs(%v) = %v, want %v", c.name, c.args, got, c.want)
+		}
+	}
+}
+
+// TestSelectScriptRefs pins selector resolution: exact name, category, wildcard, `all`, a script
+// path, a miss, and de-duplicated unions — all name-sorted.
+func TestSelectScriptRefs(t *testing.T) {
+	refs := []nseScriptRef{
+		{name: "ftp-brute", cats: []string{"brute", "intrusive"}},
+		{name: "http-enum", cats: []string{"discovery", "intrusive"}},
+		{name: "http-title", cats: []string{"default", "discovery", "safe"}},
+		{name: "smb-os-discovery", cats: []string{"default", "safe"}},
+	}
+	names := func(rs []nseScriptRef) string {
+		var ns []string
+		for _, r := range rs {
+			ns = append(ns, r.name)
+		}
+		return strings.Join(ns, ",")
+	}
+
+	cases := []struct {
+		name string
+		sels []string
+		want string
+	}{
+		{"exact", []string{"http-title"}, "http-title"},
+		{"category", []string{"safe"}, "http-title,smb-os-discovery"},
+		{"wildcard", []string{"http-*"}, "http-enum,http-title"},
+		{"all", []string{"all"}, "ftp-brute,http-enum,http-title,smb-os-discovery"},
+		{"category-intrusive", []string{"intrusive"}, "ftp-brute,http-enum"},
+		{"path-form", []string{"scripts/http-title.nse"}, "http-title"},
+		{"miss", []string{"nope"}, ""},
+		{"union-dedup", []string{"safe", "http-title"}, "http-title,smb-os-discovery"},
+		{"empty", nil, ""},
+	}
+	for _, c := range cases {
+		if got := names(selectScriptRefs(refs, c.sels)); got != c.want {
+			t.Errorf("%s: selectScriptRefs(%v) = %q, want %q", c.name, c.sels, got, c.want)
+		}
+	}
+}

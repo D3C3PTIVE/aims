@@ -427,31 +427,91 @@ func groupedNSE(scripts []nseScript, categories []string) carapace.Action {
 // existing AIMS completer when the key's shape says what the value is — a target host, a known
 // credential username, or a wordlist/data file. Anything else is left free-form.
 func completeNSEScriptArgs(con *client.Client) carapace.Action {
-	return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
-		return carapace.ActionMultiParts("=", func(c carapace.Context) carapace.Action {
-			if len(c.Parts) > 0 { // past the '=', completing the value of Parts[0]
-				return completeNSEArgValue(con, c.Parts[0])
-			}
-			return nseArgNames(con)
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		// Scope the offered args to whatever `--script` already selects on this command line.
+		selectors := scriptSelectorsFromArgs(c.Args)
+		return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
+			return carapace.ActionMultiParts("=", func(mc carapace.Context) carapace.Action {
+				if len(mc.Parts) > 0 { // past the '=', completing the value of Parts[0]
+					return completeNSEArgValue(con, mc.Parts[0])
+				}
+				return nseArgNames(con, selectors)
+			})
 		})
 	})
 }
 
-// nseArgNames offers the deduplicated set of NSE argument names, described from their `@args` text.
-// Parsing every installed `.nse` is the expensive part, so it is wrapped in the shared on-disk
-// completion cache (same rationale as the script list): in exec-once CLI mode every Tab is a fresh
-// process, so only the on-disk cache spares the whole-scripts-dir re-parse per keystroke.
-func nseArgNames(con *client.Client) carapace.Action {
-	return aims.CacheCompletion(con, "scan:nmap:nse-args", carapace.ActionCallback(func(carapace.Context) carapace.Action {
-		args := loadNSEScriptArgs()
-		if len(args) == 0 {
-			return carapace.ActionMessage("no NSE script args found (is nmap installed locally?)")
+// scriptSelectorsFromArgs pulls the `--script` value(s) out of the raw positional token stream
+// (DisableFlagParsing hands us everything as args). It handles both `--script foo,bar` and
+// `--script=foo,bar`, splits on commas, and never mistakes `--script-args`/`--script-help` for
+// `--script`. The returned selectors are script names, categories, wildcards, `all`, or paths —
+// resolved later against the installed set.
+func scriptSelectorsFromArgs(args []string) []string {
+	var sels []string
+	for i := 0; i < len(args); i++ {
+		var val string
+		switch a := args[i]; {
+		case a == "--script" && i+1 < len(args):
+			val = args[i+1]
+			i++
+		case strings.HasPrefix(a, "--script="):
+			val = strings.TrimPrefix(a, "--script=")
+		default:
+			continue
 		}
-		described := make([]string, 0, len(args)*2)
-		for _, a := range args {
-			described = append(described, a[0], a[1])
+		for _, s := range strings.Split(val, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				sels = append(sels, s)
+			}
 		}
-		return carapace.ActionValuesDescribed(described...).Tag("script args")
+	}
+	return sels
+}
+
+// nseArgNames offers the NSE argument names, described from their `@args` text and scoped to the
+// scripts `--script` selects. With no selection it falls back to the full deduped set under one
+// "script args" tag; with a selection it groups the args by the script that declares them, so an
+// operator running several scripts sees whose arg is whose. Parsing the `.nse` files is the
+// expensive part, so it is wrapped in the shared on-disk completion cache — keyed by the (sorted)
+// selectors so distinct `--script` values don't share a cache entry, while repeated Tabs at the
+// same selection stay a cache hit.
+func nseArgNames(con *client.Client, selectors []string) carapace.Action {
+	name := "scan:nmap:nse-args"
+	if len(selectors) > 0 {
+		sorted := append([]string(nil), selectors...)
+		sort.Strings(sorted)
+		name += ":" + strings.Join(sorted, ",")
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(carapace.Context) carapace.Action {
+		refs := nseScriptIndex()
+		if len(refs) == 0 {
+			return carapace.ActionMessage("no NSE scripts found (is nmap installed locally?)")
+		}
+
+		selected := selectScriptRefs(refs, selectors)
+		if len(selected) == 0 {
+			// No --script scope yet (or nothing matched): the whole deduped set, one group.
+			return allArgsAction(refs)
+		}
+
+		// Scoped: one tag group per selected script, so multi-script selections stay legible.
+		actions := make([]carapace.Action, 0, len(selected))
+		for _, ref := range selected {
+			args := parseArgsForFile(ref.path)
+			if len(args) == 0 {
+				continue
+			}
+			described := make([]string, 0, len(args)*2)
+			for _, a := range args {
+				described = append(described, a[0], a[1])
+			}
+			actions = append(actions, carapace.ActionValuesDescribed(described...).Tag(ref.name))
+		}
+		if len(actions) == 0 {
+			return carapace.ActionMessage("selected script(s) declare no @args")
+		}
+		return carapace.Batch(actions...).ToA()
 	}))
 }
 
@@ -527,42 +587,137 @@ func dirHasNSE(dir string) bool {
 	return len(matches) > 0
 }
 
-// loadNSEScriptArgs parses the `@args` tags of every installed `.nse` into a name-sorted, deduped
-// (name, description) set. The same argument is declared by many scripts (library args like
-// http.useragent, smbdomain), so it is deduplicated by name, keeping the first non-empty
-// description seen.
-func loadNSEScriptArgs() [][2]string {
+// nseScriptRef locates one installed script and its categories without parsing its @args — enough
+// to resolve a --script selector. Building the whole index is cheap (script.db + a glob); the
+// expensive per-file @args parse is deferred to only the scripts that actually match.
+type nseScriptRef struct {
+	name string
+	cats []string
+	path string
+}
+
+// nseScriptIndex lists every installed script with its categories (from script.db) and file path
+// (from the scripts dir glob), name-sorted. No @args parsing happens here.
+func nseScriptIndex() []nseScriptRef {
 	dir := findNSEScriptsDir()
 	if dir == "" {
 		return nil
 	}
-	files, _ := filepath.Glob(filepath.Join(dir, "*.nse"))
 
-	byName := make(map[string]string)
+	scripts, _ := loadNSEScripts() // name → categories, from script.db
+	catByName := make(map[string][]string, len(scripts))
+	for _, s := range scripts {
+		catByName[s.name] = s.cats
+	}
+
+	files, _ := filepath.Glob(filepath.Join(dir, "*.nse"))
+	refs := make([]nseScriptRef, 0, len(files))
 	for _, path := range files {
-		f, err := os.Open(path)
-		if err != nil {
+		name := strings.TrimSuffix(filepath.Base(path), ".nse")
+		refs = append(refs, nseScriptRef{name: name, cats: catByName[name], path: path})
+	}
+	sort.Slice(refs, func(i, j int) bool { return refs[i].name < refs[j].name })
+	return refs
+}
+
+// selectScriptRefs resolves --script selectors against the index the way nmap does: `all`, an exact
+// script name, a category, a `name*`/`?`/`[` wildcard, or a script path (dir and `.nse` stripped).
+// Matches are unioned and de-duplicated, name-sorted. Empty selectors resolve to nothing (the
+// caller then falls back to the full arg set).
+func selectScriptRefs(refs []nseScriptRef, selectors []string) []nseScriptRef {
+	if len(selectors) == 0 {
+		return nil
+	}
+
+	byName := make(map[string]nseScriptRef, len(refs))
+	for _, r := range refs {
+		byName[r.name] = r
+	}
+
+	seen := make(map[string]bool)
+	var out []nseScriptRef
+	add := func(r nseScriptRef) {
+		if !seen[r.name] {
+			seen[r.name] = true
+			out = append(out, r)
+		}
+	}
+
+	for _, sel := range selectors {
+		s := strings.TrimSpace(sel)
+		if s == "" {
 			continue
 		}
-		for _, a := range parseNSEArgs(f) {
-			if cur, ok := byName[a[0]]; !ok || cur == "" {
+		if strings.Contains(s, "/") || strings.HasSuffix(s, ".nse") { // a script path
+			s = strings.TrimSuffix(filepath.Base(s), ".nse")
+		}
+
+		switch {
+		case s == "all":
+			for _, r := range refs {
+				add(r)
+			}
+		case strings.ContainsAny(s, "*?["): // a wildcard
+			for _, r := range refs {
+				if ok, _ := filepath.Match(s, r.name); ok {
+					add(r)
+				}
+			}
+		default: // an exact name and/or a category
+			if r, ok := byName[s]; ok {
+				add(r)
+			}
+			for _, r := range refs {
+				for _, c := range r.cats {
+					if c == s {
+						add(r)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
+	return out
+}
+
+// parseArgsForFile parses the @args of a single script file, or nil if it can't be opened.
+func parseArgsForFile(path string) [][2]string {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	return parseNSEArgs(f)
+}
+
+// allArgsAction is the unscoped fallback: the @args of every installed script, deduplicated by name
+// (many scripts declare the same library arg, e.g. http.useragent, smbdomain) keeping the first
+// non-empty description, under a single "script args" tag.
+func allArgsAction(refs []nseScriptRef) carapace.Action {
+	byName := make(map[string]string)
+	var order []string
+	for _, ref := range refs {
+		for _, a := range parseArgsForFile(ref.path) {
+			if _, ok := byName[a[0]]; !ok {
+				order = append(order, a[0])
+			}
+			if byName[a[0]] == "" {
 				byName[a[0]] = a[1]
 			}
 		}
-		f.Close()
+	}
+	if len(order) == 0 {
+		return carapace.ActionMessage("no NSE script args found (is nmap installed locally?)")
 	}
 
-	names := make([]string, 0, len(byName))
-	for n := range byName {
-		names = append(names, n)
+	sort.Strings(order)
+	described := make([]string, 0, len(order)*2)
+	for _, n := range order {
+		described = append(described, n, byName[n])
 	}
-	sort.Strings(names)
-
-	out := make([][2]string, 0, len(names))
-	for _, n := range names {
-		out = append(out, [2]string{n, byName[n]})
-	}
-	return out
+	return carapace.ActionValuesDescribed(described...).Tag("script args")
 }
 
 // parseNSEArgs extracts the `@args name description` declarations from a single `.nse` file. NSE
