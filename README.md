@@ -149,6 +149,7 @@ The companion docs carry the detail:
 
 | Doc                              | What it covers                                           |
 |----------------------------------|---------------------------------------------------------|
+| [`NAVIGATION.md`](./NAVIGATION.md) | Codebase map — directory roles + "where is X?" lookup  |
 | [`CLAUDE.md`](./CLAUDE.md)       | Root context — architecture, pipeline, domain catalog   |
 | [`STATE.md`](./STATE.md)         | Current state, build status, per-service maturity        |
 | [`ROADMAP.md`](./ROADMAP.md)     | Re-entry plan / what to build next                       |

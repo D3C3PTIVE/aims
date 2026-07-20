@@ -41,6 +41,14 @@ is done. Current state of `GOWORK=off go build ./...`:
 - ✅ **`server/transport/` compiles** — the `reeflective/team` **v0.3.2** API migration landed
   in `7749329` (slog loggers, `WithHandler`, changed `GetConfig`/auth signatures; Tailscale
   gated behind `-tags tailscale`). `cmd/aims` no longer fails transitively.
+- ✅ **Transport factored out + client/server boot split (`c3c24b1`).** The hand-forked
+  gRPC/mTLS transport was promoted into the shared `reeflective/team/transports/grpc/{server,client}`
+  package; aims's old `server/transport/{mtls,middleware}.go` and the whole `client/transport/`
+  dir were **deleted**. `server/transport/` now only *constructs+wires* the teamserver (see its
+  README). The binary picks embedded-server vs. thin-client mode at boot via
+  `reeflective/team/boot` in `cmd/aims/root.go` — a thin client never builds the teamserver or
+  opens the DB. aims consumes the ahead-of-release team via a `replace` in `go.mod` (interim).
+  Full map: [`NAVIGATION.md`](./NAVIGATION.md).
 - ✅ **The binary runs.** `aims --help` shows the full command tree (database + C2 groups +
   `teamserver`); `aims scan run nmap …` executes and stores; its completions fire
   (`aims __complete scan run nmap --script ""` returns the NSE catalog). The nmap fork

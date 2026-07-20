@@ -3,7 +3,8 @@
 > Root context file. Discovered & written 2026-07-19. This is an exploration report
 > for the repository plus working guidance for future sessions.
 >
-> **Companion docs:** [`STATE.md`](./STATE.md) — current state & what's broken ·
+> **Companion docs:** [`NAVIGATION.md`](./NAVIGATION.md) — codebase map (directory roles +
+> "where is X?") · [`STATE.md`](./STATE.md) — current state & what's broken ·
 > [`SCAN.md`](./SCAN.md) — scan model & scanner-plug substrate ·
 > [`ROADMAP.md`](./ROADMAP.md) — re-entry plan.
 >
