@@ -64,6 +64,11 @@ func (zgrabIngestor) Name() string { return "zgrab2" }
 func (zgrabIngestor) Ingest(raw []byte) (*scanpb.Run, error) {
 	run := &scandomain.Run{}
 	run.Scanner = "zgrab2"
+	// Record the raw output as the run's identity. zgrab has no nmap-style run metadata
+	// (Start/Args/version), so without this two DIFFERENT zgrab files would collapse into one
+	// run (AreScansIdentical would match on Scanner alone). RawXML is the authoritative dedup
+	// key: same bytes re-imported stay idempotent, different bytes become a distinct run.
+	run.RawXML = string(raw)
 
 	// zgrab2 output is a sequence of JSON objects (one target per line). A streaming decoder
 	// with UseNumber walks them regardless of the exact whitespace/newline framing and keeps
