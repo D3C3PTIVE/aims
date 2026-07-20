@@ -262,8 +262,26 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 
 	dbScans := []*scanpb.RunORM{}
 
-	// Preloads
+	// Preloads. When hosts are requested, preload the run's host subtrees THROUGH the run_hosts
+	// join: Preload("Hosts") (via clause.Associations in db.Preload) loads each run's OWN hosts,
+	// scoped by the many-to-many, and the "Hosts.<assoc>" entries pull the nested host tree
+	// (ports, services, OS, trace, ...). This replaces a former per-run `Find(&run.Hosts)` that
+	// queried the whole hosts table and so loaded EVERY host into EVERY run — which made
+	// `scan diff` see identical host sets ("no changes") and `scan show --hosts` wrong.
 	scanFilters := WithPreloads(filters)
+	if filters.Hosts {
+		hostClauses := hosts.WithPreloads(&hostrpcpb.HostFilters{Trace: true, Ports: filters.Ports})
+		for name, load := range hostClauses {
+			if load {
+				scanFilters["Hosts."+name] = true
+			}
+		}
+		// Addresses are the host's identity anchor but are not in hosts.WithPreloads (the host
+		// server loads them via clause.Associations on the Host model); preload them explicitly
+		// so a run's hosts come back with their addresses.
+		scanFilters["Hosts.Addresses"] = true
+	}
+
 	query := s.db.Where(hst)
 	// Per-tool scoping: a run's producing tool is its Scanner, so scoping to a tool is a
 	// direct Scanner match (no join needed). Empty Source is a no-op (all runs).
@@ -280,19 +298,11 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 	}
 
 	scansResp := []*scanpb.Run{}
-
-	// Load hosts if required
 	for _, run := range dbScans {
-		if filters.Hosts {
-			filters := hosts.WithPreloads(&hostrpcpb.HostFilters{
-				Trace: true,
-				Ports: true,
-			})
-			database = db.Preload(s.db, filters)
-			database.Find(&run.Hosts)
+		pb, err := run.ToPB(ctx)
+		if err != nil {
+			return nil, err
 		}
-
-		pb, _ := run.ToPB(ctx)
 		scansResp = append(scansResp, &pb)
 	}
 
