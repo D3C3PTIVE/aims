@@ -21,9 +21,9 @@ package main
 import (
 	"log"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/reeflective/team/server"
 	"github.com/reeflective/team/server/commands"
-	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
@@ -43,7 +43,9 @@ func main() {
 	// AIMS RPC client, access to database/server.
 	// No working connection yet, handled by teamclient.
 	aimsClient, err := client.New(opts...)
-
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	aimsClient.AddConnectHooks(preRunServer(teamserver, aimsClient))
 
@@ -53,7 +55,7 @@ func main() {
 	teamserverCmds := commands.Generate(teamserver, aimsClient.Teamclient)
 	aimsCmd.AddCommand(teamserverCmds)
 
-    bindRunners(aimsCmd, true, aimsClient.ConnectRun)
+	bindRunners(aimsCmd, true, aimsClient.ConnectRun)
 
 	// Completions (also pre-connect to the server)
 	carapace.Gen(aimsCmd)
@@ -93,4 +95,3 @@ func preRunServer(teamserver *server.Server, con *client.Client) func() error {
 		return nil
 	}
 }
-

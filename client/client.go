@@ -22,9 +22,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/carapace-sh/carapace"
 	"github.com/reeflective/team"
 	"github.com/reeflective/team/client"
-	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
@@ -43,7 +43,6 @@ type Client struct {
 	// Teamclient & remotes
 	Teamclient   *client.Client
 	dialer       *transport.TeamClient
-	conn         *grpc.ClientConn
 	connectHooks []func() error
 
 	// Services

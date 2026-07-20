@@ -126,7 +126,7 @@ func Commands(client *client.Client) *cobra.Command {
 			// Each host renders through the shared Banner/Panes/Insights/Sections
 			// detail layout, identical to the credential and service info views.
 			for _, h := range res.GetHosts() {
-				if len(args) > 0 && !matchesAny(h.Id, args) {
+				if len(args) > 0 && !aims.MatchesAnyPrefix(h.Id, args) {
 					continue
 				}
 				fmt.Println(host.Detail(h, traceroute).Render(0))
@@ -237,7 +237,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 			// Display
 			for _, arg := range args {
 				for _, h := range res.GetHosts() {
-					if strings.HasPrefix(h.Id, strip(arg)) {
+					if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
 						scanList = append(scanList, h)
 					}
 				}
@@ -247,19 +247,4 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 	}
 
 	return exportRunE
-}
-
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
-}
-
-// matchesAny reports whether id has any of the (ANSI-stripped) prefixes.
-func matchesAny(id string, prefixes []string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(id, strip(p)) {
-			return true
-		}
-	}
-	return false
 }

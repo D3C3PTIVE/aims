@@ -97,7 +97,7 @@ func Completions() []display.Options {
 var DisplayFields = map[string]func(h *pb.Host) string{
 	// Table
 	"ID": func(h *pb.Host) string {
-		if h.Status.State == "up" {
+		if h.Status != nil && h.Status.State == "up" {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
 		return display.FormatSmallID(h.Id)

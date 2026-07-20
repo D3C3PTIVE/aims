@@ -28,7 +28,6 @@ import (
 	"github.com/d3c3ptive/aims/internal/db"
 	"github.com/d3c3ptive/aims/network/pb"
 	network "github.com/d3c3ptive/aims/network/pb/rpc"
-	"github.com/d3c3ptive/aims/provenance"
 )
 
 type server struct {
@@ -56,9 +55,7 @@ func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*ne
 	query := s.db.Where(service)
 	// Per-tool scoping: restrict to services contributed by a given tool via the
 	// service_sources provenance join. Empty Source is a no-op (all services).
-	if tool := req.GetSource(); tool != "" {
-		query = query.Scopes(provenance.WhereContributedBy("service_sources", "service_id", tool))
-	}
+	query = db.ScopeBySource(query, "service_sources", "service_id", req.GetSource())
 	if err = query.First(&services).Error; err != nil {
 		return nil, err
 	}
