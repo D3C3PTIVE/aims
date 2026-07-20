@@ -21,6 +21,7 @@ package scan
 import (
 	"context"
 
+	"github.com/gofrs/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
@@ -154,8 +155,9 @@ func stampScanProvenance(run *scanpb.Run) {
 	if run == nil || run.GetScanner() == "" {
 		return
 	}
-	newSource := func() *provpb.Source {
+	newSource := func(id string) *provpb.Source {
 		return &provpb.Source{
+			Id:          id,
 			Tool:        run.GetScanner(),
 			Type:        provpb.SourceType_Scan,
 			Args:        run.GetArgs(),
@@ -165,31 +167,32 @@ func stampScanProvenance(run *scanpb.Run) {
 		}
 	}
 
-	run.Source = newSource()
+	// The run's own producer record (empty Id → BeforeCreate mints one).
+	run.Source = newSource("")
 
-	// NOTE: each produced object gets its OWN Source value, so a run of a host with N ports/
-	// services yields N+ identical source rows rather than one shared row. Collapsing these to a
-	// single shared row (dedup) needs OnConflict-DoNothing / shared-association persistence inside
-	// the host save path (saveMergedHost's FullSaveAssociations workaround) — deferred so it can be
-	// done together with that path's ongoing rework, not fought against it. The rows are correct,
-	// just not storage-optimal; the merge unions by key so no incorrect duplication of contributors.
 	for _, h := range run.GetHosts() {
 		if h == nil {
 			continue
 		}
-		h.Sources = append(h.Sources, newSource())
+		// One Source row per host, shared by the host and every object the run produced on it
+		// (its addresses, ports, and port services): a scan of a host with N ports yields one
+		// provenance row + N join links, not N identical rows. The shared pre-assigned Id now
+		// survives (BeforeCreate only mints an Id when none is set), and GORM's m2m insert is
+		// OnConflict-DoNothing, so the row is written once and every other object references it.
+		src := newSource(uuid.Must(uuid.NewV4()).String())
+		h.Sources = append(h.Sources, src)
 		for _, a := range h.GetAddresses() {
 			if a != nil {
-				a.Sources = append(a.Sources, newSource())
+				a.Sources = append(a.Sources, src)
 			}
 		}
 		for _, p := range h.GetPorts() {
 			if p == nil {
 				continue
 			}
-			p.Sources = append(p.Sources, newSource())
+			p.Sources = append(p.Sources, src)
 			if p.Service != nil {
-				p.Service.Sources = append(p.Service.Sources, newSource())
+				p.Service.Sources = append(p.Service.Sources, src)
 			}
 		}
 	}

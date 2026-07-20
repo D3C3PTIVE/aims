@@ -94,12 +94,26 @@ func TestCreateStampsAndScopesProvenance(t *testing.T) {
 		t.Fatalf("create run: %v", err)
 	}
 
-	// Provenance persisted: a source row exists and the host is linked to it via host_sources.
-	if n := countRows(t, gdb, "sources"); n == 0 {
-		t.Fatal("no provenance sources persisted after scan ingest")
-	}
+	// Provenance persisted and DEDUPED: the whole run's co-produced objects (host + address +
+	// port + service) reference ONE shared source row, not one per object. The host and the
+	// service it produced must point at the same source_id.
 	if n := countRows(t, gdb, "host_sources"); n == 0 {
 		t.Fatal("host not linked to provenance (host_sources join empty)")
+	}
+	var hostSrc, svcSrc string
+	if err := gdb.Table("host_sources").Select("source_id").Limit(1).Scan(&hostSrc).Error; err != nil {
+		t.Fatalf("read host_sources: %v", err)
+	}
+	if err := gdb.Table("service_sources").Select("source_id").Limit(1).Scan(&svcSrc).Error; err != nil {
+		t.Fatalf("read service_sources: %v", err)
+	}
+	if hostSrc == "" || hostSrc != svcSrc {
+		t.Fatalf("co-produced host and service should share one source row: host=%q service=%q", hostSrc, svcSrc)
+	}
+	// That shared object row + the run's own producer row = 2 provenance rows for this scan,
+	// not one per object.
+	if n := countRows(t, gdb, "sources"); n != 2 {
+		t.Fatalf("expected 2 source rows (1 shared object + 1 run producer), got %d", n)
 	}
 	var tool string
 	if err := gdb.Table("sources").Select("tool").Limit(1).Scan(&tool).Error; err != nil {
