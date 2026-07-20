@@ -172,3 +172,27 @@ completers under context promotion.
 - Context: promote the **current agent host's** web endpoints to the top, via the classification
   layer above.
 - Highest frequency (~84 NSE args) but the most moving parts — build after interface + port.
+
+# Design: smart subnet completer (context-aware)
+
+Offer CIDR *subnets* as scan targets, not just single hosts — nmap/masscan/zmap all accept
+`10.0.0.0/24`, and "sweep the network the agent sits on" is one of the most common pivot actions.
+This reuses the netmask-free `sameSubnet` heuristic and the agent-host resolution already built for
+target promotion.
+
+- **Source — cluster the DB's known host addresses** into prefixes (/24 for IPv4, /64 for IPv6, the
+  same heuristic `sameSubnet` uses). Each cluster becomes a candidate CIDR, described by
+  "N known hosts · <locality>". So a partially-discovered network becomes a one-Tab full sweep.
+- **Context seed & promotion** — the subnet(s) the **current agent's host** sits on float to the top
+  (`agent subnet`), derived from the agent host's own addresses *even when few hosts are known there
+  yet*, so you can sweep the pivot network before discovery. A second seed: the agent's last-hop
+  gateway (`Host.Trace.Hops` / `AIMS_AGENT_ROUTE`) implies a subnet worth sweeping.
+- **"Smart" ranking** — order by (1) contains the agent host, (2) host density (more known hosts =
+  more confirmed-reachable), (3) locality (private nets are the juicy internal targets; a public /24
+  is noisy — deprioritize). Tag via the Relevance×Group layer: `agent subnet` › `dense private` ›
+  `sparse`.
+- **Guardrail** — never fabricate an internet-wide sweep: cap the offered prefix (only /24-and-
+  smaller for v4, /64 for v6) and `log()` anything dropped, so a broad candidate is never silently
+  implied.
+- **Wiring** — an alternative in the target slot (a CIDR is a valid nmap target) and any CIDR-taking
+  flag (`--exclude`, target files). Cap + cache; classifier already routes address/target slots.

@@ -34,6 +34,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/agentctx"
 	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/host"
@@ -91,10 +92,16 @@ const (
 	tagPrivate  = "private targets"
 	tagLoopback = "loopback targets"
 	tagNoAddr   = "targets (no address)"
+
+	// Agent-context relevance groups, promoted above the locality groups when `aims bring` has
+	// loaded an agent: the agent's own host, then hosts sharing its subnet.
+	tagAgentHost   = "this agent's host"
+	tagAgentSubnet = "agent subnet (nearby)"
 )
 
-// targetGroupOrder fixes the order sub-groups are presented in.
-var targetGroupOrder = []string{tagRoutable, tagPrivate, tagLoopback, tagNoAddr}
+// targetGroupOrder fixes the order sub-groups are presented in: context-relevant groups first, then
+// the intrinsic locality groups.
+var targetGroupOrder = []string{tagAgentHost, tagAgentSubnet, tagRoutable, tagPrivate, tagLoopback, tagNoAddr}
 
 // completeTargets completes a target slot with known hosts, sub-grouped by address locality, and
 // drops any target already present on the command line. It is the shared target completer — the
@@ -116,8 +123,18 @@ func completeTargets(con *client.Client) carapace.Action {
 // hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it; the read
 // still goes through the teamclient RPC, never the DB directly. Wrapped in the shared on-disk
 // completion cache so a burst of Tabs doesn't re-fetch the whole host set each keystroke.
+//
+// When an agent context is loaded, the grouping is relative to that agent's host, so the cache name
+// carries the agent id — a different loaded agent gets a distinct entry, and repeated Tabs at the
+// same context stay a hit. The agent id comes from the cheap env read (agentctx.Current); the full
+// agent host is resolved once per cache-miss inside the callback.
 func cachedTargets(con *client.Client) carapace.Action {
-	return aims.CacheCompletion(con, "scan:nmap:targets", carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	name := "scan:nmap:targets"
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -130,18 +147,22 @@ func cachedTargets(con *client.Client) carapace.Action {
 			return carapace.ActionMessage("no hosts in database")
 		}
 
-		return groupedTargets(res.GetHosts())
+		// The agent's host is the base for context-aware grouping; nil when no context is loaded.
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedTargets(res.GetHosts(), agentHost)
 	}))
 }
 
-// groupedTargets partitions hosts into locality sub-groups and renders each as its own tagged
-// carapace group, reusing the shared display engine for the (candidate, description) rows exactly
-// as hosts.CompleteByHostnameOrIP does — the hostname is the inserted value, the address the
-// fallback for hosts with no name.
-func groupedTargets(all []*pb.Host) carapace.Action {
+// groupedTargets partitions hosts into sub-groups and renders each as its own tagged carapace
+// group, reusing the shared display engine for the (candidate, description) rows exactly as
+// hosts.CompleteByHostnameOrIP does — the hostname is the inserted value, the address the fallback
+// for hosts with no name. When agentHost is non-nil (a context is loaded), the agent's own host and
+// its subnet neighbours are promoted into their own groups ahead of the locality groups; otherwise
+// hosts fall into their locality group as before.
+func groupedTargets(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 	buckets := make(map[string][]*pb.Host, len(targetGroupOrder))
 	for _, h := range all {
-		tag := hostLocality(h)
+		tag := targetTag(h, agentHost)
 		buckets[tag] = append(buckets[tag], h)
 	}
 
@@ -161,6 +182,64 @@ func groupedTargets(all []*pb.Host) carapace.Action {
 	}
 
 	return carapace.Batch(actions...).ToA()
+}
+
+// targetTag chooses a host's completion group. With an agent context loaded (agentHost non-nil),
+// the agent's own host and its subnet neighbours are promoted into dedicated groups; every other
+// host — and every host when no context is loaded — falls into its intrinsic locality group.
+func targetTag(h, agentHost *pb.Host) string {
+	if agentHost != nil {
+		if h.GetId() == agentHost.GetId() {
+			return tagAgentHost
+		}
+		if hostsSameSubnet(h, agentHost) {
+			return tagAgentSubnet
+		}
+	}
+	return hostLocality(h)
+}
+
+// hostsSameSubnet reports whether any address of a shares a subnet with any address of b. Loopback
+// addresses are ignored so two hosts each carrying 127.0.0.1 aren't read as neighbours.
+func hostsSameSubnet(a, b *pb.Host) bool {
+	for _, aa := range a.GetAddresses() {
+		ipA := net.ParseIP(strings.TrimSpace(aa.GetAddr()))
+		if ipA == nil || ipA.IsLoopback() {
+			continue
+		}
+		for _, ba := range b.GetAddresses() {
+			ipB := net.ParseIP(strings.TrimSpace(ba.GetAddr()))
+			if ipB == nil || ipB.IsLoopback() {
+				continue
+			}
+			if sameSubnet(ipA, ipB) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// sameSubnet is a heuristic — the model stores bare addresses with no netmask (see COMPLETERS.md) —
+// so "same subnet" assumes the common defaults: a shared /24 for IPv4, a shared /64 for IPv6.
+// Mixed address families are never in the same subnet.
+func sameSubnet(a, b net.IP) bool {
+	if a4, b4 := a.To4(), b.To4(); a4 != nil && b4 != nil {
+		return a4[0] == b4[0] && a4[1] == b4[1] && a4[2] == b4[2]
+	}
+	if a.To4() != nil || b.To4() != nil {
+		return false // one v4, one v6
+	}
+	a16, b16 := a.To16(), b.To16()
+	if a16 == nil || b16 == nil {
+		return false
+	}
+	for i := 0; i < 8; i++ { // the first 64 bits
+		if a16[i] != b16[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // hostLocality classifies a host by the locality of its first parseable address; a host with no
