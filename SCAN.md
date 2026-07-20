@@ -63,10 +63,10 @@ production-grade; the verbs (ingest-anything, target, stream, fold, diff) are th
 | Store / read a Run (with host dedup) | ✅ works | `server/scan/scan.go` Create/Read; Create folds hosts through `host.IngestHosts` and links via the `run_hosts` join; run-level dedup via `AreScansIdentical` |
 | **Fold results/hosts into a Run** (in-memory) | ✅ built + tested | `scan/fold.go` — `Run.AddResult` (feeder) + `Run.AddHosts` (bulk/import) → scoped keyed match + field-class merge; `scan/fold_test.go`. |
 | **Fold *against persisted rows*** (DB-level idempotence) | ✅ **realized** | `host.IngestHosts`/`ingest` (`server/host/host.go`) loads existing rows by natural key, `host.MergeHost`-es in place, and `saveMergedHost`/`saveMergedPorts` persist only new evidence (incl. enrichment inside already-persisted children); `server/scan.Create` uses it |
-| **Targets-from-DB (hosts-as-targets)** | ❌ absent | `scan.Target` type exists (`ToORM`/`ToPB` only); no bridge from stored `Host`/`Service` → `Target` |
-| **Any scanner other than nmap** | ❌ absent | no adapter interface; `Result.Data`'s *"add a branch case in the Go scan package"* (`result.proto:31-36`) was never written |
-| Live / streaming scans | ❌ absent | `Scans` service is unary-only (`scans.proto` has no `stream`); `scan run nmap` blocks to completion (`cmd/scan/run.go`); yet `scan.go` `getTasks` already splits *running* vs *done* tasks for display |
-| Run-to-run diff | ❌ absent | but Runs are timestamped + hosts dedup, so it is a query away |
+| **Targets-from-DB (hosts-as-targets)** | ✅ done | `scan/targets.go` `TargetsFromHosts`/`TargetSpecs` (stored `Host` → `Target` → scanner args); `scan/drive` consumes them |
+| **Any scanner other than nmap** | ✅ done | `scan/ingest` `Ingestor` interface + registry; nmap + zgrab2 adapters; generic `jsonToScript` walker maps any JSON tool into the NSE tree. CLI `scan import --scanner` |
+| Live / streaming scans | ✅ done | `Scans.Run` is server-streaming (`RunUpdate` oneof) + a server-side job model (`server/scan/run.go`); `scan run nmap` streams server-side, Ctrl-C detaches, `--background`/`jobs`/`attach`/`stop`. (`watch scan show` live snapshot still needs incremental persistence — SUBSTRATE.md backlog) |
+| Run-to-run diff | ✅ done | `scan/diff.go` `DiffRuns` + `scan diff` CLI (stored shared-host diff gated on the `server/scan.Read` host-scoping fix — SUBSTRATE.md backlog) |
 | Upsert / Delete / List RPC | ✅ done | `server/scan/scan.go` — List delegates to Read; Delete removes by Id, clearing run_hosts (shared hosts survive); Upsert is idempotent insert-or-return-existing. Plus `scan rm` CLI (running-scan guard via `scan.IsRunning`) |
 
 ### DB-level fold — REALIZED (was: "in-memory only")
@@ -95,10 +95,12 @@ The DB-level, additive-and-idempotent fold (DEDUP.md §0 prime directive) is now
 Tests: `server/host/host_test.go`, `server/scan/scan_test.go`, `scan/fold_test.go`,
 `scan/identical_test.go`. See DEDUP.md and the `aims-ingest-merge-fold` project note.
 
-**Scan CRUD is now complete:** `Create`/`Read`/`List`/`Upsert`/`Delete` are all implemented
-(`server/scan/scan.go`), with `scan list`/`show`/`rm` on the CLI. What remains for the domain is
-the scanner-plug substrate (Part C): live/streaming scans, non-nmap ingestors, the hosts-as-targets
-bridge, and run-to-run diff — all still absent.
+**Scan CRUD + the scanner-plug substrate (Part C) are now built** (2026-07-20, see SUBSTRATE.md):
+the `Ingestor` interface + generic JSON→NSE walker (non-nmap ingest), the hosts-as-targets bridge +
+`Scanner` driver, run-to-run diff, and server-side streaming scans + a job model (the nmap fork's
+async path was fixed to enable it). What remains are the SUBSTRATE.md backlog items — chiefly
+incremental persistence for the `watch scan show` live view, the `server/scan.Read` host-scoping bug
+that gates stored-run diff, and per-tool dedup/cascade verification — not new capabilities.
 
 ### The object catalog (for reference)
 
