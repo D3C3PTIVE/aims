@@ -120,13 +120,70 @@ func pickHead(runs []*scan.Run) *scan.Run {
 }
 
 // headWorse reports whether a is a worse head than b (so b should win). A finished-clean run beats a
-// non-clean one; otherwise the newer run beats the older.
+// non-clean one; otherwise the newer run beats the older, breaking a same-second tie by creation time.
 func headWorse(a, b *scan.Run) bool {
 	aClean, bClean := stateOf(a) == stateDone, stateOf(b) == stateDone
 	if aClean != bClean {
 		return !aClean
 	}
-	return activityTime(a) < activityTime(b)
+	ta, tb := activityTime(a), activityTime(b)
+	if ta != tb {
+		return ta < tb
+	}
+	// Same activity second (two runs that finished within the same second — e.g. back-to-back failing
+	// scans): break the tie by creation time (sub-second) so the genuinely-latest run heads the group
+	// deterministically, not whichever the DB happened to return first.
+	return createdBefore(a, b)
+}
+
+// createdBefore reports whether a was persisted before b, by CreatedAt (sub-second). A run with no
+// creation timestamp sorts earliest, so a persisted run wins the head over one not yet stored.
+func createdBefore(a, b *scan.Run) bool {
+	at, bt := a.GetCreatedAt(), b.GetCreatedAt()
+	if at == nil || bt == nil {
+		return bt != nil // a (missing) is "earliest"; if b has a timestamp, a precedes b
+	}
+	return at.AsTime().Before(bt.AsTime())
+}
+
+// coalesceClass returns the coalescing class of a run, or "" if the run must never be collapsed.
+// Runs collapse only against others of the SAME class within a series, so a series keeps at most one
+// head PER class — a successful head and the latest failed head coexist as separate visible rows.
+// That is deliberate: it surfaces a "was working, now failing" regression instead of burying the
+// fresh failure under a stale success (or vice-versa). The classes:
+//
+//   - "done": a clean completion. Repeats collapse to the newest done (the existing behaviour).
+//   - "failed-empty": a terminal failure that produced NO host — pure noise (a misconfigured cron, a
+//     privilege error, an unresolved target set) whose repeats collapse to the LATEST failure, whose
+//     FormerRuns count then reads as "failed N times". The count IS the diagnostic; the runs stay in
+//     `scan history`/`scan diff`.
+//
+// Everything else is non-coalescible ("" — kept as its own visible row): a failure that DID find
+// hosts (partial surface is unique data, worth seeing at a glance), an interrupted run (each is
+// individually resumable), and a running/queued run (still in flight).
+func coalesceClass(r *scan.Run) string {
+	switch stateOf(r) {
+	case stateDone:
+		return "done"
+	case stateFailed:
+		if runFoundHosts(r) {
+			return "" // a partial failure carries unique surface — never fold it away
+		}
+		return "failed-empty"
+	default:
+		return "" // interrupted, running, created — never coalesced
+	}
+}
+
+// runFoundHosts reports whether a run produced any host observation. It prefers the loaded host
+// subtree but falls back to the persisted host stats, because the cleanup/auto-supersede path loads
+// runs WITHOUT their hosts (loadRuns preloads Stats, not Hosts) — so the streamed-run host count that
+// consume stamps into Stats.Hosts is the authoritative "did this failure find anything" signal there.
+func runFoundHosts(r *scan.Run) bool {
+	if len(r.GetHosts()) > 0 {
+		return true
+	}
+	return r.GetStats().GetHosts().GetTotal() > 0
 }
 
 // CleanupPlan is the set of field mutations a cleanup pass computes over the whole run set. The runs
@@ -141,25 +198,34 @@ type CleanupPlan struct {
 // Empty reports whether the plan collapses nothing.
 func (p CleanupPlan) Empty() bool { return len(p.Tombstoned) == 0 && len(p.Prunable) == 0 }
 
-// ComputeCleanup groups every run into its series and collapses each multi-run series onto a single
-// head, mutating the affected runs in place and returning the plan. It is idempotent: a series that
-// is already collapsed to one visible head yields no new tombstones, so re-running is a no-op.
+// ComputeCleanup groups every run into its series-and-outcome-class and collapses each multi-run
+// group onto a single head, mutating the affected runs in place and returning the plan. It is
+// idempotent: a group already collapsed to one visible head yields no new tombstones, so re-running
+// is a no-op.
 //
-// Only currently-visible, non-running runs are candidates to become or absorb a head — a live scan
-// is left untouched (it collapses on a later pass once finished), and already-tombstoned runs are
-// re-homed only if their head is itself absorbed (chains are flattened to one level). FormerRuns on
-// each head is recomputed from the full set so it always equals the number of runs it supersedes.
+// Only currently-visible, coalescible runs are candidates to become or absorb a head (see
+// coalesceClass): a live scan, an interrupted run, and a failure that found hosts are left untouched
+// as their own rows; already-tombstoned runs are re-homed only if their head is itself absorbed
+// (chains are flattened to one level). FormerRuns on each head is recomputed from the full set so it
+// always equals the number of runs it supersedes.
 func ComputeCleanup(all []*scan.Run) CleanupPlan {
 	var plan CleanupPlan
 
-	// Group the visible, non-running runs by series definition.
+	// Group the visible, coalescible runs by series definition AND outcome class, so a series
+	// collapses to one head per class (a success head and the latest failure head coexist) rather than
+	// one head overall. Non-coalescible runs (running, interrupted, a partial failure) get class "" and
+	// are skipped entirely — never grouped, never tombstoned.
 	groups := map[string][]*scan.Run{}
 	var order []string
 	for _, r := range all {
-		if IsSuperseded(r) || stateOf(r) == stateRunning {
+		if IsSuperseded(r) {
 			continue
 		}
-		k := seriesKey(r)
+		class := coalesceClass(r)
+		if class == "" {
+			continue
+		}
+		k := seriesKey(r) + "\x00" + class
 		if _, ok := groups[k]; !ok {
 			order = append(order, k)
 		}
@@ -259,9 +325,11 @@ func resolveHead(r *scan.Run, all []*scan.Run) string {
 // SupersedeFor computes a cleanup plan limited to the series containing runID — the auto-collapse a
 // server runs when a new scan of the same definition finishes, so `scan list` self-collapses without
 // a manual `scan cleanup`. It restricts the run set to that one series and reuses ComputeCleanup, so
-// the newest clean run becomes the head and older completed siblings are tombstoned under it; a
-// still-running sibling is left alone (ComputeCleanup skips running runs). Returns an empty plan when
-// the run is unknown or its series has nothing to collapse.
+// the collapse stays within outcome classes: a finished clean run heads the success line, a resultless
+// failure coalesces with earlier resultless failures of the same definition (latest wins, with a
+// count), and the two heads coexist. A still-running or interrupted sibling, and a failure that found
+// hosts, are left alone. Returns an empty plan when the run is unknown or its series has nothing to
+// collapse.
 func SupersedeFor(all []*scan.Run, runID string) CleanupPlan {
 	var target *scan.Run
 	for _, r := range all {

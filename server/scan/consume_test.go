@@ -173,6 +173,81 @@ func TestConsumeCleanRunCompletesAndSupersedes(t *testing.T) {
 	}
 }
 
+// TestConsumeCoalescesConsecutiveFailures is the auto-path payoff of failure-coalescing: a second
+// resultless failure of the same definition tombstones the first under itself (latest wins, with a
+// count), so a misconfigured cron collapses to one "✗ failed ×N" row instead of piling up — while a
+// clean run of the same series, added after, still heads a SEPARATE visible success row.
+func TestConsumeCoalescesConsecutiveFailures(t *testing.T) {
+	s, _, ctx := newTestServer(t)
+
+	// runFailed drives one resultless failure (no host produced, an errc error, no cancel) to its
+	// stored terminal state under the given job id.
+	runFailed := func(id string) {
+		jobCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		job := newScanJob(&scanrpcpb.RunScanRequest{
+			Scanner: "nmap", Args: []string{"-sU", "-p1-100"},
+			Targets: []*scanpb.Target{{Id: id + "-t", Address: "10.0.0.9"}},
+		}, id, jobCtx, cancel, time.Now().Unix())
+		s.addJob(job)
+		results := make(chan *scanpb.Result)
+		progress := make(chan *scanpb.TaskProgress)
+		close(results)
+		close(progress)
+		s.consume(job, results, progress, errChan(errors.New("requires root privileges. QUITTING!")))
+	}
+
+	runFailed("fail-1")
+	runFailed("fail-2") // its autoSupersede should coalesce fail-1 under fail-2
+
+	// fail-1 is tombstoned under fail-2 (the latest failure heads the failure line).
+	f1, err := s.readRun(ctx, "fail-1")
+	if err != nil || f1 == nil {
+		t.Fatalf("readRun fail-1: %v", err)
+	}
+	if f1.GetSupersededBy() != "fail-2" {
+		t.Errorf("fail-1 SupersededBy = %q, want fail-2 (consecutive failures coalesce)", f1.GetSupersededBy())
+	}
+	f2, err := s.readRun(ctx, "fail-2")
+	if err != nil || f2 == nil {
+		t.Fatalf("readRun fail-2: %v", err)
+	}
+	if f2.GetSupersededBy() != "" {
+		t.Errorf("fail-2 should head the failure line, not be superseded (got %q)", f2.GetSupersededBy())
+	}
+	if f2.GetFormerRuns() != 1 {
+		t.Errorf("failure head FormerRuns = %d, want 1", f2.GetFormerRuns())
+	}
+
+	// A clean run of the SAME definition, completed after, heads a separate visible success row — the
+	// failure head is not buried under it, nor it under the failure.
+	jobCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	okJob := newScanJob(&scanrpcpb.RunScanRequest{
+		Scanner: "nmap", Args: []string{"-sU", "-p1-100"},
+		Targets: []*scanpb.Target{{Id: "ok-t", Address: "10.0.0.9"}},
+	}, "ok", jobCtx, cancel, time.Now().Unix())
+	s.addJob(okJob)
+	okRes, okProg := feed(upHost("10.0.0.9"), &scanpb.TaskProgress{Task: "SYN Stealth Scan", Percent: 100})
+	s.consume(okJob, okRes, okProg, errChan(nil))
+
+	ok, err := s.readRun(ctx, "ok")
+	if err != nil || ok == nil {
+		t.Fatalf("readRun ok: %v", err)
+	}
+	if ok.GetSupersededBy() != "" {
+		t.Errorf("clean run tombstoned by a failure head (SupersededBy=%q); classes must not cross", ok.GetSupersededBy())
+	}
+	// The latest failure must still be visible — a success must not bury the regression signal.
+	f2, err = s.readRun(ctx, "fail-2")
+	if err != nil || f2 == nil {
+		t.Fatalf("readRun fail-2 (post-success): %v", err)
+	}
+	if f2.GetSupersededBy() != "" {
+		t.Errorf("failure head buried under a later success (SupersededBy=%q); classes must not cross", f2.GetSupersededBy())
+	}
+}
+
 // TestAttachFromDBStreamsProgress asserts the cross-process attach now streams the persisted progress
 // (the #1 payoff): a DB-only terminal run carrying a progress row and a host is replayed as a
 // progress frame + a host frame + the terminal Final frame, so an operator attaching from another

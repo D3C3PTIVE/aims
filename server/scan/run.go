@@ -346,7 +346,20 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	pbRun := run.ToPB()
 	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
-	pbRun.Stats = &scanpb.Stats{Finished: fin}
+	// Persist a host count into the run stats. A streamed run carries no nmap runstats, so without this
+	// Stats.Hosts is nil and nothing downstream can tell a failure that found nothing from one that
+	// found hosts — exactly the signal failure-coalescing keys on (scan.runFoundHosts, which reads the
+	// stats because the cleanup path loads runs without their host subtree) and the Info column shows.
+	up := 0
+	for _, h := range pbRun.GetHosts() {
+		if h.GetStatus().GetState() == "up" {
+			up++
+		}
+	}
+	pbRun.Stats = &scanpb.Stats{
+		Finished: fin,
+		Hosts:    &scanpb.HostStats{Up: int32(up), Total: int32(len(pbRun.GetHosts()))},
+	}
 	stampScanProvenance(pbRun)
 
 	stored, err := s.persistRun(context.Background(), pbRun)
@@ -354,11 +367,14 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		job.finish(errorUpdate(err.Error()))
 		return
 	}
-	// Only a clean completion collapses older runs of the same definition, so `scan list`
-	// self-collapses. A failed OR interrupted run is NOT collapsed: an interrupted (partial) run must
-	// stay visible as its own row so an operator can find and `scan resume` it, and a failed run has
-	// no results and must never tombstone a sibling's fuller, good history.
-	if !interrupted && scanErr == nil {
+	// A terminal run collapses its series so `scan list` self-collapses, but the collapse is
+	// outcome-class scoped (scan.coalesceClass): a clean run heads the success line, while a resultless
+	// failure coalesces with earlier resultless failures of the same definition (latest wins, its
+	// FormerRuns reading "failed N times") — and a success head and a failure head COEXIST, so a "was
+	// working, now failing" regression still shows instead of being buried. An interrupted run is
+	// skipped entirely: each is individually resumable and must stay its own visible row for `scan
+	// resume`. A failure that DID find hosts is left visible by coalesceClass (its surface is unique).
+	if !interrupted {
 		s.autoSupersede(context.Background(), stored.GetId())
 	}
 	job.finish(finalUpdate(stored))

@@ -135,6 +135,64 @@ func TestComputeCleanupCollapsesAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestCoalesceClass pins the outcome-class map that keeps success and failure heads separate: a clean
+// run is "done", a resultless failure is "failed-empty" (coalescible noise), but a failure that found
+// hosts, an interrupted run, and a running run are all non-coalescible ("") — kept as their own rows.
+func TestCoalesceClass(t *testing.T) {
+	done := mkDone("d", "nmap", "-sT x", 100)
+	emptyFail := mkFailed("ef", "nmap", "-sU x", 100)
+	partialFail := mkFailed("pf", "nmap", "-sU x", 100)
+	partialFail.Stats.Hosts = &scan.HostStats{Total: 3, Up: 2} // found surface before erroring
+	interrupted := &scan.Run{Id: "i", Scanner: "nmap", Args: "-sU x",
+		Stats: &scan.Stats{Finished: &scan.Finished{Time: 100, Exit: ExitInterrupted}}}
+	running := &scan.Run{Id: "r", Scanner: "nmap", Args: "-sU x", Begin: []*scan.ScanTask{{Task: "SYN"}}}
+
+	cases := map[*scan.Run]string{
+		done: "done", emptyFail: "failed-empty", partialFail: "", interrupted: "", running: "",
+	}
+	for r, want := range cases {
+		if got := coalesceClass(r); got != want {
+			t.Errorf("coalesceClass(%s) = %q, want %q", r.GetId(), got, want)
+		}
+	}
+}
+
+// TestComputeCleanupCoalescesFailuresByClass is the ambitious half of failure-coalescing: within one
+// series, repeated resultless failures collapse to the LATEST failure (with a count), yet the clean
+// success head and that failure head COEXIST as two visible rows — so a "was working, now failing"
+// regression is surfaced, not buried under the stale success.
+func TestComputeCleanupCoalescesFailuresByClass(t *testing.T) {
+	done := mkDone("done", "nmap", "-sU localhost", 150)
+	f1 := mkFailed("f1", "nmap", "-sU localhost", 100) // resultless failure, older
+	f2 := mkFailed("f2", "nmap", "localhost -sU", 200) // reordered args -> same series; newest failure
+	all := []*scan.Run{done, f1, f2}
+
+	ComputeCleanup(all)
+
+	// Success and failure heads coexist: neither supersedes the other.
+	if done.GetSupersededBy() != "" {
+		t.Errorf("done head must not be superseded by a failure (got %q)", done.GetSupersededBy())
+	}
+	if f2.GetSupersededBy() != "" {
+		t.Errorf("newest failure should head the failure line, not be superseded (got %q)", f2.GetSupersededBy())
+	}
+	// The older resultless failure coalesces under the latest failure, contributing to its count.
+	if f1.GetSupersededBy() != "f2" {
+		t.Errorf("older empty failure should coalesce under f2, got %q", f1.GetSupersededBy())
+	}
+	if f2.GetFormerRuns() != 1 {
+		t.Errorf("failure head FormerRuns = %d, want 1", f2.GetFormerRuns())
+	}
+	if done.GetFormerRuns() != 0 {
+		t.Errorf("the done head must not absorb a failure; FormerRuns = %d, want 0", done.GetFormerRuns())
+	}
+
+	// Two visible rows: the success head and the latest failure — the whole point of the class split.
+	if v := VisibleRuns(all); len(v) != 2 {
+		t.Errorf("visible = %d, want 2 (success head + failure head)", len(v))
+	}
+}
+
 // TestComputeCleanupLeavesRunningAlone asserts a live run in a series is never tombstoned.
 func TestComputeCleanupLeavesRunningAlone(t *testing.T) {
 	done := mkDone("done", "nmap", "-sT localhost", 100)
