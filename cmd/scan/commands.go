@@ -105,10 +105,50 @@ func CompleteByID(client *client.Client) carapace.Action {
 		options = append(options, display.WithCandidateValue("ID", ""))
 
 		// The server's default read already returns only surviving heads — a tombstoned run is
-		// browsed via `scan history`, not offered as a first-class completion target.
-		results := display.Completions(res.Scans, scan.DisplayFields, options...)
+		// browsed via `scan history`, not offered as a first-class completion target. Order them like
+		// `scan list` (running first, then newest-first) so the candidate list matches the table.
+		scanList := res.GetScans()
+		scan.SortRuns(scanList)
+		results := display.Completions(scanList, scan.DisplayFields, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("scans")
+	}))
+
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		return cached.Filter(c.Args...)
+	})
+}
+
+// CompleteSeriesHead completes only scans that head a collapsed series (FormerRuns > 0) — the
+// meaningful arguments to `scan history`, since a run with no series has nothing to browse.
+func CompleteSeriesHead(client *client.Client) carapace.Action {
+	cached := aims.CacheCompletion(client, "scans:series", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		if msg, err := client.ConnectComplete(); err != nil {
+			return msg
+		}
+		res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
+			Scan:    &pb.Run{},
+			Filters: &scans.RunFilters{},
+		})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		var heads []*pb.Run
+		for _, r := range res.GetScans() {
+			if r.GetFormerRuns() > 0 {
+				heads = append(heads, r)
+			}
+		}
+		if len(heads) == 0 {
+			return carapace.ActionMessage("no collapsed scan series yet")
+		}
+		scan.SortRuns(heads) // newest-first, matching the `scan list`/`scan history` table order
+
+		options := scan.Completions()
+		options = append(options, display.WithCandidateValue("ID", ""))
+		results := display.Completions(heads, scan.DisplayFields, options...)
+
+		return carapace.ActionValuesDescribed(results...).Tag("scan series")
 	}))
 
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
@@ -386,7 +426,7 @@ from the default 'scan list'.`,
 		},
 	}
 
-	carapace.Gen(historyCmd).PositionalAnyCompletion(CompleteByID(con))
+	carapace.Gen(historyCmd).PositionalAnyCompletion(CompleteSeriesHead(con))
 
 	return historyCmd
 }

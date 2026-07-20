@@ -135,9 +135,9 @@ func summarizeDelta(d *RunDiff) []string {
 		return nil
 	}
 	var lines []string
-	// A whole new/gone host is one compact token (its port count, not a line per port).
+	// A whole new/gone host is one compact token (its port-state digest, not a line per port).
 	for _, nh := range d.NewHosts {
-		lines = append(lines, fmt.Sprintf("+ %s (%d open)", hostAddr(nh), countOpenPorts(nh)))
+		lines = append(lines, fmt.Sprintf("+ %s (%s)", hostAddr(nh), portSummary(nh)))
 	}
 	for _, gh := range d.GoneHosts {
 		lines = append(lines, "- "+hostAddr(gh))
@@ -159,14 +159,31 @@ func summarizeDelta(d *RunDiff) []string {
 	return lines
 }
 
-func countOpenPorts(h *host.Host) int {
-	n := 0
+// portSummary digests a host's ports for the drift timeline: open / filtered / closed counts, folding
+// nmap's summarised ExtraPorts (e.g. a single "996 closed" record) into the totals — so a new host
+// reads "1 open, 300 closed", not a bare open count. Empty when the host has no port information.
+func portSummary(h *host.Host) string {
+	counts := map[string]int{}
 	for _, p := range h.GetPorts() {
-		if portState(p) == "open" {
-			n++
+		if st := portState(p); st != "" {
+			counts[st]++
 		}
 	}
-	return n
+	for _, ep := range h.GetExtraPorts() {
+		if ep.GetState() != "" {
+			counts[ep.GetState()] += int(ep.GetCount())
+		}
+	}
+	var parts []string
+	for _, st := range []string{"open", "filtered", "closed"} {
+		if n := counts[st]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, st))
+		}
+	}
+	if len(parts) == 0 {
+		return "no ports"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // buildSurface classifies every (addr, proto, port) ever seen open across the series.
