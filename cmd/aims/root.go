@@ -26,6 +26,7 @@ import (
 	"github.com/carapace-sh/carapace"
 	"github.com/reeflective/team/boot"
 	teamclient "github.com/reeflective/team/client"
+	clientcmds "github.com/reeflective/team/client/commands"
 	"github.com/reeflective/team/server"
 	"github.com/reeflective/team/server/commands"
 	"github.com/spf13/cobra"
@@ -104,8 +105,14 @@ func runServer() error {
 // runClient builds and runs aims as a thin client of a remote teamserver. No
 // teamserver is constructed and no database is opened: the client connects to
 // the resolved remote config (cfg), and only data/consumption commands are
-// bound — server administration lives under `teamserver`, which forces server
-// mode.
+// bound.
+//
+// Server administration lives under `teamserver`, which forces server mode and
+// is therefore absent here. In its place we bind the `teamclient` tree at the
+// root so a thin client still has the client-side team commands it needs (import
+// a connection config, list users, show versions). In server mode these same
+// commands are reachable nested under `teamserver client`; a client-only binary
+// gets them at the top level instead.
 func runClient(cfg *teamclient.Config) error {
 	aimsClient, err := client.New()
 	if err != nil {
@@ -115,6 +122,7 @@ func runClient(cfg *teamclient.Config) error {
 	aimsClient.SetServerConfig(cfg)
 
 	bindCommands(aimsCmd, aimsClient)
+	aimsCmd.AddCommand(clientcmds.Generate(aimsClient.Teamclient))
 	bindRunners(aimsCmd, true, aimsClient.ConnectRun)
 	carapace.Gen(aimsCmd)
 

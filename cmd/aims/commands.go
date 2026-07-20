@@ -48,6 +48,7 @@ func bindCommands(rootCmd *cobra.Command, con *client.Client) {
 	cmd.BindGroup("shell", rootCmd, con,
 		bring.BringCommand,
 		bring.InitCommand,
+		bring.PromptCommand,
 	)
 }
 // bindRunners is used to register specific pre/post-runs for a given command/tree.

@@ -273,7 +273,7 @@ func (con *Client) isOffline(cmd *cobra.Command) bool {
 	}
 
 	tc, _, err := cmd.Root().Find([]string{"teamclient", "import"})
-	if err == nil && ts != nil && tc == cmd {
+	if err == nil && tc != nil && tc == cmd {
 		return true
 	}
 

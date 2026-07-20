@@ -25,18 +25,22 @@ _aims_apply_prompt() {
     PROMPT="%F{red}[$seg]%f ${_aims_saved_prompt}"
 }
 
-# ─── running-scan indicator (right prompt) ──────────────────────────────────────────────────────
-# Unlike the per-agent left segment above, the running-scan count is a live, server-global figure:
-# scans start and finish independently of bring/leave, so a bring-time snapshot would be stale at
-# once. It is therefore refreshed from a precmd hook — running before every prompt — rather than
-# baked into $PROMPT. To keep the prompt responsive the hook polls `aims scan jobs --count` at most
-# once per AIMS_SCAN_POLL_INTERVAL seconds and caches the result. The value is a bare integer (never
-# agent-derived data), so it is inert under prompt expansion. It renders in RPROMPT so it shows even
-# with no agent brought, and composes with — rather than clobbers — the operator's own right prompt.
+# ─── server + running-scan indicator (right prompt) ─────────────────────────────────────────────
+# Unlike the per-agent left segment above, these are live, server-GLOBAL figures: the server version
+# and the count of connected operators, plus the number of running scans. They change independently
+# of bring/leave — scans start and finish, operators come and go — so a bring-time snapshot would be
+# stale at once. They are refreshed from a precmd hook (running before every prompt) rather than baked
+# into $PROMPT, and fetched together by a single `aims prompt --terse` call — one teamserver connect
+# per poll — throttled to at most once per AIMS_PROMPT_POLL_INTERVAL seconds and cached. That command
+# emits three tab-separated fields (scans, version, connected); each is numeric or a dotted version,
+# never agent-derived data, so all are inert under prompt expansion. The indicator renders in RPROMPT
+# so it shows even with no agent brought, and composes with — rather than clobbers — the operator's
+# own right prompt.
 #
 # Toggles (export before sourcing, or any time after — read live on each poll):
-#   AIMS_SCAN_PROMPT=0          disable the indicator entirely
-#   AIMS_SCAN_POLL_INTERVAL=5   minimum seconds between polls (default 5)
+#   AIMS_SCAN_PROMPT=0            hide the running-scan segment
+#   AIMS_SERVER_PROMPT=0          hide the server (version + operators) segment
+#   AIMS_PROMPT_POLL_INTERVAL=5   minimum seconds between polls (default 5)
 zmodload -F zsh/datetime b:EPOCHSECONDS 2>/dev/null
 
 # Remember the operator's own right prompt once, so the indicator prefixes it instead of replacing
@@ -45,39 +49,63 @@ if [[ -z "${_aims_saved_rprompt+set}" ]]; then
     typeset -g _aims_saved_rprompt="${RPROMPT-}"
 fi
 
-# _aims_scan_poll refreshes the cached running-scan count (throttled) and rebuilds RPROMPT. Registered
-# as a precmd hook, it runs before each prompt; between polls it just re-renders the cached count.
-_aims_scan_poll() {
-    if [[ "${AIMS_SCAN_PROMPT:-1}" == (0|false|no) ]]; then
+# _aims_prompt_poll refreshes the cached server/scan figures (throttled) and rebuilds RPROMPT.
+# Registered as a precmd hook, it runs before each prompt; between polls it just re-renders the cache.
+_aims_prompt_poll() {
+    local scans_on=1 server_on=1
+    [[ "${AIMS_SCAN_PROMPT:-1}" == (0|false|no) ]] && scans_on=0
+    [[ "${AIMS_SERVER_PROMPT:-1}" == (0|false|no) ]] && server_on=0
+
+    # Both segments off: restore the operator's own right prompt and don't poll (spend no connect).
+    if (( ! scans_on && ! server_on )); then
         RPROMPT="$_aims_saved_rprompt"
         return
     fi
 
-    local now="${EPOCHSECONDS:-0}" interval="${AIMS_SCAN_POLL_INTERVAL:-5}"
-    if [[ -z "${_aims_scan_last_poll+set}" ]] || (( now - _aims_scan_last_poll >= interval )); then
-        typeset -g _aims_scan_last_poll="$now"
-        # Synchronous but throttled (poll-and-cache): a bare integer, or nothing on error. On failure
-        # (server unreachable, aims not on PATH) keep the last known count rather than flap the prompt;
-        # _aims_scan_last_poll is still advanced, so a down server is retried at the interval, not every
-        # keystroke.
-        local out
-        if out="$(command aims scan jobs --count 2>/dev/null)" && [[ "$out" == <-> ]]; then
-            typeset -g _aims_scan_count="$out"
+    local now="${EPOCHSECONDS:-0}" interval="${AIMS_PROMPT_POLL_INTERVAL:-5}"
+    if [[ -z "${_aims_prompt_last_poll+set}" ]] || (( now - _aims_prompt_last_poll >= interval )); then
+        typeset -g _aims_prompt_last_poll="$now"
+        # Synchronous but throttled (poll-and-cache): one connect fetches every field. On failure
+        # (server unreachable, aims not on PATH) keep the last known values rather than flap the prompt;
+        # _aims_prompt_last_poll is still advanced, so a down server is retried at the interval, not
+        # every keystroke. Fields: scans<TAB>version<TAB>connected — an empty (or malformed) field
+        # means "no update", so a partial result never clears a good cached value.
+        local line
+        if line="$(command aims prompt --terse 2>/dev/null)"; then
+            # Split the three columns by hand. `read`/`${(s::)}` treat tab as IFS-*whitespace* and would
+            # collapse an empty leading field — mis-aligning the columns whenever one value is absent (an
+            # empty field is how the command signals "no update"). `%%`/`#`/`##` keep empties in place.
+            local scans="${line%%$'\t'*}" rest="${line#*$'\t'}"
+            local ver="${rest%%$'\t'*}" conn="${rest##*$'\t'}"
+            [[ "$scans" == <-> ]] && typeset -g _aims_scan_count="$scans"
+            [[ "$ver" == <->.<->.<-> ]] && typeset -g _aims_server_version="$ver"
+            [[ "$conn" == <-> ]] && typeset -g _aims_server_conn="$conn"
         fi
     fi
 
     local seg=""
-    if (( ${_aims_scan_count:-0} > 0 )); then
+    if (( server_on )) && [[ -n "${_aims_server_version-}" ]]; then
+        # Server identity, always shown while connected: "aims v0.4.0", plus the connected-operator
+        # count, labelled so a bare number never floats unexplained: "·2 ops" (singular "·1 op").
+        seg="%F{green}aims v${_aims_server_version}%f"
+        if [[ -n "${_aims_server_conn-}" ]]; then
+            local onoun=ops
+            (( _aims_server_conn == 1 )) && onoun=op
+            seg="${seg} %F{green}·${_aims_server_conn} ${onoun}%f"
+        fi
+        seg="${seg} "
+    fi
+    if (( scans_on )) && (( ${_aims_scan_count:-0} > 0 )); then
         # Label the count so the glyph alone is never left to carry the meaning: "⟳2 scans".
         local noun=scans
         (( _aims_scan_count == 1 )) && noun=scan
-        seg="%F{cyan}⟳${_aims_scan_count} ${noun}%f "
+        seg="${seg}%F{cyan}⟳${_aims_scan_count} ${noun}%f "
     fi
     RPROMPT="${seg}${_aims_saved_rprompt}"
 }
 
 autoload -Uz add-zsh-hook
-add-zsh-hook precmd _aims_scan_poll
+add-zsh-hook precmd _aims_prompt_poll
 
 # _aims_push saves the current agent context onto the stack (parallel arrays), so a nested `bring`
 # can be undone by `leave`.
