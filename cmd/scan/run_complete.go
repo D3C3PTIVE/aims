@@ -75,6 +75,8 @@ func completeRunNmap(con *client.Client) carapace.Action {
 				return completePortSpec(con)
 			case "--spoof-mac":
 				return completeMAC(con)
+			case "-S":
+				return completeSourceAddr()
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
@@ -475,6 +477,8 @@ func completeRunMasscan(con *client.Client) carapace.Action {
 				return completeInterface()
 			case "--router-mac", "--adapter-mac", "--spoof-mac":
 				return completeMAC(con)
+			case "--source-ip", "--adapter-ip":
+				return completeSourceAddr()
 			case "--exclude", "--range":
 				return completeTargets(con) // a host or CIDR — the target completer offers both
 			case "-iL", "--excludefile", "-oX", "-oJ", "-oL", "-oG":
@@ -846,6 +850,48 @@ func interfaceLabel(loopback bool, addrs []net.Addr) string {
 		label = "no address"
 	}
 	return label
+}
+
+// completeSourceAddr completes a source-address value — nmap's `-S`, masscan's `--source-ip`/
+// `--adapter-ip` — from the LOCAL machine's interface addresses: the legitimate source IPs a scan can
+// send from. Like completeInterface it is deliberately local, not agent-context (the source belongs
+// to the box running the scan tooling, not the possibly-remote loaded agent). Free-form is still
+// accepted — spoofing an arbitrary address — this only offers the real local addresses as a shortcut.
+func completeSourceAddr() carapace.Action {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return carapace.ActionMessage("cannot list interfaces: %s", err)
+	}
+	var pairs []string
+	for _, ic := range ifaces {
+		addrs, _ := ic.Addrs()
+		pairs = append(pairs, localAddrLabels(ic.Name, ic.Flags&net.FlagUp != 0, ic.Flags&net.FlagLoopback != 0, addrs)...)
+	}
+	if len(pairs) == 0 {
+		return carapace.ActionMessage("no local source addresses found")
+	}
+	return carapace.ActionValuesDescribed(pairs...).Tag("local addresses")
+}
+
+// localAddrLabels returns (address, "on <iface>") pairs for one interface's addresses, or nil when the
+// interface is down or loopback — you cannot legitimately source a scan from either. Split out so it
+// is testable without the machine's real interfaces.
+func localAddrLabels(name string, up, loopback bool, addrs []net.Addr) []string {
+	if !up || loopback {
+		return nil
+	}
+	var out []string
+	for _, a := range addrs {
+		ip := a.String()
+		if ipn, ok := a.(*net.IPNet); ok {
+			ip = ipn.IP.String()
+		}
+		if ip == "" {
+			continue
+		}
+		out = append(out, ip, "on "+name)
+	}
+	return out
 }
 
 //

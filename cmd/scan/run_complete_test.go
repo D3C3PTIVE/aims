@@ -450,6 +450,29 @@ func TestInterfaceLabel(t *testing.T) {
 	}
 }
 
+// TestLocalAddrLabels pins the source-address candidates: (addr, "on <iface>") for an up, non-loopback
+// interface; nothing for a down or loopback one (you can't legitimately source a scan from either).
+func TestLocalAddrLabels(t *testing.T) {
+	ipnet := func(cidr string) *net.IPNet {
+		_, n, _ := net.ParseCIDR(cidr)
+		n.IP = net.ParseIP(strings.SplitN(cidr, "/", 2)[0])
+		return n
+	}
+	addrs := []net.Addr{ipnet("192.168.1.10/24"), ipnet("fe80::1/64")}
+
+	got := localAddrLabels("eth0", true, false, addrs)
+	want := []string{"192.168.1.10", "on eth0", "fe80::1", "on eth0"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("up iface: got %v, want %v", got, want)
+	}
+	if got := localAddrLabels("eth0", false, false, addrs); got != nil {
+		t.Errorf("down iface: got %v, want nil", got)
+	}
+	if got := localAddrLabels("lo", true, true, addrs); got != nil {
+		t.Errorf("loopback iface: got %v, want nil", got)
+	}
+}
+
 // TestCollectOpenPorts pins the port aggregation and its agent-context ranking: only open ports
 // count, each number is deduped across hosts with a host count, and a port takes the highest
 // relevance of any host exposing it (agent host › subnet neighbour › distant).
