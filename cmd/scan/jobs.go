@@ -34,13 +34,20 @@ import (
 
 // jobsCommand lists the scans currently running server-side (`aims scan jobs`).
 func jobsCommand(con *client.Client) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "jobs",
 		Short: "List running scan jobs",
 		RunE: func(command *cobra.Command, args []string) error {
 			res, err := con.Scans.Jobs(command.Context(), &scans.JobsRequest{})
 			if err = aims.CheckError(err); err != nil {
 				return err
+			}
+			// --count: emit only the number of running jobs and nothing else. This is the terse,
+			// machine-readable mode the shell prompt integration (`aims init`) polls — the zsh
+			// precmd hook parses a bare integer, so keep it a single decimal with no decoration.
+			if count, _ := command.Flags().GetBool("count"); count {
+				fmt.Println(len(res.GetJobs()))
+				return nil
 			}
 			if len(res.GetJobs()) == 0 {
 				fmt.Println("No running scan jobs.")
@@ -54,6 +61,8 @@ func jobsCommand(con *client.Client) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().Bool("count", false, "Print only the number of running jobs (for the `aims init` prompt integration)")
+	return cmd
 }
 
 // attachCommand re-follows a running scan job's stream (`aims scan attach <job-id>`).

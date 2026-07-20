@@ -35,6 +35,12 @@ if [ "$1" = bring ]; then
   cat "$AIMS_TEST_PAYLOAD_DIR/$2" 2>/dev/null || { echo "fake aims: no payload for '$2'" >&2; exit 1; }
   exit 0
 fi
+if [ "$1" = scan ] && [ "$2" = jobs ]; then
+  # --count mode for the prompt integration: emit the test-provided running-job count (empty when
+  # unset, which the poll treats as "no update").
+  printf '%s\n' "${AIMS_TEST_SCAN_COUNT}"
+  exit 0
+fi
 echo "fake aims: unsupported args: $*" >&2
 exit 1
 `
@@ -293,4 +299,70 @@ func TestZshBringNesting(t *testing.T) {
 		t.Errorf("after full teardown, PROMPT = %q, want the base %q", r["P0_PROMPT"], r["BASE_PROMPT"])
 	}
 	assertNoStrayFiles(t, dir)
+}
+
+// scanPollRunner sources the integration and invokes the precmd poll once directly (a script has no
+// prompt, so the registered precmd hook never fires on its own), then reports the resulting RPROMPT.
+const scanPollRunner = `
+source "$1"
+print -r -- "BASE_RPROMPT=$RPROMPT"
+_aims_scan_poll
+print -r -- "RPROMPT=$RPROMPT"
+`
+
+// TestZshScanIndicatorShowsRunningCount checks the right-prompt running-scan indicator surfaces the
+// count reported by `aims scan jobs --count`, and composes with the operator's own RPROMPT.
+func TestZshScanIndicatorShowsRunningCount(t *testing.T) {
+	t.Setenv("AIMS_TEST_SCAN_COUNT", "2")
+
+	r, dir := runZshScript(t, nil, `RPROMPT='%~'`+"\n"+scanPollRunner)
+
+	// The count carries a "scans" label so the glyph alone never has to convey the meaning.
+	if !strings.Contains(r["RPROMPT"], "⟳2 scans") {
+		t.Errorf("RPROMPT = %q, want it to contain the labelled running-scan indicator ⟳2 scans", r["RPROMPT"])
+	}
+	// The indicator prefixes, not replaces, the pre-existing right prompt.
+	if !strings.Contains(r["RPROMPT"], "%~") {
+		t.Errorf("RPROMPT = %q, want it to preserve the operator's own right prompt %%~", r["RPROMPT"])
+	}
+	assertNoStrayFiles(t, dir)
+}
+
+// TestZshScanIndicatorSingularLabel checks the label is singular for a single running scan.
+func TestZshScanIndicatorSingularLabel(t *testing.T) {
+	t.Setenv("AIMS_TEST_SCAN_COUNT", "1")
+
+	r, _ := runZshScript(t, nil, `RPROMPT='%~'`+"\n"+scanPollRunner)
+
+	if !strings.Contains(r["RPROMPT"], "⟳1 scan") || strings.Contains(r["RPROMPT"], "⟳1 scans") {
+		t.Errorf("RPROMPT = %q, want the singular label ⟳1 scan", r["RPROMPT"])
+	}
+}
+
+// TestZshScanIndicatorHiddenWhenIdle checks that with no running scans the indicator adds nothing —
+// the right prompt is exactly what the operator had.
+func TestZshScanIndicatorHiddenWhenIdle(t *testing.T) {
+	t.Setenv("AIMS_TEST_SCAN_COUNT", "0")
+
+	r, _ := runZshScript(t, nil, `RPROMPT='%~'`+"\n"+scanPollRunner)
+
+	if strings.Contains(r["RPROMPT"], "⟳") {
+		t.Errorf("RPROMPT = %q, want no scan indicator when the count is 0", r["RPROMPT"])
+	}
+	if r["RPROMPT"] != "%~" {
+		t.Errorf("RPROMPT = %q, want the untouched operator prompt %%~", r["RPROMPT"])
+	}
+}
+
+// TestZshScanIndicatorDisabled checks the AIMS_SCAN_PROMPT=0 opt-out fully suppresses the indicator
+// even while scans are running (and does not even poll).
+func TestZshScanIndicatorDisabled(t *testing.T) {
+	t.Setenv("AIMS_TEST_SCAN_COUNT", "5")
+	t.Setenv("AIMS_SCAN_PROMPT", "0")
+
+	r, _ := runZshScript(t, nil, `RPROMPT='%~'`+"\n"+scanPollRunner)
+
+	if strings.Contains(r["RPROMPT"], "⟳") {
+		t.Errorf("RPROMPT = %q, want no scan indicator when AIMS_SCAN_PROMPT=0", r["RPROMPT"])
+	}
 }
