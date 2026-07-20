@@ -63,7 +63,7 @@ import (
 // pre-NSE stub that drops --script and friends — supplemented, deduped, by the carapace-bridge
 // long-tail for whatever extra the local `_nmap` knows.
 func completeRunNmap(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	return carapace.ActionCallback(guard("nmap", func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 {
 			switch c.Args[n-1] {
 			case "--script":
@@ -80,7 +80,22 @@ func completeRunNmap(con *client.Client) carapace.Action {
 			return nmapFlagCompletions()
 		}
 		return completeTargets(con)
-	})
+	}))
+}
+
+// guard wraps a completion callback so a panic degrades to a visible carapace message instead of
+// crashing the exec-once `_carapace` subprocess — which the shell experiences as completion hanging
+// with no output. The message also surfaces the failure (with its location in the panic text) so it
+// can be diagnosed rather than silently swallowed. label names the completer for the message.
+func guard(label string, fn carapace.CompletionCallback) carapace.CompletionCallback {
+	return func(c carapace.Context) (action carapace.Action) {
+		defer func() {
+			if r := recover(); r != nil {
+				action = carapace.ActionMessage("%s completion panicked: %v", label, r)
+			}
+		}()
+		return fn(c)
+	}
 }
 
 //
@@ -134,7 +149,7 @@ func cachedTargets(con *client.Client) carapace.Action {
 		name += ":" + ctx.ID
 	}
 
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("targets", func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -156,7 +171,7 @@ func cachedTargets(con *client.Client) carapace.Action {
 			groupedTargets(res.GetHosts(), agentHost),
 			groupedSubnets(res.GetHosts(), agentHost),
 		).ToA()
-	}))
+	})))
 }
 
 // groupedTargets partitions hosts into sub-groups and renders each as its own tagged carapace
@@ -721,7 +736,7 @@ func cachedPorts(con *client.Client) carapace.Action {
 		name += ":" + ctx.ID
 	}
 
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("ports", func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -736,7 +751,7 @@ func cachedPorts(con *client.Client) carapace.Action {
 
 		agentHost, _ := agentctx.CurrentHost(con)
 		return groupedPorts(res.GetHosts(), agentHost)
-	}))
+	})))
 }
 
 // portInfo aggregates one open port number across the host set: its service name and protocol
@@ -873,7 +888,7 @@ func completeSecret(con *client.Client) carapace.Action {
 		name += ":" + ctx.ID
 	}
 
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("secret", func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -888,7 +903,7 @@ func completeSecret(con *client.Client) carapace.Action {
 
 		agentHost, _ := agentctx.CurrentHost(con)
 		return groupedSecrets(res.GetCredentials(), agentHostCredIDs(con, agentHost))
-	}))
+	})))
 }
 
 // agentHostCredIDs returns the set of credential ids that have a login on the current agent's host —
@@ -1043,7 +1058,7 @@ func completeWebURL(con *client.Client) carapace.Action {
 		name += ":" + ctx.ID
 	}
 
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("web-url", func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -1058,7 +1073,7 @@ func completeWebURL(con *client.Client) carapace.Action {
 
 		agentHost, _ := agentctx.CurrentHost(con)
 		return groupedURLs(res.GetHosts(), agentHost)
-	}))
+	})))
 }
 
 // groupedURLs synthesizes a URL per open web port and renders them as promoted, described groups.
