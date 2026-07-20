@@ -29,6 +29,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,9 +137,13 @@ func (j *scanJob) isDone() bool {
 	return j.done
 }
 
-func (s *server) addJob(j *scanJob)          { s.jobsMu.Lock(); s.jobs[j.id] = j; s.jobsMu.Unlock() }
-func (s *server) removeJob(id string)         { s.jobsMu.Lock(); delete(s.jobs, id); s.jobsMu.Unlock() }
-func (s *server) getJob(id string) *scanJob   { s.jobsMu.Lock(); defer s.jobsMu.Unlock(); return s.jobs[id] }
+func (s *server) addJob(j *scanJob)   { s.jobsMu.Lock(); s.jobs[j.id] = j; s.jobsMu.Unlock() }
+func (s *server) removeJob(id string) { s.jobsMu.Lock(); delete(s.jobs, id); s.jobsMu.Unlock() }
+func (s *server) getJob(id string) *scanJob {
+	s.jobsMu.Lock()
+	defer s.jobsMu.Unlock()
+	return s.jobs[id]
+}
 
 // Run executes a scanner server-side against the request's targets and streams RunUpdate frames.
 // The job runs under its own context so it survives the client detaching (Ctrl-C on a foreground
@@ -203,6 +208,18 @@ func (s *server) forward(stream updateStream, job *scanJob) error {
 func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <-chan *scanpb.TaskProgress) {
 	run := &scan.Run{}
 	run.Scanner = job.scanner
+	// Carry the invocation onto the persisted run so `scan list`/`show` (and a cross-process
+	// `scan jobs`) reflect what is running, not a bare scanner name. Args is the joined command; the
+	// structured Targets (present on a --from-db scan; empty when targets ride inside Args) get stable
+	// Ids up front so re-persisting the snapshot each heartbeat is idempotent — BeforeCreate only mints
+	// when Id=="", so pre-assigning avoids inserting duplicate target rows on every tick.
+	run.Args = strings.Join(job.args, " ")
+	for _, t := range job.targets {
+		if t.GetId() == "" {
+			t.Id = uuid.Must(uuid.NewV4()).String()
+		}
+	}
+	run.Targets = job.targets
 
 	// snapshot upserts the accumulating run under the JOB id, so `scan show <job-id>` and
 	// `watch scan show` reflect live state as hosts arrive (persistRun upserts by Id — see
@@ -269,17 +286,20 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	job.finish(finalUpdate(stored))
 }
 
-// Jobs lists the scans currently running server-side (finished jobs are kept briefly for late
-// Attach replay but are not reported as running).
+// Jobs lists the scans currently running. It reports this process's in-memory jobs AND — because the
+// all-in-one binary boots a fresh ephemeral teamserver per command, so a scan running in another
+// process is absent from this registry — every run the shared DB shows as running (fresh heartbeat).
+// That makes `scan jobs`/`attach` see a foreground scan started in a different terminal, not just
+// jobs owned by the current process.
 func (s *server) Jobs(ctx context.Context, req *scanrpcpb.JobsRequest) (*scanrpcpb.JobsResponse, error) {
 	s.jobsMu.Lock()
-	defer s.jobsMu.Unlock()
-
+	seen := map[string]bool{}
 	var jobs []*scanrpcpb.ScanJob
 	for _, j := range s.jobs {
 		if j.isDone() {
 			continue
 		}
+		seen[j.id] = true
 		jobs = append(jobs, &scanrpcpb.ScanJob{
 			Id:        j.id,
 			Scanner:   j.scanner,
@@ -288,16 +308,87 @@ func (s *server) Jobs(ctx context.Context, req *scanrpcpb.JobsRequest) (*scanrpc
 			Targets:   j.targets,
 		})
 	}
+	s.jobsMu.Unlock()
+
+	// Cross-process running scans, surfaced from the shared DB (stateOf judges liveness by heartbeat).
+	dbRuns, err := s.loadRuns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range dbRuns {
+		if seen[r.GetId()] || !scan.IsRunning(r) {
+			continue
+		}
+		jobs = append(jobs, &scanrpcpb.ScanJob{
+			Id:        r.GetId(),
+			Scanner:   r.GetScanner(),
+			Args:      strings.Fields(r.GetArgs()),
+			StartedAt: startedAt(r),
+			Targets:   r.GetTargets(),
+		})
+	}
 	return &scanrpcpb.JobsResponse{Jobs: jobs}, nil
 }
 
-// Attach re-subscribes to a running (or just-finished) job's stream.
+// Attach re-subscribes to a running (or just-finished) job's stream. If the job is not in this
+// process's registry it may be a scan running in another aims process; fall back to streaming its
+// persisted state from the shared DB (hosts as they appear, then the terminal run) by polling.
 func (s *server) Attach(req *scanrpcpb.AttachRequest, stream scanrpcpb.Scans_AttachServer) error {
-	job := s.getJob(req.GetJobId())
-	if job == nil {
-		return fmt.Errorf("no scan job %q", req.GetJobId())
+	if job := s.getJob(req.GetJobId()); job != nil {
+		return s.forward(stream, job)
 	}
-	return s.forward(stream, job)
+	return s.attachFromDB(stream.Context(), req.GetJobId(), stream)
+}
+
+// attachFromDB streams a cross-process run's live state from the DB: it emits each newly-observed
+// host as the owning process persists it, then the terminal run once the run stops being running
+// (finished, or heartbeat-stale/interrupted). Progress frames are not available — the snapshot does
+// not persist the task stream — so this is a coarser view than an in-process attach (host-level, not
+// a live progress bar), but it works across processes with no shared server.
+func (s *server) attachFromDB(ctx context.Context, id string, stream updateStream) error {
+	sent := map[string]bool{}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		run, err := s.readRun(ctx, id)
+		if err != nil {
+			return err
+		}
+		if run == nil {
+			return fmt.Errorf("no scan job %q", id)
+		}
+		for _, h := range run.GetHosts() {
+			if hid := h.GetId(); hid != "" {
+				if sent[hid] {
+					continue
+				}
+				sent[hid] = true
+			}
+			if err := stream.Send(hostUpdate(h)); err != nil {
+				return err
+			}
+		}
+		if !scan.IsRunning(run) {
+			return stream.Send(finalUpdate(run)) // finished or interrupted: terminal frame
+		}
+		select {
+		case <-ctx.Done():
+			return nil // client detached
+		case <-ticker.C:
+		}
+	}
+}
+
+// startedAt is a run's best start timestamp for the jobs list: its explicit Start, else its creation.
+func startedAt(r *scanpb.Run) int64 {
+	if r.GetStart() != 0 {
+		return r.GetStart()
+	}
+	if ts := r.GetCreatedAt(); ts != nil {
+		return ts.AsTime().Unix()
+	}
+	return 0
 }
 
 // Stop cancels a running job, killing its scanner process. The partial results already gathered

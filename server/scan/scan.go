@@ -432,23 +432,13 @@ func (s *server) Delete(ctx context.Context, req *scanrpcpb.DeleteScanRequest) (
 // so shared hosts survive.
 func (s *server) Cleanup(ctx context.Context, req *scanrpcpb.CleanupScanRequest) (*scanrpcpb.CleanupScanResponse, error) {
 	// Load every run (tombstoned included) so the fold can group series, recount FormerRuns, and
-	// flatten chains. The state relations (Stats.Finished, Begin, Progress) MUST be preloaded:
-	// stateOf classifies a run from them, and a run whose Stats is not loaded would fall through to
-	// the fresh-UpdatedAt heartbeat and read as "running" — silently excluding just-imported runs
-	// from cleanup. Targets are half the series identity; the host tree is not needed.
-	clauses := WithPreloads(&scanrpcpb.RunFilters{})
-	clauses["Targets"] = true
-	var dbRuns []*scanpb.RunORM
-	if err := db.Preload(s.db, clauses).Find(&dbRuns).Error; err != nil {
+	// flatten chains. loadRuns preloads the state relations (Stats.Finished, Begin, Progress) — stateOf
+	// classifies a run from them, and a run whose Stats is not loaded would fall through to the
+	// fresh-UpdatedAt heartbeat and read as "running", silently excluding just-imported runs from
+	// cleanup — plus Targets (half the series identity).
+	all, err := s.loadRuns(ctx)
+	if err != nil {
 		return nil, err
-	}
-	all := make([]*scanpb.Run, 0, len(dbRuns))
-	for _, r := range dbRuns {
-		pb, err := r.ToPB(ctx)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, &pb)
 	}
 
 	plan := scan.ComputeCleanup(all)
@@ -471,7 +461,7 @@ func (s *server) Cleanup(ctx context.Context, req *scanrpcpb.CleanupScanRequest)
 		return resp, nil
 	}
 
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// Tombstone each non-prunable sibling by writing only its superseded_by column. UpdateColumn
 		// (not Update) so the write does NOT bump updated_at: that timestamp is the liveness heartbeat
 		// stateOf reads, and refreshing it would make a tombstoned interrupted/done run masquerade as
@@ -538,4 +528,54 @@ func WithPreloads(from *scanrpcpb.RunFilters) (clauses map[string]bool) {
 	}
 
 	return clauses
+}
+
+// loadRuns loads every persisted run as PB with the relations stateOf needs (Stats.Finished, Begin,
+// Progress) plus Targets, but not the heavy host tree — so callers can classify run state and read
+// the scan definition cheaply. Shared by Cleanup (series grouping) and Jobs (cross-process
+// running-scan view).
+func (s *server) loadRuns(ctx context.Context) ([]*scanpb.Run, error) {
+	clauses := WithPreloads(&scanrpcpb.RunFilters{})
+	clauses["Targets"] = true
+	var dbRuns []*scanpb.RunORM
+	if err := db.Preload(s.db, clauses).Find(&dbRuns).Error; err != nil {
+		return nil, err
+	}
+	out := make([]*scanpb.Run, 0, len(dbRuns))
+	for _, r := range dbRuns {
+		pb, err := r.ToPB(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, &pb)
+	}
+	return out, nil
+}
+
+// readRun loads a single run by id with its full host subtree (and the state relations), for the
+// cross-process DB-attach stream. Returns (nil, nil) when no such run exists.
+func (s *server) readRun(ctx context.Context, id string) (*scanpb.Run, error) {
+	clauses := WithPreloads(&scanrpcpb.RunFilters{Hosts: true})
+	hostClauses := hosts.WithPreloads(&hostrpcpb.HostFilters{Trace: true, Ports: true})
+	for name, load := range hostClauses {
+		if load {
+			clauses["Hosts."+name] = true
+		}
+	}
+	clauses["Hosts.Addresses"] = true
+	clauses["Targets"] = true
+
+	var r scanpb.RunORM
+	err := db.Preload(s.db.Where("id = ?", id), clauses).First(&r).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	pb, err := r.ToPB(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &pb, nil
 }
