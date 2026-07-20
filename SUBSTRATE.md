@@ -186,6 +186,98 @@ work; `watch aims scan show <id>` refreshes during a run.
 
 ---
 
+## Phase 5 — Run lifecycle: cleanup / tombstone / history (proto + Go) — ✅ DONE (`4af9c31`)
+
+Repeated runs of the same scan definition (a cron scan of the same hosts) accumulate near-duplicate
+`Run`s. Phase 5 collapses each *series* onto one visible head **without** losing the drift history
+`scan diff` (Phase 3) depends on.
+
+**Governing distinction:** *identical output* (byte-equal `RawXML` — a re-import, safe to delete) vs
+*identical definition* (same scanner+args+targets, drifting output — must be **tombstoned**, never
+deleted, or `scan diff` loses exactly the runs it needs). Tombstone is primary; hard-delete is opt-in
+(`--prune`) for the byte-identical subset only.
+
+- **Proto (ormable regen):** `Run.SupersededBy` (Id of the surviving head; "" == head), `Run.FormerRuns`
+  (monotonic count of absorbed siblings — the indicative trace, survives `--prune`), `Run.ResumedFrom`
+  (Phase-6 seed). `RunFilters.IncludeSuperseded` / `RunFilters.SupersededBy` for server-side scoping.
+- **`scan/lifecycle.go` (pure Go):** `seriesKey` (arg-order-normalized, profile-aware), `pickHead`
+  (never demotes a clean `done` under a later `failed`/`interrupted`), `ComputeCleanup` (idempotent,
+  chain-flattening, monotonic FormerRuns), `Prunable` = byte-identical only.
+- **Server `Cleanup` RPC:** applies the plan with **column-scoped** writes (`UpdateColumn`, so a
+  tombstone never bumps the `UpdatedAt` heartbeat — else a stale interrupted run would masquerade as
+  running) in a transaction; `--prune` hard-deletes via Delete's `run_hosts`-unlink path so shared
+  hosts survive. Server `Read` default hides tombstones (heads only); `IncludeSuperseded` /
+  `SupersededBy` let `history`/`show`/`rm`/`diff` reach any run **server-side** (the `history` series
+  is one scoped query, not read-all-and-triage — a design ask from the user).
+- **CLI:** `scan cleanup [--prune] [--yes]` (dry-run default), `scan history [id]`, `scan list --all`,
+  a `Series` (+N) column; completions offer heads only.
+- **Tests:** `scan/lifecycle_test.go` + `server/scan/cleanup_test.go` (persist+filter+idempotence+
+  shared-host survival + heartbeat-not-bumped; prune hard-delete). **Live-verified** on the dev DB
+  (dry-run grouped 21 real runs → 3 series heads), which surfaced and fixed the heartbeat-bump bug now
+  guarded by a regression test.
+
+> **Codegen note:** the ormable `scan.proto` regen used the **offline buf recipe** (BSR auth-walled):
+> vendor `infobloxopen/protoc-gen-gorm@v1.1.5/proto/{options,types}`, comment the BSR dep + blank
+> `buf.lock`, `buf generate --template buf.gen-gorm.yaml --path scan/pb/scan.proto`, `maltego-tags.sh`,
+> sed the vendored-options import back to `infobloxopen/...`, restore. **Validated byte-identical**
+> against the committed output before adding fields. The rpc `scans.proto` (non-ormable) used the
+> lighter direct-`protoc` recipe. See `aims-provenance-source-domain` memory.
+
+---
+
+## Phase 6 — `scan resume` for interrupted runs — DESIGN (AIMS-owned target-diff)
+
+> **Design only (not built).** Pivoted from the original "native + derived" plan after discussion:
+> make **AIMS-owned per-target tracking + command reforging** the *primary* mechanism, native
+> `nmap --resume` a *deferred refinement*. Rationale below.
+
+**Why AIMS-owned beats scanner-native as the foundation.** The streaming fold already sees every
+result as it lands and persists incrementally, so AIMS can own an authoritative record of which
+targets produced results. That signal is **uniform across every scanner** (no per-tool checkpoint
+format — nmap's `-oG` log, masscan's `paused.conf`, nothing for zgrab2/httpx), and it **survives a
+SIGKILL** that would destroy a scanner's own un-flushed checkpoint. It is the substrate thesis run
+backwards: AIMS knows the targets, so AIMS reforges the command.
+
+**Granularity — the honest boundary.** AIMS-owned tracking is **target-granular** (re-scan only the
+hosts/targets that produced nothing); it is **not port-granular** (a scan killed mid-host re-scans
+that whole host — fold-idempotent, just repeated work). Native `nmap --resume` picks up mid-host; that
+is its *sole* advantage and the only reason it stays on the roadmap.
+
+**Primary mechanism (no new driver interface, no new ormable field):**
+1. **Per-target completion tracking.** As `consume` folds each `Result`, match its Host back to the
+   run's `Targets` (by address/hostname) and mark `Target.Status = done` — a *down* host counts as
+   done (it was scanned); `Targets − Hosts` would wrongly re-scan down hosts. **Wiring needed:**
+   `consume` must carry `job.targets` onto the run and persist Status as results land (it does not
+   today).
+2. **Interrupt-aware final persist.** `consume` always writes `Stats.Finished{success}` today (→
+   `done`) even when cancelled. It must instead check `jobCtx.Err()` and, if cancelled, persist the
+   partial run **without** `Finished` so the heartbeat goes stale → `stateInterrupted` (the resumable
+   state). Pass `jobCtx` into `consume`.
+3. **Reforge + run.** `scan resume <id>` → server `Resume(ResumeScanRequest{Id})`: load the interrupted
+   run, `remaining = Targets with Status != done`, reforge `Scanner + Args + TargetSpecs(remaining)`,
+   drive via the existing `drive.Scanner.Scan`, stream like `Run`, fold into a new run with
+   `ResumedFrom = oldId`, and **tombstone the parent** (Phase-5 `SupersededBy`) — a resume chain is a
+   series.
+
+**Honest limitation — structured targets required.** Target-diff needs the run to carry *structured*
+`Targets`. The `--from-db` path (Phase 2) provides them; a raw `scan run nmap -sT 10.0.0.0/24` keeps
+targets inside `Args`, so there resume can only re-run the whole command (fold-idempotent) until a
+follow-up parses specs out of `Args`. Report which mode was used.
+
+**Guard:** only `stateOf ∈ {interrupted, failed}` resume; error on running/done.
+
+**Codegen:** only a `Resume(ResumeScanRequest{string Id}) returns (stream RunUpdate)` RPC on the
+non-ormable `scans.proto` (light direct-`protoc` regen). **No** ormable change — `ResumedFrom` and
+`Target.Status` already exist; the pivot drops the `Run.Checkpoint` field the old plan wanted.
+
+**Deferred refinement — native `nmap --resume` (NOT this slice):** for port granularity, later add an
+always-on `-oG <tmpfile>`, capture the partial log on interrupt, `nmap --resume <file>`. The fiddly,
+weakly-testable path (nmap's all-or-nothing `--resume` args, temp-file lifecycle, masscan needing
+SIGINT not SIGKILL for `paused.conf`). Worth it only after the target-diff core is proven, and only
+where sub-target granularity matters.
+
+---
+
 ## Cross-cutting
 
 - **Preserve the four Part-A primitives** (evidence/confidence, summarize-the-boring, run provenance,
