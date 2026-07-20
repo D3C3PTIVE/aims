@@ -119,6 +119,25 @@ func hostsSameSubnet(a, b *hostpb.Host) bool {
 	return false
 }
 
+// SubnetOf returns the address's subnet in CIDR form under the same netmask-free heuristic sameSubnet
+// uses — a /24 for IPv4, a /64 for IPv6 — and false for a nil/unusable address. It is the companion
+// to sameSubnet for callers that need the prefix itself (e.g. offering subnets as scan targets).
+func SubnetOf(ip net.IP) (string, bool) {
+	if ip == nil {
+		return "", false
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return net.IPv4(v4[0], v4[1], v4[2], 0).To4().String() + "/24", true
+	}
+	v6 := ip.To16()
+	if v6 == nil {
+		return "", false
+	}
+	masked := make(net.IP, net.IPv6len)
+	copy(masked, v6[:8]) // keep the first 64 bits; the rest stays zero
+	return masked.String() + "/64", true
+}
+
 // sameSubnet is a heuristic — the model stores bare addresses with no netmask — so "same subnet"
 // assumes the common defaults: a shared /24 for IPv4, a shared /64 for IPv6. Mixed address families
 // are never in the same subnet.

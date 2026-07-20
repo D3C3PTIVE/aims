@@ -577,6 +577,121 @@ func TestPortDesc(t *testing.T) {
 	}
 }
 
+// TestCollectSubnets pins the clustering + agent seeding: hosts group into /24s, loopback is
+// dropped, the agent's own subnet is marked (host-count includes the agent), and the last-hop
+// gateway seeds a subnet marked agent with no known hosts. Sorted by density desc.
+func TestCollectSubnets(t *testing.T) {
+	host := func(id string, addrs ...string) *pb.Host {
+		h := &pb.Host{Id: id}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+	agent := host("agent", "10.0.0.10")
+	agent.Trace = &network.Trace{Hops: []*network.Hop{{IPAddr: "10.0.5.1"}, {IPAddr: "10.0.0.10"}}}
+
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.20"), host("c", "10.0.0.30"), host("d", "10.0.0.40"),
+		host("e", "192.168.1.5"), host("f", "192.168.1.6"),
+		host("g", "8.8.8.8"),
+		host("lo", "127.0.0.1"), // loopback → dropped
+	}
+
+	byCidr := map[string]*subnetInfo{}
+	subs := collectSubnets(all, agent)
+	for _, si := range subs {
+		byCidr[si.cidr] = si
+	}
+
+	if si := byCidr["10.0.0.0/24"]; si == nil || !si.isAgent || si.hosts != 4 {
+		t.Errorf("10.0.0.0/24: got %+v, want isAgent hosts=4", si)
+	}
+	if si := byCidr["10.0.5.0/24"]; si == nil || !si.isAgent || si.hosts != 0 || si.gateway != "10.0.5.1" {
+		t.Errorf("10.0.5.0/24 (gateway seed): got %+v, want isAgent hosts=0 gateway=10.0.5.1", si)
+	}
+	if si := byCidr["192.168.1.0/24"]; si == nil || si.isAgent || si.hosts != 2 || si.locality != "private" {
+		t.Errorf("192.168.1.0/24: got %+v, want private hosts=2 not-agent", si)
+	}
+	if si := byCidr["8.8.8.0/24"]; si == nil || si.locality != "routable" || si.hosts != 1 {
+		t.Errorf("8.8.8.0/24: got %+v, want routable hosts=1", si)
+	}
+	if _, ok := byCidr["127.0.0.0/24"]; ok {
+		t.Error("loopback subnet must be excluded")
+	}
+	for i := 1; i < len(subs); i++ {
+		if subs[i-1].hosts < subs[i].hosts {
+			t.Errorf("collectSubnets not sorted by density desc: %v", subs)
+			break
+		}
+	}
+}
+
+// TestSubnetTag: agent subnets win, routable is always last-group, private splits on the density
+// threshold.
+func TestSubnetTag(t *testing.T) {
+	cases := []struct {
+		si   *subnetInfo
+		want string
+	}{
+		{&subnetInfo{isAgent: true, locality: "private", hosts: 4}, tagSubnetAgent},
+		{&subnetInfo{isAgent: true, locality: "routable", hosts: 0}, tagSubnetAgent},
+		{&subnetInfo{locality: "private", hosts: 5}, tagSubnetDense},
+		{&subnetInfo{locality: "private", hosts: 4}, tagSubnetDense},
+		{&subnetInfo{locality: "private", hosts: 3}, tagSubnetPrivate},
+		{&subnetInfo{locality: "routable", hosts: 10}, tagSubnetRoutable},
+	}
+	for _, c := range cases {
+		if got := subnetTag(c.si); got != c.want {
+			t.Errorf("subnetTag(%+v) = %q, want %q", c.si, got, c.want)
+		}
+	}
+}
+
+// TestSubnetDesc: gateway annotation, host count (or "sweep to discover"), public and IPv6 markers.
+func TestSubnetDesc(t *testing.T) {
+	cases := []struct {
+		si   *subnetInfo
+		want string
+	}{
+		{&subnetInfo{hosts: 12}, "12 hosts"},
+		{&subnetInfo{hosts: 1}, "1 host"},
+		{&subnetInfo{hosts: 0, isAgent: true, gateway: "10.0.5.1"}, "gateway 10.0.5.1 · sweep to discover"},
+		{&subnetInfo{hosts: 2, locality: "routable"}, "2 hosts · public"},
+		{&subnetInfo{hosts: 4, v6: true}, "4 hosts · IPv6"},
+	}
+	for _, c := range cases {
+		if got := subnetDesc(c.si); got != c.want {
+			t.Errorf("subnetDesc(%+v) = %q, want %q", c.si, got, c.want)
+		}
+	}
+}
+
+// TestLastGateway: the second-to-last traceroute hop, or "" when there aren't two hops.
+func TestLastGateway(t *testing.T) {
+	mk := func(hops ...string) *pb.Host {
+		h := &pb.Host{}
+		if len(hops) > 0 {
+			tr := &network.Trace{}
+			for _, ip := range hops {
+				tr.Hops = append(tr.Hops, &network.Hop{IPAddr: ip})
+			}
+			h.Trace = tr
+		}
+		return h
+	}
+	if got := lastGateway(mk("10.0.5.1", "10.0.0.10")); got != "10.0.5.1" {
+		t.Errorf("two hops: got %q, want 10.0.5.1", got)
+	}
+	if got := lastGateway(mk("10.0.0.10")); got != "" {
+		t.Errorf("single hop: got %q, want empty", got)
+	}
+	if got := lastGateway(mk()); got != "" {
+		t.Errorf("no trace: got %q, want empty", got)
+	}
+}
+
 // TestScriptSelectorsFromArgs checks we recover the --script selection from the raw token stream in
 // both `--script v` and `--script=v` forms, split on commas, without mistaking --script-args or
 // --script-help for --script.

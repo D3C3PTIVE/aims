@@ -97,6 +97,28 @@ func TestRelevanceOfHostID(t *testing.T) {
 	}
 }
 
+// TestSubnetOf: /24 for IPv4, /64 for IPv6, false for junk.
+func TestSubnetOf(t *testing.T) {
+	cases := []struct {
+		ip   string
+		want string
+		ok   bool
+	}{
+		{"10.10.14.37", "10.10.14.0/24", true},
+		{"192.168.1.254", "192.168.1.0/24", true},
+		{"2001:db8:14::abcd", "2001:db8:14::/64", true},
+		{"fe80::1", "fe80::/64", true},
+		{"", "", false},
+		{"not-an-ip", "", false},
+	}
+	for _, c := range cases {
+		got, ok := SubnetOf(net.ParseIP(c.ip))
+		if ok != c.ok || got != c.want {
+			t.Errorf("SubnetOf(%q) = (%q, %v), want (%q, %v)", c.ip, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 // TestPromotedOrder: relevance groups lead, the completer's own groups follow in order.
 func TestPromotedOrder(t *testing.T) {
 	got := PromotedOrder("a", "b")

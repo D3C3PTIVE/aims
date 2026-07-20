@@ -149,7 +149,13 @@ func cachedTargets(con *client.Client) carapace.Action {
 
 		// The agent's host is the base for context-aware grouping; nil when no context is loaded.
 		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedTargets(res.GetHosts(), agentHost)
+
+		// A CIDR is a valid nmap target, so the target slot offers individual hosts *and* the
+		// subnets clustered from them (both promoted by agent context).
+		return carapace.Batch(
+			groupedTargets(res.GetHosts(), agentHost),
+			groupedSubnets(res.GetHosts(), agentHost),
+		).ToA()
 	}))
 }
 
@@ -1200,6 +1206,167 @@ func urlDesc(h *pb.Host, p *pb.Port) string {
 	}
 
 	return strings.Join(parts, " · ")
+}
+
+//
+// [ Subnets — clustered from DB addresses + agent seeds ] ---------------------------------------
+//
+
+const (
+	tagSubnetAgent    = "agent subnets"
+	tagSubnetDense    = "private subnets (dense)"
+	tagSubnetPrivate  = "private subnets"
+	tagSubnetRoutable = "routable subnets"
+
+	// subnetDenseThreshold is the known-host count at which a private subnet is promoted from the
+	// "private" group to the "dense" one.
+	subnetDenseThreshold = 4
+)
+
+// subnetGroupOrder ranks the subnet groups: the agent's own subnets first, then private subnets by
+// density, then routable last.
+var subnetGroupOrder = []string{tagSubnetAgent, tagSubnetDense, tagSubnetPrivate, tagSubnetRoutable}
+
+// subnetInfo aggregates one candidate subnet: its CIDR, how many known hosts fall in it, its
+// locality, whether the agent belongs to it (an agent address or gateway sits inside), and an
+// optional gateway annotation.
+type subnetInfo struct {
+	cidr     string
+	hosts    int
+	locality string
+	isAgent  bool
+	gateway  string
+	v6       bool
+}
+
+// collectSubnets clusters the DB's host addresses into /24 (v4) and /64 (v6) prefixes, then seeds
+// the agent host's own subnets and its last-hop gateway — marked as the agent's, and offered even
+// when no other host is known there ("sweep to discover"). Sorted by host density (desc) then CIDR.
+func collectSubnets(all []*pb.Host, agentHost *pb.Host) []*subnetInfo {
+	byNet := make(map[string]*subnetInfo)
+
+	touch := func(addr string) *subnetInfo {
+		ip := net.ParseIP(strings.TrimSpace(addr))
+		if ip == nil || ip.IsLoopback() {
+			return nil
+		}
+		cidr, ok := agentctx.SubnetOf(ip)
+		if !ok {
+			return nil
+		}
+		si := byNet[cidr]
+		if si == nil {
+			si = &subnetInfo{cidr: cidr, locality: localityOf(addr), v6: ip.To4() == nil}
+			byNet[cidr] = si
+		}
+		return si
+	}
+
+	for _, h := range all {
+		for _, a := range h.GetAddresses() {
+			if si := touch(a.GetAddr()); si != nil {
+				si.hosts++
+			}
+		}
+	}
+
+	if agentHost != nil {
+		for _, a := range agentHost.GetAddresses() {
+			if si := touch(a.GetAddr()); si != nil {
+				si.isAgent = true
+			}
+		}
+		if gw := lastGateway(agentHost); gw != "" {
+			if si := touch(gw); si != nil {
+				si.isAgent = true
+				si.gateway = gw
+			}
+		}
+	}
+
+	out := make([]*subnetInfo, 0, len(byNet))
+	for _, si := range byNet {
+		out = append(out, si)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].hosts != out[j].hosts {
+			return out[i].hosts > out[j].hosts
+		}
+		return out[i].cidr < out[j].cidr
+	})
+	return out
+}
+
+// groupedSubnets renders the clustered subnets as ranked, described carapace groups. Prefixes are
+// capped at /24 and /64 (SubnetOf), so clustering never rolls scattered addresses up into a wider
+// sweep. Returns an empty action (contributing nothing to the target slot) when there are none.
+func groupedSubnets(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+	buckets := make(map[string][]string)
+	for _, si := range collectSubnets(all, agentHost) {
+		tag := subnetTag(si)
+		buckets[tag] = append(buckets[tag], si.cidr, subnetDesc(si))
+	}
+
+	actions := make([]carapace.Action, 0, len(subnetGroupOrder))
+	for _, tag := range subnetGroupOrder {
+		if pairs := buckets[tag]; len(pairs) > 0 {
+			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
+		}
+	}
+	if len(actions) == 0 {
+		return carapace.ActionValues()
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// subnetTag ranks a subnet: the agent's own subnets first, then routable last, else private split by
+// density.
+func subnetTag(si *subnetInfo) string {
+	if si.isAgent {
+		return tagSubnetAgent
+	}
+	if si.locality == "routable" {
+		return tagSubnetRoutable
+	}
+	if si.hosts >= subnetDenseThreshold {
+		return tagSubnetDense
+	}
+	return tagSubnetPrivate
+}
+
+// subnetDesc describes a subnet by its gateway (when it's the agent's), host count (or "sweep to
+// discover" when none known yet), a public marker, and an IPv6 marker.
+func subnetDesc(si *subnetInfo) string {
+	var parts []string
+	if si.gateway != "" {
+		parts = append(parts, "gateway "+si.gateway)
+	}
+	if si.hosts == 0 {
+		parts = append(parts, "sweep to discover")
+	} else {
+		unit := "hosts"
+		if si.hosts == 1 {
+			unit = "host"
+		}
+		parts = append(parts, strconv.Itoa(si.hosts)+" "+unit)
+	}
+	if si.locality == "routable" {
+		parts = append(parts, "public")
+	}
+	if si.v6 {
+		parts = append(parts, "IPv6")
+	}
+	return strings.Join(parts, " · ")
+}
+
+// lastGateway returns the IP of the hop adjacent to the agent host — its gateway — from the host's
+// traceroute (the second-to-last hop), or "" when the trace is too short to tell.
+func lastGateway(h *pb.Host) string {
+	hops := h.GetTrace().GetHops()
+	if len(hops) < 2 {
+		return ""
+	}
+	return hops[len(hops)-2].GetIPAddr()
 }
 
 // nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment
