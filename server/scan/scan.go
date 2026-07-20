@@ -21,6 +21,7 @@ package scan
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/gofrs/uuid"
 	"gorm.io/gorm"
@@ -39,11 +40,20 @@ import (
 type server struct {
 	db *gorm.DB
 	*scanrpcpb.UnimplementedScansServer
+
+	// jobs holds the scans currently (and recently) running server-side, so a foreground scan
+	// survives the operator detaching and other operators can list/attach/stop it. See run.go.
+	jobsMu sync.Mutex
+	jobs   map[string]*scanJob
 }
 
 // New returns a new database scan server, from a given db.
 func New(db *gorm.DB) *server {
-	return &server{db: db, UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{}}
+	return &server{
+		db:                       db,
+		UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{},
+		jobs:                     make(map[string]*scanJob),
+	}
 }
 
 // Create stores one or more new scan runs, unifying the hosts they observed with the shared host

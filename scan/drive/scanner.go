@@ -54,8 +54,8 @@ type Scanner interface {
 }
 
 // Nmap is the reference Scanner, driving the AIMS-native nmap fork. Each host nmap reports is
-// surfaced as a Result carrying that host (Result.Host), so the downstream fold enriches the
-// very objects the targets were derived from.
+// surfaced as a Result carrying that host (Result.Host) as it is found, so the downstream fold
+// enriches the very objects the targets were derived from while the scan is still running.
 type Nmap struct {
 	// Args are nmap arguments placed before the target specs (e.g. "-sV", "-p1-1000").
 	Args []string
@@ -89,39 +89,44 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 		return nil, nil, err
 	}
 
+	// Start nmap asynchronously and consume its live host/progress streams (the fork's fixed
+	// async path: YieldHosts/YieldProgress emit as nmap runs and close on completion). Each host
+	// batch becomes per-host Results; progress frames pass through. The channels close when the
+	// scan ends so consumers' range loops terminate.
+	if err := scanner.RunAsync(); err != nil {
+		return nil, nil, err
+	}
+
 	results := make(chan *scanpb.Result)
 	progress := make(chan *scanpb.TaskProgress)
 
 	go func() {
 		defer close(results)
-		defer close(progress)
-
-		// The fork's async YieldHosts/YieldProgress path never terminates — nothing closes its
-		// internal done channel (see nmap fork Wait) — so we drive the reliable synchronous Run
-		// and surface its hosts/progress on the channels. Truly incremental streaming is the
-		// server-side streaming RPC's job (SCAN.md Part C, Phase 4), which must fix the fork path.
-		run, _, runErr := scanner.Run()
-		if runErr != nil || run == nil {
-			return
+		for batch := range scanner.YieldHosts() {
+			for _, h := range batch {
+				select {
+				case results <- &scanpb.Result{Host: h}:
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
-		// The fork's Run shares scan.Run's underlying struct, so this is a conversion, not a copy.
-		pbRun := (*scanpb.Run)(run)
+	}()
 
-		for _, tp := range pbRun.Progress {
+	go func() {
+		defer close(progress)
+		for tp := range scanner.YieldProgress() {
 			select {
 			case progress <- tp:
 			case <-ctx.Done():
 				return
 			}
 		}
-		for _, h := range pbRun.Hosts {
-			select {
-			case results <- &scanpb.Result{Host: h}:
-			case <-ctx.Done():
-				return
-			}
-		}
 	}()
+
+	// Reap the process once it exits (releases resources; the yield channels already signal
+	// completion to consumers by closing).
+	go func() { _ = scanner.Wait() }()
 
 	return results, progress, nil
 }
