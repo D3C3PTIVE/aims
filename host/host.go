@@ -21,9 +21,11 @@ package host
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/host/pb"
@@ -40,81 +42,62 @@ type Host pb.Host
 //
 
 // DisplayHeaders returns all weighted table headers for a table of hosts.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Hostnames", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Addresses", 1)
-
-	add("Status", 2)
-	add("Hops", 2)
-
-	add("Arch", 3)
-	add("MAC", 3)
-	add("Purpose", 3)
-
-	return headers
+func DisplayHeaders() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Hostnames", 1).
+		Add("OS Name", 1).
+		Add("OS Family", 1).
+		Add("Addresses", 1).
+		Add("Status", 2).
+		Add("Hops", 2).
+		Add("Arch", 3).
+		Add("MAC", 3).
+		Add("Purpose", 3).
+		Options()
 }
 
 // DetailHeaders returns the headers for a detailed host view.
 func DisplayDetails() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	// Core
-	add("ID", 1)
-	add("OS Name", 1)
-	add("OS Family", 1)
-	add("Arch", 1)
-	add("Status", 1)
-
-	// Network
-	add("Hostnames", 2)
-	add("Addresses", 2)
-	add("Hops", 2)
-
-	// Hardware
-	add("Extra Ports", 3)
-	add("Purpose", 3)
-	add("MAC", 3)
-	add("Virtual Host", 3)
-
-	// Tools
-	add("Comment", 4)
-	add("Scripts", 4)
-	add("Sources", 4)
-
-	return headers
+	return display.Headers().
+		// Core
+		Add("ID", 1).
+		Add("OS Name", 1).
+		Add("OS Family", 1).
+		Add("Arch", 1).
+		Add("Status", 1).
+		// Network
+		Add("Hostnames", 2).
+		Add("Addresses", 2).
+		Add("Hops", 2).
+		// Hardware
+		Add("Extra Ports", 3).
+		Add("Purpose", 3).
+		Add("MAC", 3).
+		Add("Virtual Host", 3).
+		// Tools
+		Add("Comment", 4).
+		Add("Scripts", 4).
+		Add("Sources", 4).
+		Options()
 }
 
 // Completions returns some columns to be combined into
 // completion candidates and/or their descriptions.
 func Completions() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Hostnames", 1)
-	add("OS Name", 1)
-	add("Addresses", 1)
-
-	return headers
+	return display.Headers().
+		Add("ID", 1).
+		Add("Hostnames", 1).
+		Add("OS Name", 1).
+		Add("Addresses", 1).
+		Options()
 }
 
 // Fields maps field names to their value generators.
 var DisplayFields = map[string]func(h *pb.Host) string{
 	// Table
 	"ID": func(h *pb.Host) string {
-		if h.Status.State == "up" {
+		if h.Status != nil && h.Status.State == "up" {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
 		return display.FormatSmallID(h.Id)
@@ -231,6 +214,364 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 	"Comment": func(h *pb.Host) string {
 		return h.Comment
 	},
+}
+
+//
+// [ Detail View ] --------------------------------------------------------
+//
+
+// Detail assembles the full `info` view for a single host: the identity banner, the side-by-side
+// info panes, the derived insights, and any trailing sections (open ports, extra ports, comment
+// and — when showRoute is set — the full traceroute). It hands these to the shared display.Detail
+// renderer, so a host's detail view is laid out identically to every other domain's. showRoute
+// mirrors the `hosts show --traceroute` flag: the route can be long, so it prints only on request.
+func Detail(h *pb.Host, showRoute bool) display.Detail {
+	return display.Detail{
+		Title:    bannerTitle(h),
+		Badges:   bannerBadges(h),
+		Panes:    InfoPanes(h),
+		Insights: Insights(h),
+		Sections: sections(h, showRoute),
+	}
+}
+
+// bannerTitle is the host identity shown in the banner: its display name (hostname, else address,
+// else short id) in bold, followed by its OS name — bare, with no accuracy chip. When the OS is
+// only an nmap guess, the confidence is surfaced once, in Insights, rather than repeated here and
+// in the System pane.
+func bannerTitle(h *pb.Host) string {
+	title := display.Bold + hostLabel(h) + display.Reset
+	if os := osDisplayName(h); os != "" {
+		title += "  " + os
+	}
+	return title
+}
+
+// bannerBadges are the host's status badges (liveness + open-port count) for the banner.
+func bannerBadges(h *pb.Host) (badges []string) {
+	badges = append(badges, statusBadge(h))
+	if open := openPorts(h); len(open) > 0 {
+		badges = append(badges, color.HiGreenString("%d open", len(open)))
+	}
+	return badges
+}
+
+// InfoPanes groups a host's detail into titled panes (System / Network / Status) for side-by-side
+// layout via display.Columns, mirroring the credential and service info views. Empty panes are
+// dropped, so a host with no OS/network data never prints a bare title.
+func InfoPanes(h *pb.Host) []display.Pane {
+	system := display.KVLines([][2]string{
+		{"OS Name", osDisplayName(h)},
+		{"OS Family", DisplayFields["OS Family"](h)},
+		{"Arch", DisplayFields["Arch"](h)},
+		{"Purpose", DisplayFields["Purpose"](h)},
+	})
+
+	network := display.KVLines([][2]string{
+		{"Hostnames", joinNames(h)},
+		{"Addresses", joinAddrs(h)},
+		{"MAC", h.GetMAC()},
+		{"Hops", DisplayFields["Hops"](h)},
+	})
+
+	status := display.KVLines([][2]string{
+		{"State", DisplayFields["Status"](h)},
+		{"Reason", h.GetStatus().GetReason()},
+		{"Uptime", uptimeLabel(h)},
+		{"ID", display.FormatSmallID(h.GetId())},
+		{"Updated", fmtTime(h.GetUpdatedAt())},
+	})
+
+	var panes []display.Pane
+	for _, p := range []display.Pane{
+		{Title: "System", Lines: system},
+		{Title: "Network", Lines: network},
+		{Title: "Status", Lines: status},
+	} {
+		if len(p.Lines) > 0 {
+			panes = append(panes, p)
+		}
+	}
+	return panes
+}
+
+// Insights returns cross-cutting observations about a single host for the info view: a
+// down/stale warning, exposed cleartext services, a large-attack-surface note, and a flag when the
+// OS is only an nmap guess.
+func Insights(h *pb.Host) (lines []string) {
+	if st := h.GetStatus(); st != nil && st.State == "down" {
+		lines = append(lines, color.HiYellowString("⚠")+" host last reported down — data may be stale")
+	}
+	if ct := cleartextServices(h); len(ct) > 0 {
+		lines = append(lines, color.HiYellowString("⚠")+" cleartext service(s) exposed: "+strings.Join(ct, ", "))
+	}
+	if open := openPorts(h); len(open) >= 10 {
+		lines = append(lines, fmt.Sprintf("large attack surface — %d open ports", len(open)))
+	}
+	if pct, matches, guessed := osConfidence(h); guessed {
+		lines = append(lines, fmt.Sprintf("OS is an nmap guess — best match %d%% of %d candidate(s)", pct, matches))
+	}
+	return lines
+}
+
+// sections builds the trailing blocks of a host's detail view: its open ports, the full route
+// (only when showRoute is set — it can be long), any nmap extra-port summary, and a free-text
+// comment. Empty bodies are skipped, so a section only prints when it has content.
+func sections(h *pb.Host, showRoute bool) (out []display.Section) {
+	add := func(title, body string) {
+		if body = sectionBody(body); body != "" {
+			out = append(out, display.Section{Title: title, Body: body})
+		}
+	}
+	add("Open Ports", portsBody(h))
+	if showRoute {
+		add("Route", DisplayFields["Route"](h))
+	}
+	add("Extra Ports", DisplayFields["Extra Ports"](h))
+	add("Comment", h.GetComment())
+	return out
+}
+
+// sectionBody normalizes a section's content to the shared renderer's convention: a single leading
+// newline (so the bold section title sits on its own line rather than colliding with the first
+// content line) and no trailing blank space. Returns "" for empty content, so the section drops.
+func sectionBody(body string) string {
+	// TrimRight drops trailing blank space; TrimLeft strips only leading newlines (not spaces), so
+	// the first content line keeps its own indentation.
+	body = strings.TrimLeft(strings.TrimRight(body, "\n "), "\n")
+	if body == "" {
+		return ""
+	}
+	return "\n" + body
+}
+
+//
+// [ Detail Formatters ] --------------------------------------------------
+//
+
+// hostLabel is the host's best display name: its first hostname, else its first address, else its
+// shortened id. Mirrors cmd/services.hostLabel so a host reads the same wherever it is named.
+func hostLabel(h *pb.Host) string {
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			return hn.GetName()
+		}
+	}
+	for _, a := range h.GetAddresses() {
+		if a.GetAddr() != "" {
+			return a.GetAddr()
+		}
+	}
+	return display.FormatSmallID(h.GetId())
+}
+
+// statusBadge renders the host liveness as a coloured "● <state>" badge for the banner.
+func statusBadge(h *pb.Host) string {
+	st := h.GetStatus()
+	if st == nil {
+		return color.HiBlackString("● unknown")
+	}
+	switch st.State {
+	case "up":
+		return color.HiGreenString("● up")
+	case "down":
+		return color.HiRedString("● down")
+	default:
+		return color.HiBlackString("● " + st.State)
+	}
+}
+
+// openPorts returns the host's ports in the "open" state — the ones an attacker acts on.
+func openPorts(h *pb.Host) (open []*pb.Port) {
+	for _, p := range h.GetPorts() {
+		if st := p.GetState(); st != nil && st.State == "open" {
+			open = append(open, p)
+		}
+	}
+	return open
+}
+
+// portsBody lists the host's open ports, sorted by number, as "<num>/<proto>  <service>" lines for
+// the Open Ports section; "" when the host has no open ports. The full per-service detail lives in
+// `services show` — this is the at-a-glance surface.
+func portsBody(h *pb.Host) string {
+	open := openPorts(h)
+	if len(open) == 0 {
+		return ""
+	}
+	sort.SliceStable(open, func(i, j int) bool { return open[i].Number < open[j].Number })
+
+	var b strings.Builder
+	for _, p := range open {
+		fmt.Fprintf(&b, "  %s", color.HiGreenString("%d/%s", p.Number, p.Protocol))
+		if svc := svcLabel(p); svc != "" {
+			b.WriteString("  " + svc)
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// svcLabel is the compact service description for a port line: its name, then its product/version
+// dimmed; "" when the port carries no service.
+func svcLabel(p *pb.Port) string {
+	svc := p.GetService()
+	if svc == nil {
+		return ""
+	}
+	var parts []string
+	if n := svc.GetName(); n != "" {
+		parts = append(parts, n)
+	}
+	if prod := strings.TrimSpace(svc.GetProduct() + " " + svc.GetVersion()); prod != "" {
+		parts = append(parts, display.Dim+prod+display.Reset)
+	}
+	return strings.Join(parts, "  ")
+}
+
+// cleartextServices returns the distinct cleartext application protocols exposed on the host's open
+// ports, for the insights block.
+func cleartextServices(h *pb.Host) (out []string) {
+	seen := map[string]bool{}
+	for _, p := range openPorts(h) {
+		if name := cleartextProto(p); name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// cleartextProto names the well-known cleartext protocol of a port (by service name or number), or
+// "" if it is not a recognised cleartext service. Mirrors cmd/services.cleartextProtocol.
+func cleartextProto(p *pb.Port) string {
+	switch strings.ToLower(p.GetService().GetName()) {
+	case "ftp", "telnet", "http", "smtp", "pop3", "imap", "snmp":
+		return strings.ToLower(p.GetService().GetName())
+	}
+	switch p.GetNumber() {
+	case 21:
+		return "ftp"
+	case 23:
+		return "telnet"
+	case 25:
+		return "smtp"
+	case 80:
+		return "http"
+	case 110:
+		return "pop3"
+	case 143:
+		return "imap"
+	}
+	return ""
+}
+
+// osDisplayName returns the host's best OS name with no accuracy decoration: the authoritative
+// OSName (with flavor) when known, else the highest-accuracy nmap match name. It is the bare-name
+// counterpart to GetOperatingSystem (which chips the guessed name with its accuracy for the table);
+// the detail view uses this and surfaces the confidence once, via osConfidence, in Insights.
+func osDisplayName(h *pb.Host) string {
+	if h.GetOSName() != "" {
+		name := h.GetOSName()
+		if f := h.GetOSFlavor(); f != "" {
+			name += " " + f
+		}
+		return name
+	}
+	if m := bestOSMatch(h); m != nil {
+		return m.GetName()
+	}
+	return ""
+}
+
+// bestOSMatch returns the highest-accuracy *named* nmap OS match, or nil when the host has none.
+func bestOSMatch(h *pb.Host) *pb.OSMatch {
+	os := h.GetOS()
+	if os == nil {
+		return nil
+	}
+	var best *pb.OSMatch
+	for _, m := range os.GetMatches() {
+		if m.GetName() == "" {
+			continue
+		}
+		if best == nil || m.GetAccuracy() > best.GetAccuracy() {
+			best = m
+		}
+	}
+	return best
+}
+
+// osConfidence reports the best OS-match accuracy, the number of candidate matches, and whether the
+// OS is only an nmap guess. guessed is true only when the OS is match-derived (no authoritative
+// OSName) and below a perfect 100% — so a confident or known OS shows no confidence insight.
+func osConfidence(h *pb.Host) (pct, matches int, guessed bool) {
+	if h.GetOSName() != "" {
+		return 0, 0, false // known without guessing
+	}
+	m := bestOSMatch(h)
+	if m == nil {
+		return 0, 0, false
+	}
+	pct = int(m.GetAccuracy())
+	matches = len(h.GetOS().GetMatches())
+	return pct, matches, pct < 100
+}
+
+// uptimeLabel renders the host's uptime at the coarsest non-zero unit — "<d>d <h>h", "<h>h",
+// "<m>m" or "<s>s" — so a sub-hour uptime never floors to a meaningless "0h". Falls back to the
+// raw last-boot string when only that is known, and "" when no uptime was recorded.
+func uptimeLabel(h *pb.Host) string {
+	u := h.GetUptime()
+	if u == nil {
+		return ""
+	}
+	switch s := int(u.GetSeconds()); {
+	case s >= 86400:
+		return fmt.Sprintf("%dd %dh", s/86400, (s%86400)/3600)
+	case s >= 3600:
+		return fmt.Sprintf("%dh", s/3600)
+	case s >= 60:
+		return fmt.Sprintf("%dm", s/60)
+	case s > 0:
+		return fmt.Sprintf("%ds", s)
+	}
+	return u.GetLastBoot()
+}
+
+// joinNames joins the host's non-empty hostnames with commas for a single-line pane value.
+func joinNames(h *pb.Host) string {
+	var names []string
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			names = append(names, hn.GetName())
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+// joinAddrs joins the host's non-empty addresses with commas for a single-line pane value.
+func joinAddrs(h *pb.Host) string {
+	var addrs []string
+	for _, a := range h.GetAddresses() {
+		if a.GetAddr() != "" {
+			addrs = append(addrs, a.GetAddr())
+		}
+	}
+	return strings.Join(addrs, ", ")
+}
+
+// fmtTime renders a timestamp as "YYYY-MM-DD HH:MM", or "" when unset. Mirrors the other domains'
+// detail-view time formatting.
+func fmtTime(t *timestamppb.Timestamp) string {
+	if t == nil {
+		return ""
+	}
+	tt := t.AsTime()
+	if tt.IsZero() {
+		return ""
+	}
+	return tt.Format("2006-01-02 15:04")
 }
 
 // GetOperatingSystem returns the operating system of the host based on potential

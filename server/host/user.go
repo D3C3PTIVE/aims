@@ -42,11 +42,11 @@ func (userServer) Create(context.Context, *hosts.CreateUserRequest) (*hosts.Crea
 }
 
 func (userServer) Read(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetUser not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method ReadUser not implemented")
 }
 
 func (userServer) List(context.Context, *hosts.ReadUserRequest) (*hosts.ReadUserResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserMany not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method ListUser not implemented")
 }
 
 func (userServer) Upsert(context.Context, *hosts.UpsertUserRequest) (*hosts.UpsertUserResponse, error) {

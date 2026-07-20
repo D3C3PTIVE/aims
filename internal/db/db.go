@@ -23,7 +23,33 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/d3c3ptive/aims/provenance"
 )
+
+// ScopeBySource restricts a query to the objects contributed by the named tool, via that
+// object's provenance m2m join (e.g. "host_sources"/"host_id"). An empty tool is a no-op, so
+// callers can thread a request's Source filter through unconditionally. It is the one-liner
+// wrapper the per-domain servers share instead of each repeating the same Scopes(...) block.
+func ScopeBySource(query *gorm.DB, joinTable, objectFK, tool string) *gorm.DB {
+	if tool == "" {
+		return query
+	}
+	return query.Scopes(provenance.WhereContributedBy(joinTable, objectFK, tool))
+}
+
+// FindMatch returns the first element of in for which pred is true, and whether one was found.
+// It is the generic form of the per-domain "find the matching row in this slice" helpers
+// (identity/absorbable/same-host lookups) so they need not each re-spell the loop.
+func FindMatch[T any](in []T, pred func(T) bool) (T, bool) {
+	for _, v := range in {
+		if pred(v) {
+			return v, true
+		}
+	}
+	var zero T
+	return zero, false
+}
 
 // Preload loads a database with the base clause.Associations preload plus every association named
 // with a true value in filts (a false entry is skipped, so callers can gate a preload on a request

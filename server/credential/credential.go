@@ -28,7 +28,6 @@ import (
 	credpb "github.com/d3c3ptive/aims/credential/pb"
 	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
-	"github.com/d3c3ptive/aims/provenance"
 )
 
 type server struct {
@@ -51,9 +50,7 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 	query := db.PreloadAll(s.db).Where(&cred)
 	// Per-tool scoping: restrict to credentials contributed by a given tool via the
 	// core_sources provenance join. Empty Source is a no-op (all credentials).
-	if tool := req.GetSource(); tool != "" {
-		query = query.Scopes(provenance.WhereContributedBy("core_sources", "core_id", tool))
-	}
+	query = db.ScopeBySource(query, "core_sources", "core_id", req.GetSource())
 	if err = query.First(&creds).Error; err != nil {
 		return nil, err
 	}
@@ -219,21 +216,13 @@ func (s *server) loadAll(ctx context.Context) ([]*credpb.CoreORM, error) {
 }
 
 func findIdentical(c *credpb.CoreORM, in []*credpb.CoreORM) *credpb.CoreORM {
-	for _, e := range in {
-		if credential.AreCredentialsIdentical(c, e) {
-			return e
-		}
-	}
-	return nil
+	m, _ := db.FindMatch(in, func(e *credpb.CoreORM) bool { return credential.AreCredentialsIdentical(c, e) })
+	return m
 }
 
 func findAbsorbable(full *credpb.CoreORM, in []*credpb.CoreORM) *credpb.CoreORM {
-	for _, e := range in {
-		if credential.AbsorbsPartial(full, e) {
-			return e
-		}
-	}
-	return nil
+	m, _ := db.FindMatch(in, func(e *credpb.CoreORM) bool { return credential.AbsorbsPartial(full, e) })
+	return m
 }
 
 func removeCore(in []*credpb.CoreORM, drop *credpb.CoreORM) []*credpb.CoreORM {

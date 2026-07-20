@@ -38,74 +38,54 @@ type Agent c2.Agent
 // [ Display Functions ] --------------------------------------------------
 //
 
-// DisplayHeaders returns all weighted table headers for a table of.Agents.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Tool", 1)
-	add("Name", 1)
-	add("User/Hostname", 1)
-	add("OS", 1)
-	add("Channels", 1)
-
-	add("Last/Next Check-in", 2)
-	add("Tasks", 2)
-
-	return headers
+// DisplayHeadersAgent returns all weighted table headers for a table of.Agents.
+func DisplayHeadersAgent() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Tool", 1).
+		Add("Name", 1).
+		Add("User/Hostname", 1).
+		Add("OS", 1).
+		Add("Channels", 1).
+		Add("Last/Next Check-in", 2).
+		Add("Tasks", 2).
+		Options()
 }
 
 // DetailHeaders returns the headers for a detailed.Agent view.
-func DisplayDetails() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	// Core
-	add("ID", 1)
-	add("Tool", 1)
-	add("Name", 1)
-	add("Host ID", 1)
-	add("User/Hostname", 1)
-	add("OS", 1)
-	add("Process", 1)
-	add("Working directory", 1)
-
-	// Tasks
-	add("Last/Next Check-in", 2)
-	add("Tasks", 2)
-
-	// Network
-	add("Channel Details", 3)
-
-	// Tools
-	// add("Task Details", 3)
-
-	return headers
+func DisplayDetailsAgent() []display.Options {
+	return display.Headers().
+		// Core
+		Add("ID", 1).
+		Add("Tool", 1).
+		Add("Name", 1).
+		Add("Host ID", 1).
+		Add("User/Hostname", 1).
+		Add("OS", 1).
+		Add("Process", 1).
+		Add("Working directory", 1).
+		// Tasks
+		Add("Last/Next Check-in", 2).
+		Add("Tasks", 2).
+		// Network
+		Add("Channel Details", 3).
+		Options()
 }
 
-// Completions returns some columns to be combined into
+// CompletionsAgent returns some columns to be combined into
 // completion candidates and/or their descriptions.
-func Completions() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Name", 1)
-	add("Tool", 1)
-	add("User/Hostname", 1)
-	add("Channels", 1)
-
-	return headers
+func CompletionsAgent() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Name", 1).
+		Add("Tool", 1).
+		Add("User/Hostname", 1).
+		Add("Channels", 1).
+		Options()
 }
 
 // Fields maps field names to their value generators.
-var DisplayFields = map[string]func(h *c2.Agent) string{
+var DisplayFieldsAgent = map[string]func(h *c2.Agent) string{
 	"ID": func(h *c2.Agent) string {
 		id := display.FormatSmallID(h.Id)
 		// If dead and behind checkin, red

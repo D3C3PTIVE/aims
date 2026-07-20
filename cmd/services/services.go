@@ -24,11 +24,10 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 
-	"github.com/fatih/color"
 	"github.com/carapace-sh/carapace"
 	"github.com/carapace-sh/carapace/pkg/style"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
@@ -103,9 +102,9 @@ func showCommand(con *client.Client) *cobra.Command {
 
 			shown := 0
 			for _, h := range hostList {
-				hostMatch := matchesAny(h.GetId(), args)
+				hostMatch := aims.MatchesAnyPrefix(h.GetId(), args)
 				for _, p := range h.GetPorts() {
-					if hostMatch || matchesAny(p.GetId(), args) {
+					if hostMatch || aims.MatchesAnyPrefix(p.GetId(), args) {
 						printService(h, p)
 						shown++
 					}
@@ -175,7 +174,7 @@ func groupedHeaders() []display.Options {
 	return append([]display.Options{
 		display.WithHeader("Host", 1),
 		display.WithHeader("ID", 1),
-	}, network.Headers()...)
+	}, network.DisplayHeaders()...)
 }
 
 // groupedFields wraps the port-level network.DisplayFields so they apply to an svcRow, and adds the
@@ -330,16 +329,6 @@ func hostLabel(h *pb.Host) string {
 	return display.FormatSmallID(h.GetId())
 }
 
-// matchesAny reports whether id has any of the (ANSI-stripped) prefixes.
-func matchesAny(id string, prefixes []string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(id, strip(p)) {
-			return true
-		}
-	}
-	return false
-}
-
 func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
 	return func(command *cobra.Command, args []string) (data any) {
 		hostList, err := readHosts(con, command)
@@ -349,7 +338,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 
 		var services []*pb.Port
 		for _, h := range hostList {
-			if len(args) > 0 && !matchesAny(h.GetId(), args) {
+			if len(args) > 0 && !aims.MatchesAnyPrefix(h.GetId(), args) {
 				continue
 			}
 			services = append(services, h.GetPorts()...)
@@ -357,9 +346,4 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 
 		return services
 	}
-}
-
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
 }

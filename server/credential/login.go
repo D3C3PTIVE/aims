@@ -42,11 +42,11 @@ func (loginServer) Create(context.Context, *credentials.CreateLoginRequest) (*cr
 }
 
 func (loginServer) Read(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLogin not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method ReadLogin not implemented")
 }
 
 func (loginServer) List(context.Context, *credentials.ReadLoginRequest) (*credentials.ReadLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetLoginMany not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method ListLogin not implemented")
 }
 
 func (loginServer) Upsert(context.Context, *credentials.UpsertLoginRequest) (*credentials.UpsertLoginResponse, error) {
