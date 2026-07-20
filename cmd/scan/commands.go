@@ -51,6 +51,9 @@ func Commands(con *client.Client) *cobra.Command {
 	scanCmd.AddCommand(rmCommand(con))
 	scanCmd.AddCommand(runCommand(con))
 	scanCmd.AddCommand(diffCommand(con))
+	scanCmd.AddCommand(jobsCommand(con))
+	scanCmd.AddCommand(attachCommand(con))
+	scanCmd.AddCommand(stopCommand(con))
 
 	// Import
 	importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
