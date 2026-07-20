@@ -7,12 +7,12 @@
 
 ## TL;DR
 
-The **data model + generated code layer is mature and compiles**. The **user-facing layer
-(domain helpers + server + CLI) does not currently build** because the pinned
-`github.com/maxlandon/gondor/maltego` dependency is itself broken. Read/Create gRPC paths
-were implemented for the domains that got exercised; **mutations (Update/Delete/Upsert) are
-almost all stubs.** It's a solid foundation with a partial, currently-non-compiling vertical
-slice on top.
+The **data model + generated code layer is mature**, and the **whole tree now builds and the
+`aims` binary runs** (the gondor/maltego and Tailscale/gvisor blockers are gated behind build
+tags). The user-facing layer is a **vertical slice filling out domain by domain**: host and
+credential are full CRUD; Read/Create work broadly elsewhere; **Update/Delete/Upsert are still
+stubbed on network, scan, and c2, and the Users/Logins services are entirely stubbed.** A solid
+foundation with a real, compiling, partially-complete slice on top.
 
 ## History — three work bursts
 
@@ -24,14 +24,15 @@ Solo project (Maxime Landon), 92 commits, reconstructed from git:
 | **Jun–Aug 2023** | Client/server/gRPC layer, `reeflective/team` teamserver transport (mTLS + Tailscale), the generic `cmd/display` engine, cobra command tree | 34 |
 | **Aug 2024** (last touch) | scan RPC, host/port dedup on insert, JSON/XML import-export, **c2 agents/channels**, display table/detail polish | 32 |
 
-**Left off at:** wiring the c2 Agent/Channel domain end-to-end and polishing display fields —
-the newest and least-finished area.
+**Since resumed (2026-07):** build unblocked, then domain-by-domain depth — credential (full
+CRUD), scan (host-fold ingest, live-state list/show), provenance/Source across domains, and a
+CLI/display/completion polish pass. See CLAUDE.md for the live per-domain detail.
 
-## Build status (updated 2026-07-19 — the whole tree builds; the `aims` binary runs)
+## Build status — the whole tree builds; the `aims` binary runs
 
-The original gondor/maltego blocker (below) is resolved, along with a cascade of ~1-year
-dependency drift it was masking, and the `reeflective/team` v0.3.2 migration is now done.
-Current state of `GOWORK=off go build ./...`:
+The original gondor/maltego blocker is resolved (isolated behind a build tag), along with a
+cascade of ~1-year dependency drift it was masking, and the `reeflective/team` v0.3.2 migration
+is done. Current state of `GOWORK=off go build ./...`:
 
 - ✅ **The whole tree builds — including `cmd/aims`.** Every domain (`host`, `network`,
   `credential`, `scan/nmap`, `c2`), the generated `pb` layer, all per-domain gRPC servers, the
@@ -68,51 +69,40 @@ Installed toolchain is **go1.26.3** (go.mod says `go 1.23.0`). The gvisor breaka
 toolchain-vs-pinned-dep incompatibility (`//go:linkname` to runtime internals), which is why
 build-tagging the Tailscale transport out was the pragmatic unblock rather than a dep bump.
 
----
-
-### Original blocker (historical — now resolved via build tag)
-Every domain root package imported `github.com/maxlandon/gondor/maltego` for its `AsEntity()`
-methods, and that dependency did not build at its pinned version:
-```
-gondor/maltego/entity.go: undefined: base
-gondor/maltego/entity.go: declared and not used: dir
-gondor/maltego/entity.go: undefined: getDirectory
-gondor/maltego/entity.go: undefined: configuration.Entity
-gondor/maltego/entity.go: undefined: getNamePlural
-```
-
 ## Implementation matrix (gRPC services)
 
-| Service | Read/List | Create | Upd/Del/Upsert | Notes |
-|---------|:--:|:--:|:--:|-------|
-| host **Hosts** | ✅ | ✅ (with dedup) | ❌ stub | reference implementation |
-| host **Users** | ❌ | ❌ | ❌ | all methods stubbed |
-| network **Services** | ✅ | ❌ stub | ❌ stub | stray copy-pasted `ReadHost`/`ListHost`/`UpsertHost` stubs |
-| credential **Credentials** | ✅ | ❌ stub | ❌ stub | |
-| credential **Logins** | ❌ | ❌ | ❌ | all methods stubbed |
-| scan **Scans** | ✅ | ✅ | ❌ stub | |
-| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | type-name asymmetry, see below |
+Verified 2026-07-20 against source. CLAUDE.md's table carries the same status with fuller notes.
+
+| Service | Read/List | Create | Upsert | Delete | Notes |
+|---------|:--:|:--:|:--:|:--:|-------|
+| host **Hosts** | ✅ | ✅ (dedup) | ✅ | ❌ stub | reference impl.; DB-level fold + deep child enrichment (`saveMergedHost`/`saveMergedPorts`) done; Delete has scaffolding ending in Unimplemented (`server/host/host.go:480`) |
+| host **Users** | ❌ | ❌ | ❌ | ❌ | all methods stubbed |
+| network **Services** | ✅ | ❌ stub | ❌ stub | ❌ stub | Read/List + display/CLI slice done; mutations Unimplemented |
+| credential **Credentials** | ✅ | ✅ | ✅ | ✅ | full CRUD; Delete resolves by identity when no ID given |
+| credential **Logins** | ❌ | ❌ | ❌ | ❌ | all methods stubbed |
+| scan **Scans** | ✅ | ✅ (host fold + `run_hosts` join) | ❌ stub | ❌ stub | Upsert/Delete/List `Unimplemented` (`server/scan/scan.go:289-297`); list/show CLI slice done |
+| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | ❌ stub | type-name asymmetry, see below |
 
 ## Known rough edges / gotchas
 
-- **gondor Maltego dep is broken** — see Build status. Root blocker.
 - **c2 server type-name asymmetry (minor):** filenames match contents — `agent.go` is the
   **Agents** server (`type server`, `CreateAgentRequest`), `channel.go` the **Channels** server
   (`type channelServer`, `CreateChannelRequest`). Only wart: the Agents type is the generic
   `server` vs the specific `channelServer`; an optional `server`→`agentServer` rename squares it.
-  (The old "file↔content swap" gotcha was stale and has been removed.)
 - **Empty CLI handlers:** several command `RunE`s just `return nil` (e.g. `hosts add`,
   `hosts rm`) — command tree/completions exist but the actions are no-ops.
-- **Debug leftovers in display path:** `println(c.Type)` in `host/host.go` (`Purpose`);
-  `fmt.Println(val)` and empty `if head == "Purpose" {}` blocks in `cmd/display/details.go`.
-- **`cmd/display/defaults.go` `init()` bug:** `stdoutTerm/stdinTerm/stderrTerm` assignments
-  are crossed (stdout←os.Stderr, stderr←os.Stdin) — suspicious if output routing/size misbehaves.
 - **`credential/core.go`** Metasploit-style scope helpers (`WhereLoggedInHost`, `WhereOriginIs`,
   …) are empty signatures — designed, not implemented.
 - **Maltego `AsEntity()`** is half-done even where it's called: real in `host/group.go`
-  (`maltego.NewEntity`), stubbed `return maltego.Entity{}` in `network/service.go`.
+  (`maltego.NewEntity`), stubbed `return maltego.Entity{}` in `network/service.go`. Gated behind
+  `-tags maltego`; gondor dep still broken at its pinned version (see Build status).
 - **README drift:** mentions a `vendor/` dir and `proto/gen/` layout that don't match reality
   (deps come from the module cache; generated code sits next to each `.proto`).
+
+> Fixed since the original survey (no longer issues): the display-path debug leftovers
+> (`println`/`fmt.Println`/empty `if head == "Purpose"`); the crossed
+> `stdoutTerm/stdinTerm/stderrTerm` `init()`; and the stray copy-pasted `ReadHost`/`ListHost`/
+> `UpsertHost` stubs in `server/network/service.go`.
 
 ## Codegen / infra facts (corrected)
 
