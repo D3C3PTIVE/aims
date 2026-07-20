@@ -236,10 +236,12 @@ func Detail(h *pb.Host, showRoute bool) display.Detail {
 }
 
 // bannerTitle is the host identity shown in the banner: its display name (hostname, else address,
-// else short id) in bold, followed by the guessed OS when known.
+// else short id) in bold, followed by its OS name — bare, with no accuracy chip. When the OS is
+// only an nmap guess, the confidence is surfaced once, in Insights, rather than repeated here and
+// in the System pane.
 func bannerTitle(h *pb.Host) string {
 	title := display.Bold + hostLabel(h) + display.Reset
-	if os, _ := GetOperatingSystem(h); os != "" {
+	if os := osDisplayName(h); os != "" {
 		title += "  " + os
 	}
 	return title
@@ -259,7 +261,7 @@ func bannerBadges(h *pb.Host) (badges []string) {
 // dropped, so a host with no OS/network data never prints a bare title.
 func InfoPanes(h *pb.Host) []display.Pane {
 	system := display.KVLines([][2]string{
-		{"OS Name", DisplayFields["OS Name"](h)},
+		{"OS Name", osDisplayName(h)},
 		{"OS Family", DisplayFields["OS Family"](h)},
 		{"Arch", DisplayFields["Arch"](h)},
 		{"Purpose", DisplayFields["Purpose"](h)},
@@ -306,31 +308,41 @@ func Insights(h *pb.Host) (lines []string) {
 	if open := openPorts(h); len(open) >= 10 {
 		lines = append(lines, fmt.Sprintf("large attack surface — %d open ports", len(open)))
 	}
-	if pct, guessed := osConfidence(h); guessed {
-		lines = append(lines, fmt.Sprintf("OS is an nmap guess (best match %d%%)", pct))
+	if pct, matches, guessed := osConfidence(h); guessed {
+		lines = append(lines, fmt.Sprintf("OS is an nmap guess — best match %d%% of %d candidate(s)", pct, matches))
 	}
 	return lines
 }
 
 // sections builds the trailing blocks of a host's detail view: its open ports, the full route
 // (only when showRoute is set — it can be long), any nmap extra-port summary, and a free-text
-// comment. Blank bodies are skipped by the renderer, so a section only prints when it has content.
+// comment. Empty bodies are skipped, so a section only prints when it has content.
 func sections(h *pb.Host, showRoute bool) (out []display.Section) {
-	if body := portsBody(h); body != "" {
-		out = append(out, display.Section{Title: "Open Ports", Body: body})
-	}
-	if showRoute {
-		if body := strings.TrimSpace(DisplayFields["Route"](h)); body != "" {
-			out = append(out, display.Section{Title: "Route", Body: body})
+	add := func(title, body string) {
+		if body = sectionBody(body); body != "" {
+			out = append(out, display.Section{Title: title, Body: body})
 		}
 	}
-	if body := strings.TrimSpace(DisplayFields["Extra Ports"](h)); body != "" {
-		out = append(out, display.Section{Title: "Extra Ports", Body: body})
+	add("Open Ports", portsBody(h))
+	if showRoute {
+		add("Route", DisplayFields["Route"](h))
 	}
-	if c := strings.TrimSpace(h.GetComment()); c != "" {
-		out = append(out, display.Section{Title: "Comment", Body: c})
-	}
+	add("Extra Ports", DisplayFields["Extra Ports"](h))
+	add("Comment", h.GetComment())
 	return out
+}
+
+// sectionBody normalizes a section's content to the shared renderer's convention: a single leading
+// newline (so the bold section title sits on its own line rather than colliding with the first
+// content line) and no trailing blank space. Returns "" for empty content, so the section drops.
+func sectionBody(body string) string {
+	// TrimRight drops trailing blank space; TrimLeft strips only leading newlines (not spaces), so
+	// the first content line keeps its own indentation.
+	body = strings.TrimLeft(strings.TrimRight(body, "\n "), "\n")
+	if body == "" {
+		return ""
+	}
+	return "\n" + body
 }
 
 //
@@ -454,40 +466,75 @@ func cleartextProto(p *pb.Port) string {
 	return ""
 }
 
-// osConfidence reports the best OS-match accuracy and whether the OS is only an nmap guess (no
-// authoritative OSName and at least one sub-100% match).
-func osConfidence(h *pb.Host) (pct int, guessed bool) {
+// osDisplayName returns the host's best OS name with no accuracy decoration: the authoritative
+// OSName (with flavor) when known, else the highest-accuracy nmap match name. It is the bare-name
+// counterpart to GetOperatingSystem (which chips the guessed name with its accuracy for the table);
+// the detail view uses this and surfaces the confidence once, via osConfidence, in Insights.
+func osDisplayName(h *pb.Host) string {
 	if h.GetOSName() != "" {
-		return 0, false // known without guessing
-	}
-	os := h.GetOS()
-	if os == nil || len(os.GetMatches()) == 0 {
-		return 0, false
-	}
-	var best int32
-	for _, m := range os.GetMatches() {
-		if m.GetAccuracy() > best {
-			best = m.GetAccuracy()
+		name := h.GetOSName()
+		if f := h.GetOSFlavor(); f != "" {
+			name += " " + f
 		}
+		return name
 	}
-	if best == 0 || best >= 100 {
-		return int(best), false
+	if m := bestOSMatch(h); m != nil {
+		return m.GetName()
 	}
-	return int(best), true
+	return ""
 }
 
-// uptimeLabel renders the host's uptime as "<d>d <h>h" (or the raw last-boot string when only that
-// is known); "" when no uptime was recorded.
+// bestOSMatch returns the highest-accuracy *named* nmap OS match, or nil when the host has none.
+func bestOSMatch(h *pb.Host) *pb.OSMatch {
+	os := h.GetOS()
+	if os == nil {
+		return nil
+	}
+	var best *pb.OSMatch
+	for _, m := range os.GetMatches() {
+		if m.GetName() == "" {
+			continue
+		}
+		if best == nil || m.GetAccuracy() > best.GetAccuracy() {
+			best = m
+		}
+	}
+	return best
+}
+
+// osConfidence reports the best OS-match accuracy, the number of candidate matches, and whether the
+// OS is only an nmap guess. guessed is true only when the OS is match-derived (no authoritative
+// OSName) and below a perfect 100% — so a confident or known OS shows no confidence insight.
+func osConfidence(h *pb.Host) (pct, matches int, guessed bool) {
+	if h.GetOSName() != "" {
+		return 0, 0, false // known without guessing
+	}
+	m := bestOSMatch(h)
+	if m == nil {
+		return 0, 0, false
+	}
+	pct = int(m.GetAccuracy())
+	matches = len(h.GetOS().GetMatches())
+	return pct, matches, pct < 100
+}
+
+// uptimeLabel renders the host's uptime at the coarsest non-zero unit — "<d>d <h>h", "<h>h",
+// "<m>m" or "<s>s" — so a sub-hour uptime never floors to a meaningless "0h". Falls back to the
+// raw last-boot string when only that is known, and "" when no uptime was recorded.
 func uptimeLabel(h *pb.Host) string {
 	u := h.GetUptime()
 	if u == nil {
 		return ""
 	}
-	if s := int(u.GetSeconds()); s > 0 {
-		if d := s / 86400; d > 0 {
-			return fmt.Sprintf("%dd %dh", d, (s%86400)/3600)
-		}
+	switch s := int(u.GetSeconds()); {
+	case s >= 86400:
+		return fmt.Sprintf("%dd %dh", s/86400, (s%86400)/3600)
+	case s >= 3600:
 		return fmt.Sprintf("%dh", s/3600)
+	case s >= 60:
+		return fmt.Sprintf("%dm", s/60)
+	case s > 0:
+		return fmt.Sprintf("%ds", s)
 	}
 	return u.GetLastBoot()
 }

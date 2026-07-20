@@ -112,26 +112,61 @@ func TestOSConfidence(t *testing.T) {
 		name        string
 		host        *pb.Host
 		wantPct     int
+		wantMatches int
 		wantGuessed bool
 	}{
-		{"authoritative OSName is not a guess", &pb.Host{OSName: "Linux"}, 0, false},
-		{"no OS data", &pb.Host{}, 0, false},
+		{"authoritative OSName is not a guess", &pb.Host{OSName: "Linux"}, 0, 0, false},
+		{"no OS data", &pb.Host{}, 0, 0, false},
 		{
-			"sub-100 match is a guess",
-			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{{Accuracy: 88}, {Accuracy: 95}}}},
-			95, true,
+			"sub-100 match is a guess, best accuracy + candidate count reported",
+			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{{Name: "Linux 2.6", Accuracy: 88}, {Name: "Linux 3.x", Accuracy: 95}}}},
+			95, 2, true,
 		},
 		{
 			"perfect match is not a guess",
-			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{{Accuracy: 100}}}},
-			100, false,
+			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{{Name: "Windows", Accuracy: 100}}}},
+			100, 1, false,
+		},
+		{
+			"unnamed matches are ignored when picking the best",
+			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{{Accuracy: 99}, {Name: "Linux", Accuracy: 90}}}},
+			90, 2, true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pct, guessed := osConfidence(tt.host)
-			if pct != tt.wantPct || guessed != tt.wantGuessed {
-				t.Errorf("osConfidence() = (%d, %v), want (%d, %v)", pct, guessed, tt.wantPct, tt.wantGuessed)
+			pct, matches, guessed := osConfidence(tt.host)
+			if pct != tt.wantPct || matches != tt.wantMatches || guessed != tt.wantGuessed {
+				t.Errorf("osConfidence() = (%d, %d, %v), want (%d, %d, %v)",
+					pct, matches, guessed, tt.wantPct, tt.wantMatches, tt.wantGuessed)
+			}
+		})
+	}
+}
+
+// TestOSDisplayName confirms the detail view's OS name is bare (no accuracy chip): the
+// authoritative OSName+flavor when known, else the highest-accuracy named nmap match.
+func TestOSDisplayName(t *testing.T) {
+	tests := []struct {
+		name string
+		host *pb.Host
+		want string
+	}{
+		{"no OS data", &pb.Host{}, ""},
+		{"known OSName with flavor", &pb.Host{OSName: "Windows", OSFlavor: "Server 2019"}, "Windows Server 2019"},
+		{
+			"guessed: highest-accuracy named match, no chip",
+			&pb.Host{OS: &pb.OS{Matches: []*pb.OSMatch{
+				{Name: "Linux 2.6.17 - 2.6.18", Accuracy: 94},
+				{Name: "Linux 2.6.13", Accuracy: 90},
+			}}},
+			"Linux 2.6.17 - 2.6.18",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := osDisplayName(tt.host); got != tt.want {
+				t.Errorf("osDisplayName() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -146,6 +181,8 @@ func TestUptimeLabel(t *testing.T) {
 		{"nil uptime", nil, ""},
 		{"days and hours", &pb.Uptime{Seconds: 90061}, "1d 1h"}, // 1d 1h 1m 1s
 		{"hours only", &pb.Uptime{Seconds: 7200}, "2h"},
+		{"minutes, not floored to 0h", &pb.Uptime{Seconds: 600}, "10m"},
+		{"seconds, not floored to 0h", &pb.Uptime{Seconds: 42}, "42s"},
 		{"lastboot fallback", &pb.Uptime{LastBoot: "Mon Jul 20 09:00"}, "Mon Jul 20 09:00"},
 	}
 	for _, tt := range tests {
@@ -206,6 +243,43 @@ func TestDetailRenderSmoke(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("rendered detail missing %q:\n%s", want, out)
 		}
+	}
+
+	// Regression: a section title must sit on its own line, not collide with its first content
+	// line (the "Open Ports  80/tcp" / "Extra Portsfiltered" bug).
+	if !strings.Contains(out, "Open Ports\n") {
+		t.Errorf("Open Ports title is not on its own line:\n%s", out)
+	}
+}
+
+// TestDetailOSGuessNotDuplicated locks in the OS-guess de-duplication: for a match-derived OS, the
+// bare name appears (banner + pane) with NO accuracy chip, and the confidence shows exactly once —
+// in Insights — instead of being repeated as a chip in the banner and the pane.
+func TestDetailOSGuessNotDuplicated(t *testing.T) {
+	h := &pb.Host{
+		Hostnames: []*pb.Hostname{{Name: "sourceforge.net"}},
+		Status:    &pb.Status{State: "up"},
+		OS: &pb.OS{Matches: []*pb.OSMatch{
+			{Name: "Linux 2.6.17 - 2.6.18", Accuracy: 94},
+			{Name: "Linux 2.6.13", Accuracy: 90},
+		}},
+	}
+
+	out := display.StripANSI(Detail(h, false).Render(120))
+
+	if !strings.Contains(out, "Linux 2.6.17 - 2.6.18") {
+		t.Errorf("bare OS name missing from detail:\n%s", out)
+	}
+	// The accuracy chip ("[~94%|10]") must not appear anywhere in the detail view.
+	if strings.Contains(out, "[~") || strings.Contains(out, "%|") {
+		t.Errorf("OS accuracy chip leaked into the detail view (should be bare):\n%s", out)
+	}
+	// Confidence belongs to Insights, exactly once.
+	if n := strings.Count(out, "94%"); n != 1 {
+		t.Errorf("confidence 94%% appears %d time(s), want exactly 1 (in Insights):\n%s", n, out)
+	}
+	if !strings.Contains(out, "nmap guess") {
+		t.Errorf("expected the OS-guess insight, got:\n%s", out)
 	}
 }
 
