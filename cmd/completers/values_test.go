@@ -1,0 +1,775 @@
+package completers
+
+/*
+   AIMS (Attacked Infrastructure Modular Specification)
+   Copyright (C) 2021 Maxime Landon
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import (
+	"net"
+	"strings"
+	"testing"
+
+	"github.com/carapace-sh/carapace"
+	"github.com/d3c3ptive/aims/cmd/agentctx"
+	credential "github.com/d3c3ptive/aims/credential/pb"
+	pb "github.com/d3c3ptive/aims/host/pb"
+	network "github.com/d3c3ptive/aims/network/pb"
+	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
+)
+
+// TestGuard: a panicking completion callback must not escape guard — it degrades to a message so the
+// _carapace subprocess never crashes and hangs the shell.
+func TestGuard(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("guard let a panic escape the callback: %v", r)
+		}
+	}()
+	cb := Guard("test", func(carapace.Context) carapace.Action {
+		panic("boom")
+	})
+	_ = cb(carapace.Context{}) // must return an action, not panic
+}
+
+// TestLocalityOf pins the target sub-grouping classifier: loopback, the private estate (RFC1918,
+// ULA, link-local, in both address families), routable public space, and non-IP tokens.
+func TestLocalityOf(t *testing.T) {
+	cases := map[string]string{
+		"127.0.0.1":       "loopback",
+		"127.5.6.7":       "loopback",
+		"::1":             "loopback",
+		"10.0.0.5":        "private",
+		"192.168.1.10":    "private",
+		"172.16.0.1":      "private",
+		"169.254.1.1":     "private", // link-local
+		"fe80::1":         "private", // IPv6 link-local
+		"fc00::1":         "private", // IPv6 ULA
+		"8.8.8.8":         "routable",
+		"1.1.1.1":         "routable",
+		"2606:4700::1111": "routable",
+		"  10.0.0.9  ":    "private", // surrounding whitespace tolerated
+		"scanme.nmap.org": "",        // a hostname is not an IP literal
+		"":                "",
+		"not-an-ip":       "",
+	}
+	for addr, want := range cases {
+		if got := localityOf(addr); got != want {
+			t.Errorf("localityOf(%q) = %q, want %q", addr, got, want)
+		}
+	}
+}
+
+// TestHostLocality checks a host is bucketed by its first parseable address, and that a host known
+// only by hostname (no parseable address) lands in the "no address" group.
+func TestHostLocality(t *testing.T) {
+	host := func(addrs ...string) *pb.Host {
+		h := &pb.Host{}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+
+	cases := []struct {
+		name string
+		host *pb.Host
+		want string
+	}{
+		{"routable", host("8.8.8.8"), tagRoutable},
+		{"private", host("192.168.0.1"), tagPrivate},
+		{"loopback", host("127.0.0.1"), tagLoopback},
+		{"first-parseable-wins", host("", "10.0.0.1", "8.8.8.8"), tagPrivate},
+		{"no-parseable-address", host("", "web.example.com"), tagNoAddr},
+		{"no-address-at-all", host(), tagNoAddr},
+	}
+	for _, c := range cases {
+		if got := hostLocality(c.host); got != c.want {
+			t.Errorf("%s: hostLocality = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestTargetTag pins the agent-context promotion: the agent's own host (by id) and its subnet
+// neighbours are promoted (via the shared agentctx classifier); every other host — and every host
+// when no context is loaded — falls into its locality group.
+func TestTargetTag(t *testing.T) {
+	host := func(id string, addrs ...string) *pb.Host {
+		h := &pb.Host{Id: id}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+	agent := host("agent-1", "10.0.0.10")
+
+	cases := []struct {
+		name  string
+		h     *pb.Host
+		agent *pb.Host
+		want  string
+	}{
+		{"agent-host-by-id", host("agent-1", "10.0.0.10"), agent, agentctx.TagContext},
+		{"same-subnet", host("h2", "10.0.0.55"), agent, agentctx.TagNearby},
+		{"other-private-subnet", host("h3", "192.168.5.5"), agent, tagPrivate},
+		{"routable", host("h4", "8.8.8.8"), agent, tagRoutable},
+		{"no-context-falls-to-locality", host("h5", "10.0.0.55"), nil, tagPrivate},
+		{"no-address", host("h6"), agent, tagNoAddr},
+	}
+	for _, c := range cases {
+		if got := targetTag(c.h, c.agent); got != c.want {
+			t.Errorf("%s: targetTag = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestInterfaceLabel pins the interface description: addresses joined with the mask stripped, a
+// loopback marker, and the empty-address fallbacks.
+func TestInterfaceLabel(t *testing.T) {
+	ipnet := func(cidr string) *net.IPNet {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			t.Fatalf("bad test CIDR %q: %v", cidr, err)
+		}
+		n.IP = net.ParseIP(strings.SplitN(cidr, "/", 2)[0]) // keep the host IP, not the network addr
+		return n
+	}
+
+	cases := []struct {
+		name     string
+		loopback bool
+		addrs    []net.Addr
+		want     string
+	}{
+		{"v4+v6", false, []net.Addr{ipnet("192.168.1.10/24"), ipnet("fe80::1/64")}, "192.168.1.10, fe80::1"},
+		{"loopback", true, []net.Addr{ipnet("127.0.0.1/8")}, "127.0.0.1 (loopback)"},
+		{"no-addr", false, nil, "no address"},
+		{"loopback-no-addr", true, nil, "(loopback)"},
+	}
+	for _, c := range cases {
+		if got := interfaceLabel(c.loopback, c.addrs); got != c.want {
+			t.Errorf("%s: interfaceLabel = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestLocalAddrLabels pins the source-address candidates: (addr, "on <iface>") for an up, non-loopback
+// interface; nothing for a down or loopback one (you can't legitimately source a scan from either).
+func TestLocalAddrLabels(t *testing.T) {
+	ipnet := func(cidr string) *net.IPNet {
+		_, n, _ := net.ParseCIDR(cidr)
+		n.IP = net.ParseIP(strings.SplitN(cidr, "/", 2)[0])
+		return n
+	}
+	addrs := []net.Addr{ipnet("192.168.1.10/24"), ipnet("fe80::1/64")}
+
+	got := localAddrLabels("eth0", true, false, addrs)
+	want := []string{"192.168.1.10", "on eth0", "fe80::1", "on eth0"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("up iface: got %v, want %v", got, want)
+	}
+	if got := localAddrLabels("eth0", false, false, addrs); got != nil {
+		t.Errorf("down iface: got %v, want nil", got)
+	}
+	if got := localAddrLabels("lo", true, true, addrs); got != nil {
+		t.Errorf("loopback iface: got %v, want nil", got)
+	}
+}
+
+// TestCollectOpenPorts pins the port aggregation and its agent-context ranking: only open ports
+// count, each number is deduped across hosts with a host count, and a port takes the highest
+// relevance of any host exposing it (agent host › subnet neighbour › distant).
+func TestCollectOpenPorts(t *testing.T) {
+	port := func(num uint32, state, svc string) *pb.Port {
+		return &pb.Port{Number: num, Protocol: "tcp", State: &pb.State{State: state}, Service: &network.Service{Name: svc}}
+	}
+	host := func(id, addr string, ports ...*pb.Port) *pb.Host {
+		h := &pb.Host{Id: id}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		h.Ports = ports
+		return h
+	}
+
+	agent := host("agent", "10.0.0.10", port(22, "open", "ssh"), port(80, "open", "http"))
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", port(22, "open", "ssh"), port(443, "open", "https")), // same /24
+		host("c", "8.8.8.8", port(22, "open", "ssh"), port(3389, "open", "rdp"),
+			port(9, "closed", "")), // distant, plus a closed port that must be dropped
+	}
+
+	byNum := map[uint32]*portInfo{}
+	got := collectOpenPorts(all, agent)
+	for _, pi := range got {
+		byNum[pi.number] = pi
+	}
+
+	if _, ok := byNum[9]; ok {
+		t.Error("closed port 9 must be excluded")
+	}
+	if pi := byNum[22]; pi == nil || pi.rel != agentctx.AgentHost || pi.hosts != 3 || pi.service != "ssh" {
+		t.Errorf("port 22: got %+v, want rel=AgentHost hosts=3 service=ssh", pi)
+	}
+	if pi := byNum[80]; pi == nil || pi.rel != agentctx.AgentHost || pi.hosts != 1 {
+		t.Errorf("port 80: got %+v, want rel=AgentHost hosts=1", pi)
+	}
+	if pi := byNum[443]; pi == nil || pi.rel != agentctx.Nearby || pi.hosts != 1 {
+		t.Errorf("port 443: got %+v, want rel=Nearby hosts=1", pi)
+	}
+	if pi := byNum[3389]; pi == nil || pi.rel != agentctx.Normal {
+		t.Errorf("port 3389: got %+v, want rel=Normal", pi)
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1].number > got[i].number {
+			t.Errorf("collectOpenPorts not sorted by number: %v", got)
+			break
+		}
+	}
+}
+
+// TestSecretDesc: a secret is described by who owns it (username @ realm) and its type — never by
+// the secret value itself.
+func TestSecretDesc(t *testing.T) {
+	cases := []struct {
+		name string
+		core *credential.Core
+		want string
+	}{
+		{
+			"user-realm-hash",
+			&credential.Core{
+				Public:  &credential.Public{Username: "administrator"},
+				Realm:   &credential.Realm{Value: "CORP"},
+				Private: &credential.Private{Type: credential.PrivateType_NTLMHash, Data: "aad3b..."},
+			},
+			"administrator @ CORP · NTLM hash",
+		},
+		{
+			"user-password",
+			&credential.Core{
+				Public:  &credential.Public{Username: "root"},
+				Private: &credential.Private{Type: credential.PrivateType_Password, Data: "hunter2"},
+			},
+			"root · password",
+		},
+		{
+			"no-user-jwt",
+			&credential.Core{Private: &credential.Private{Type: credential.PrivateType_JWT, Data: "ey..."}},
+			"JWT",
+		},
+	}
+	for _, c := range cases {
+		if got := secretDesc(c.core); got != c.want {
+			t.Errorf("%s: secretDesc = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestSecretTypeGroup: each private type lands in its group, unknown types default to passwords.
+func TestSecretTypeGroup(t *testing.T) {
+	cases := map[credential.PrivateType]string{
+		credential.PrivateType_Password:          "passwords",
+		credential.PrivateType_NTLMHash:          "NTLM hashes",
+		credential.PrivateType_PostgresMD5:       "PostgreSQL hashes",
+		credential.PrivateType_ReplayableHash:    "replayable hashes",
+		credential.PrivateType_NonReplayableHash: "non-replayable hashes",
+		credential.PrivateType_Key:               "keys",
+		credential.PrivateType_JWT:               "JWTs",
+	}
+	for typ, want := range cases {
+		if got := secretTypeGroup(typ); got != want {
+			t.Errorf("secretTypeGroup(%v) = %q, want %q", typ, got, want)
+		}
+	}
+}
+
+// TestSchemeOf pins scheme detection: the ssl/tls tunnel or an https-ish service name wins, then
+// the well-known TLS ports, else http.
+func TestSchemeOf(t *testing.T) {
+	port := func(num uint32, name, tunnel string) *pb.Port {
+		return &pb.Port{Number: num, Service: &network.Service{Name: name, Tunnel: tunnel}}
+	}
+	cases := []struct {
+		name string
+		port *pb.Port
+		want string
+	}{
+		{"named-https-ssl", port(443, "https", "ssl"), "https"},
+		{"named-http", port(80, "http", ""), "http"},
+		{"http-proxy-8080", port(8080, "http-proxy", ""), "http"},
+		{"ssl-http-tunnel", port(8443, "ssl/http", "ssl"), "https"},
+		{"tunnel-overrides", port(8080, "http", "ssl"), "https"},
+		{"port-443-no-service", port(443, "", ""), "https"},
+		{"port-80-no-service", port(80, "", ""), "http"},
+	}
+	for _, c := range cases {
+		if got := schemeOf(c.port); got != c.want {
+			t.Errorf("%s: schemeOf = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBuildURL pins URL assembly: the scheme's default port is omitted, a non-default kept, an IPv6
+// literal bracketed.
+func TestBuildURL(t *testing.T) {
+	cases := []struct {
+		scheme, host string
+		port         uint32
+		want         string
+	}{
+		{"http", "web01", 80, "http://web01/"},
+		{"https", "web01", 443, "https://web01/"},
+		{"http", "web01", 8080, "http://web01:8080/"},
+		{"https", "10.0.0.5", 8443, "https://10.0.0.5:8443/"},
+		{"http", "fe80::1", 80, "http://[fe80::1]/"},
+		{"https", "fe80::1", 8443, "https://[fe80::1]:8443/"},
+	}
+	for _, c := range cases {
+		if got := buildURL(c.scheme, c.host, c.port); got != c.want {
+			t.Errorf("buildURL(%q,%q,%d) = %q, want %q", c.scheme, c.host, c.port, got, c.want)
+		}
+	}
+}
+
+// TestUrlHost pins host selection: the service vhost wins, then a host hostname, then an address.
+func TestUrlHost(t *testing.T) {
+	mkHost := func(hostnames, addrs []string) *pb.Host {
+		h := &pb.Host{}
+		for _, n := range hostnames {
+			h.Hostnames = append(h.Hostnames, &pb.Hostname{Name: n})
+		}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+	svcPort := func(hostname string) *pb.Port {
+		return &pb.Port{Service: &network.Service{Hostname: hostname}}
+	}
+
+	if got := urlHost(mkHost([]string{"web01"}, []string{"10.0.0.5"}), svcPort("vhost.example.com")); got != "vhost.example.com" {
+		t.Errorf("service vhost should win, got %q", got)
+	}
+	if got := urlHost(mkHost([]string{"web01"}, []string{"10.0.0.5"}), svcPort("")); got != "web01" {
+		t.Errorf("host hostname fallback, got %q", got)
+	}
+	if got := urlHost(mkHost(nil, []string{"10.0.0.5"}), svcPort("")); got != "10.0.0.5" {
+		t.Errorf("address fallback, got %q", got)
+	}
+}
+
+// TestPathsFromPort pins T3 path extraction: paths (and their labels) are pulled from http-* script
+// output only, in nmap's `|   /path: label` shape, deduped; non-http scripts and label-only lines
+// (http-title) yield nothing.
+func TestPathsFromPort(t *testing.T) {
+	p := &pb.Port{Number: 80, Scripts: []*nmap.Script{
+		{Id: "http-enum", Output: "  /icons/: Icons and images\n|   /robots.txt: Robots file\n|_  /admin/: Possible admin folder\n"},
+		{Id: "http-title", Output: "Site doesn't have a title (text/html)."},
+		{Id: "ssl-cert", Output: "|   /should-be-ignored: non-http script"},
+	}}
+
+	want := map[string]string{
+		"/icons/":     "Icons and images",
+		"/robots.txt": "Robots file",
+		"/admin/":     "Possible admin folder",
+	}
+	got := pathsFromPort(p)
+	if len(got) != len(want) {
+		t.Fatalf("want %d paths, got %d (%v)", len(want), len(got), got)
+	}
+	for _, pd := range got {
+		w, ok := want[pd[0]]
+		if !ok {
+			t.Errorf("unexpected path %q", pd[0])
+			continue
+		}
+		if pd[1] != w {
+			t.Errorf("path %q: want label %q, got %q", pd[0], w, pd[1])
+		}
+	}
+}
+
+// TestPortDesc: service (or protocol, or "open") plus a correctly pluralised host count.
+func TestPortDesc(t *testing.T) {
+	cases := []struct {
+		pi   *portInfo
+		want string
+	}{
+		{&portInfo{service: "ssh", proto: "tcp", hosts: 3}, "ssh · 3 hosts"},
+		{&portInfo{proto: "tcp", hosts: 1}, "tcp · 1 host"},
+		{&portInfo{hosts: 2}, "open · 2 hosts"},
+	}
+	for _, c := range cases {
+		if got := portDesc(c.pi); got != c.want {
+			t.Errorf("portDesc(%+v) = %q, want %q", c.pi, got, c.want)
+		}
+	}
+}
+
+// TestCollectSubnets pins the clustering + agent seeding: hosts group into /24s, loopback is
+// dropped, the agent's own subnet is marked (host-count includes the agent), and the last-hop
+// gateway seeds a subnet marked agent with no known hosts. Sorted by density desc.
+func TestCollectSubnets(t *testing.T) {
+	host := func(id string, addrs ...string) *pb.Host {
+		h := &pb.Host{Id: id}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+	agent := host("agent", "10.0.0.10")
+	agent.Trace = &network.Trace{Hops: []*network.Hop{{IPAddr: "10.0.5.1"}, {IPAddr: "10.0.0.10"}}}
+
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.20"), host("c", "10.0.0.30"), host("d", "10.0.0.40"),
+		host("e", "192.168.1.5"), host("f", "192.168.1.6"),
+		host("g", "8.8.8.8"),
+		host("lo", "127.0.0.1"), // loopback → dropped
+	}
+
+	byCidr := map[string]*subnetInfo{}
+	subs := collectSubnets(all, agent)
+	for _, si := range subs {
+		byCidr[si.cidr] = si
+	}
+
+	if si := byCidr["10.0.0.0/24"]; si == nil || !si.isAgent || si.hosts != 4 {
+		t.Errorf("10.0.0.0/24: got %+v, want isAgent hosts=4", si)
+	}
+	if si := byCidr["10.0.5.0/24"]; si == nil || !si.isAgent || si.hosts != 0 || si.gateway != "10.0.5.1" {
+		t.Errorf("10.0.5.0/24 (gateway seed): got %+v, want isAgent hosts=0 gateway=10.0.5.1", si)
+	}
+	if si := byCidr["192.168.1.0/24"]; si == nil || si.isAgent || si.hosts != 2 || si.locality != "private" {
+		t.Errorf("192.168.1.0/24: got %+v, want private hosts=2 not-agent", si)
+	}
+	if si := byCidr["8.8.8.0/24"]; si == nil || si.locality != "routable" || si.hosts != 1 {
+		t.Errorf("8.8.8.0/24: got %+v, want routable hosts=1", si)
+	}
+	if _, ok := byCidr["127.0.0.0/24"]; ok {
+		t.Error("loopback subnet must be excluded")
+	}
+	for i := 1; i < len(subs); i++ {
+		if subs[i-1].hosts < subs[i].hosts {
+			t.Errorf("collectSubnets not sorted by density desc: %v", subs)
+			break
+		}
+	}
+}
+
+// TestSubnetTag: agent subnets win, routable is always last-group, private splits on the density
+// threshold.
+func TestSubnetTag(t *testing.T) {
+	cases := []struct {
+		si   *subnetInfo
+		want string
+	}{
+		{&subnetInfo{isAgent: true, locality: "private", hosts: 4}, tagSubnetAgent},
+		{&subnetInfo{isAgent: true, locality: "routable", hosts: 0}, tagSubnetAgent},
+		{&subnetInfo{locality: "private", hosts: 5}, tagSubnetDense},
+		{&subnetInfo{locality: "private", hosts: 4}, tagSubnetDense},
+		{&subnetInfo{locality: "private", hosts: 3}, tagSubnetPrivate},
+		{&subnetInfo{locality: "routable", hosts: 10}, tagSubnetRoutable},
+	}
+	for _, c := range cases {
+		if got := subnetTag(c.si); got != c.want {
+			t.Errorf("subnetTag(%+v) = %q, want %q", c.si, got, c.want)
+		}
+	}
+}
+
+// TestSubnetDesc: gateway annotation, host count (or "sweep to discover"), public and IPv6 markers.
+func TestSubnetDesc(t *testing.T) {
+	cases := []struct {
+		si   *subnetInfo
+		want string
+	}{
+		{&subnetInfo{hosts: 12}, "12 hosts"},
+		{&subnetInfo{hosts: 1}, "1 host"},
+		{&subnetInfo{hosts: 0, isAgent: true, gateway: "10.0.5.1"}, "gateway 10.0.5.1 · sweep to discover"},
+		{&subnetInfo{hosts: 2, locality: "routable"}, "2 hosts · public"},
+		{&subnetInfo{hosts: 4, v6: true}, "4 hosts · IPv6"},
+	}
+	for _, c := range cases {
+		if got := subnetDesc(c.si); got != c.want {
+			t.Errorf("subnetDesc(%+v) = %q, want %q", c.si, got, c.want)
+		}
+	}
+}
+
+// TestLastGateway: the second-to-last traceroute hop, or "" when there aren't two hops.
+func TestLastGateway(t *testing.T) {
+	mk := func(hops ...string) *pb.Host {
+		h := &pb.Host{}
+		if len(hops) > 0 {
+			tr := &network.Trace{}
+			for _, ip := range hops {
+				tr.Hops = append(tr.Hops, &network.Hop{IPAddr: ip})
+			}
+			h.Trace = tr
+		}
+		return h
+	}
+	if got := lastGateway(mk("10.0.5.1", "10.0.0.10")); got != "10.0.5.1" {
+		t.Errorf("two hops: got %q, want 10.0.5.1", got)
+	}
+	if got := lastGateway(mk("10.0.0.10")); got != "" {
+		t.Errorf("single hop: got %q, want empty", got)
+	}
+	if got := lastGateway(mk()); got != "" {
+		t.Errorf("no trace: got %q, want empty", got)
+	}
+}
+
+// TestDomainsFromName pins zone extraction: the parent suffixes of ≥2 labels minus the host name
+// itself, a bare apex kept, and bare IPs / single labels yielding nothing.
+func TestDomainsFromName(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"www.corp.example.com", []string{"corp.example.com", "example.com"}},
+		{"mail.example.com", []string{"example.com"}},
+		{"example.com", []string{"example.com"}},
+		{"EXAMPLE.COM.", []string{"example.com"}}, // lowercased, trailing dot trimmed
+		{"localhost", nil}, // single label
+		{"10.0.0.5", nil},  // bare IP
+		{"", nil},
+	}
+	for _, c := range cases {
+		got := domainsFromName(c.in)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("domainsFromName(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestCollectDomains pins the zone aggregation + agent-context ranking: a host counts once per zone
+// however many names it has there, a zone takes the highest relevance of any host under it, and the
+// result is density-sorted.
+func TestCollectDomains(t *testing.T) {
+	host := func(id, addr string, names ...string) *pb.Host {
+		h := &pb.Host{Id: id}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		for _, n := range names {
+			h.Hostnames = append(h.Hostnames, &pb.Hostname{Name: n})
+		}
+		return h
+	}
+	agent := host("agent", "10.0.0.10", "web01.corp.local")
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", "db.corp.local", "db-alt.corp.local"), // same /24; two names, one zone
+		host("c", "8.8.8.8", "www.example.com"),                      // distant
+	}
+
+	byName := map[string]*domainInfo{}
+	for _, di := range collectDomains(all, agent) {
+		byName[di.name] = di
+	}
+
+	if di := byName["corp.local"]; di == nil || di.rel != agentctx.AgentHost || di.hosts != 2 {
+		t.Errorf("corp.local: got %+v, want rel=AgentHost hosts=2", di)
+	}
+	if di := byName["example.com"]; di == nil || di.rel != agentctx.Normal || di.hosts != 1 {
+		t.Errorf("example.com: got %+v, want rel=Normal hosts=1", di)
+	}
+	// Density-sorted: corp.local (2) before example.com (1).
+	subs := collectDomains(all, agent)
+	for i := 1; i < len(subs); i++ {
+		if subs[i-1].hosts < subs[i].hosts {
+			t.Errorf("collectDomains not sorted by density desc: %v", subs)
+			break
+		}
+	}
+}
+
+// TestDomainTag: agent-context relevance wins, else an apex (one dot) is registered and a deeper name
+// is a subdomain.
+func TestDomainTag(t *testing.T) {
+	cases := []struct {
+		di   *domainInfo
+		want string
+	}{
+		{&domainInfo{name: "example.com", rel: agentctx.AgentHost}, agentctx.TagContext},
+		{&domainInfo{name: "corp.local", rel: agentctx.Nearby}, agentctx.TagNearby},
+		{&domainInfo{name: "example.com"}, tagDomainRegistered},
+		{&domainInfo{name: "corp.example.com"}, tagDomainSub},
+	}
+	for _, c := range cases {
+		if got := domainTag(c.di); got != c.want {
+			t.Errorf("domainTag(%+v) = %q, want %q", c.di, got, c.want)
+		}
+	}
+}
+
+// TestDomainDesc: a correctly pluralised known-host count.
+func TestDomainDesc(t *testing.T) {
+	if got := domainDesc(&domainInfo{hosts: 3}); got != "3 known hosts" {
+		t.Errorf("domainDesc(3) = %q, want %q", got, "3 known hosts")
+	}
+	if got := domainDesc(&domainInfo{hosts: 1}); got != "1 known host" {
+		t.Errorf("domainDesc(1) = %q, want %q", got, "1 known host")
+	}
+}
+
+// mkCred builds a credential.Core for the username/MAC tests.
+func mkCred(id, user, realm string, typ credential.PrivateType, secret string) *credential.Core {
+	c := &credential.Core{
+		Id:      id,
+		Public:  &credential.Public{Username: user},
+		Private: &credential.Private{Type: typ, Data: secret},
+	}
+	if realm != "" {
+		c.Realm = &credential.Realm{Value: realm}
+	}
+	return c
+}
+
+// TestUsernameScore: an agent-host login (+2) outranks one carrying a secret (+1) outranks a bare
+// username — so the dedup keeps the most useful credential per username.
+func TestUsernameScore(t *testing.T) {
+	agentCreds := map[string]bool{"a": true}
+	bare := mkCred("z", "u", "", credential.PrivateType_Password, "")
+	withSecret := mkCred("y", "u", "", credential.PrivateType_Password, "pw")
+	onAgent := mkCred("a", "u", "", credential.PrivateType_Password, "")
+	if s := usernameScore(bare, agentCreds); s != 0 {
+		t.Errorf("bare score = %d, want 0", s)
+	}
+	if s := usernameScore(withSecret, agentCreds); s != 1 {
+		t.Errorf("with-secret score = %d, want 1", s)
+	}
+	if s := usernameScore(onAgent, agentCreds); s != 2 {
+		t.Errorf("agent-host score = %d, want 2", s)
+	}
+}
+
+// TestUsernameTag: agent-host logins are promoted; the rest split on whether a usable secret is held.
+func TestUsernameTag(t *testing.T) {
+	if got := usernameTag(mkCred("a", "u", "", credential.PrivateType_Password, ""), true); got != agentctx.TagContext {
+		t.Errorf("agent-host username tag = %q, want %q", got, agentctx.TagContext)
+	}
+	if got := usernameTag(mkCred("b", "u", "", credential.PrivateType_NTLMHash, "aad3b"), false); got != tagUserWithSecret {
+		t.Errorf("with-secret tag = %q, want %q", got, tagUserWithSecret)
+	}
+	if got := usernameTag(mkCred("c", "u", "", credential.PrivateType_Password, ""), false); got != tagUserNoSecret {
+		t.Errorf("no-secret tag = %q, want %q", got, tagUserNoSecret)
+	}
+}
+
+// TestUsernameDesc: the description names the paired secret (type + "known") and the realm — or "no
+// secret" when the username stands alone.
+func TestUsernameDesc(t *testing.T) {
+	cases := []struct {
+		core *credential.Core
+		want string
+	}{
+		{mkCred("a", "admin", "CORP", credential.PrivateType_NTLMHash, "aad3b"), "NTLM hash known @ CORP"},
+		{mkCred("b", "root", "", credential.PrivateType_Password, "pw"), "password known"},
+		{mkCred("c", "svc", "CORP", credential.PrivateType_Password, ""), "no secret @ CORP"},
+	}
+	for _, c := range cases {
+		if got := usernameDesc(c.core); got != c.want {
+			t.Errorf("usernameDesc(%s) = %q, want %q", c.core.GetPublic().GetUsername(), got, c.want)
+		}
+	}
+}
+
+// TestCollectMACs pins MAC gathering from both sources (Host.MAC and a type=="mac" address with a
+// vendor), normalised-dedup across hosts, and the highest-relevance host winning the label.
+func TestCollectMACs(t *testing.T) {
+	host := func(id, addr, mac string, macAddrs ...*network.Address) *pb.Host {
+		h := &pb.Host{Id: id, MAC: mac}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		h.Addresses = append(h.Addresses, macAddrs...)
+		return h
+	}
+	agent := host("agent", "10.0.0.10", "AA:BB:CC:00:00:01")
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", "", &network.Address{Addr: "aa:bb:cc:00:00:01", Type: "mac", Vendor: "VMware"}), // same MAC (case), same /24 → Nearby, adds vendor
+		host("c", "8.8.8.8", "DE:AD:BE:EF:00:02"),
+	}
+
+	byMAC := map[string]*macInfo{}
+	for _, mi := range collectMACs(all, agent) {
+		byMAC[mi.mac] = mi
+	}
+
+	if mi := byMAC["aa:bb:cc:00:00:01"]; mi == nil || mi.rel != agentctx.AgentHost || mi.vendor != "VMware" {
+		t.Errorf("shared MAC: got %+v, want rel=AgentHost vendor=VMware", mi)
+	}
+	if mi := byMAC["de:ad:be:ef:00:02"]; mi == nil || mi.rel != agentctx.Normal {
+		t.Errorf("distant MAC: got %+v, want rel=Normal", mi)
+	}
+	if _, ok := byMAC["AA:BB:CC:00:00:01"]; ok {
+		t.Error("MAC must be normalised to lowercase (no upper-case duplicate)")
+	}
+}
+
+// TestMacDesc: vendor and host joined, with sensible fallbacks.
+func TestMacDesc(t *testing.T) {
+	cases := []struct {
+		mi   *macInfo
+		want string
+	}{
+		{&macInfo{vendor: "VMware", host: "web01"}, "VMware · web01"},
+		{&macInfo{host: "10.0.0.5"}, "10.0.0.5"},
+		{&macInfo{}, "known MAC"},
+	}
+	for _, c := range cases {
+		if got := macDesc(c.mi); got != c.want {
+			t.Errorf("macDesc(%+v) = %q, want %q", c.mi, got, c.want)
+		}
+	}
+}
+
+// TestServiceNameGroup: the DB's open-port service names come first (described by their port), then
+// the curated well-known names, deduplicated by name — the named tokens nmap's `-p` accepts.
+func TestServiceNameGroup(t *testing.T) {
+	ports := []*portInfo{
+		{number: 22, proto: "tcp", service: "ssh"},
+		{number: 8081, proto: "tcp", service: "http"},
+		{number: 9999, proto: "tcp", service: ""}, // no service name → skipped
+	}
+	got := serviceNameGroup(ports)
+
+	// Flatten (name→desc) for lookup.
+	desc := map[string]string{}
+	for i := 0; i+1 < len(got); i += 2 {
+		desc[got[i]] = got[i+1]
+	}
+	if desc["ssh"] != "22/tcp" {
+		t.Errorf("ssh desc = %q, want 22/tcp", desc["ssh"])
+	}
+	if desc["http"] != "8081/tcp" {
+		t.Errorf("http desc = %q, want 8081/tcp (the DB port, not the well-known 80)", desc["http"])
+	}
+	// A curated name not among the DB ports is still offered (well-known).
+	if _, ok := desc["mysql"]; !ok {
+		t.Errorf("curated well-known name mysql missing from %v", got)
+	}
+	// No empty-name token leaked in from the serviceless port.
+	if _, ok := desc[""]; ok {
+		t.Error("a port with no service name must not produce an empty token")
+	}
+}

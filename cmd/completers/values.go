@@ -1,4 +1,4 @@
-package scan
+package completers
 
 /*
    AIMS (Attacked Infrastructure Modular Specification)
@@ -18,11 +18,11 @@ package scan
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// This file holds the value-typed completers — the scanner-agnostic completions that a scanner's
-// dispatch borrows by classifying a slot to a type (see run_complete.go's completeNSEArgValue and
-// the masscan dispatch). The scanner-specific glue (dispatchers, flag sets, NSE machinery) lives in
-// run_complete.go; the shared plumbing (guard, cachedCompleter, cachedHostCompleter, renderGroups)
-// lives there too.
+// This file holds the value-typed completers — the command-agnostic completions a caller borrows by
+// classifying a slot to a type (a scanner's nmap/masscan dispatch, `credentials add --realm`, …).
+// The shared substrate they stand on (Guard, cachedCompleter, cachedHostCompleter, renderGroups)
+// lives in plumbing.go; each scanner's own glue (dispatchers, flag sets, NSE machinery) stays in
+// cmd/scan/run_complete.go.
 
 import (
 	"context"
@@ -64,7 +64,7 @@ const (
 // groups first (agentctx.PromotedOrder), then the intrinsic locality groups.
 var targetGroupOrder = agentctx.PromotedOrder(tagRoutable, tagPrivate, tagLoopback, tagNoAddr)
 
-// completeTargets completes a target slot with known hosts, sub-grouped by address locality, and
+// Targets completes a target slot with known hosts, sub-grouped by address locality, and
 // drops any target already present on the command line. It is the shared target completer — the
 // nmap positional target slot and NSE host-valued script args both use it — so excluding
 // already-chosen targets happens here, once, for every reuse site.
@@ -73,13 +73,13 @@ var targetGroupOrder = agentctx.PromotedOrder(tagRoutable, tagPrivate, tagLoopba
 // whole host set once, and each keystroke filters that set against the live arguments. Filtering by
 // exact token is safe against the DisableFlagParsing arg stream — flags and flag-values (-sS, a
 // --script value) never equal a host candidate.
-func completeTargets(con *client.Client) carapace.Action {
+func Targets(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		return cachedTargets(con).Filter(c.Args...)
 	})
 }
 
-// cachedTargets is the cached whole-host-set candidate action behind completeTargets. It is a
+// cachedTargets is the cached whole-host-set candidate action behind Targets. It is a
 // scan-local completion (not a call into cmd/hosts) precisely because the shared
 // hosts.CompleteByHostnameOrIP flattens the address away, and locality grouping needs it. The
 // caching, agent-scoping and teamclient read are the shared cachedHostCompleter shell.
@@ -166,13 +166,13 @@ func localityOf(addr string) string {
 	}
 }
 
-// completeInterface completes a network-interface value — nmap's `-e`, an NSE `*.interface` arg,
+// Interface completes a network-interface value — nmap's `-e`, an NSE `*.interface` arg,
 // and any other scanner's interface flag — from the LOCAL machine's interfaces (the box the
 // completion process runs on). It is deliberately not agent-context aware: interfaces belong to the
 // operator's host, not the possibly-remote loaded agent. Purely local and cheap, so it is not
 // cached. Interfaces are grouped up vs down (you scan from an up interface), each described by its
 // addresses.
-func completeInterface() carapace.Action {
+func Interface() carapace.Action {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return carapace.ActionMessage("cannot list interfaces: %s", err)
@@ -203,7 +203,7 @@ func completeInterface() carapace.Action {
 }
 
 // interfaceLabel describes an interface for its completion candidate: its addresses (IPs, mask
-// stripped) and a loopback marker, or "no address". Split from completeInterface so it can be
+// stripped) and a loopback marker, or "no address". Split from Interface so it can be
 // tested without the machine's real interfaces.
 func interfaceLabel(loopback bool, addrs []net.Addr) string {
 	var ips []string
@@ -228,12 +228,12 @@ func interfaceLabel(loopback bool, addrs []net.Addr) string {
 	return label
 }
 
-// completeSourceAddr completes a source-address value — nmap's `-S`, masscan's `--source-ip`/
+// SourceAddr completes a source-address value — nmap's `-S`, masscan's `--source-ip`/
 // `--adapter-ip` — from the LOCAL machine's interface addresses: the legitimate source IPs a scan can
-// send from. Like completeInterface it is deliberately local, not agent-context (the source belongs
+// send from. Like Interface it is deliberately local, not agent-context (the source belongs
 // to the box running the scan tooling, not the possibly-remote loaded agent). Free-form is still
 // accepted — spoofing an arbitrary address — this only offers the real local addresses as a shortcut.
-func completeSourceAddr() carapace.Action {
+func SourceAddr() carapace.Action {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return carapace.ActionMessage("cannot list interfaces: %s", err)
@@ -285,18 +285,18 @@ const (
 // "service names" group is only ever populated for nmap; masscan/NSE port slots keep it empty).
 var portGroupOrder = agentctx.PromotedOrder(tagPortsDB, tagPortsCommon, tagPortsService)
 
-// completePortValue completes a numeric port value — masscan's `-p`/`--ports` and NSE `*.port` — from
+// PortValue completes a numeric port value — masscan's `-p`/`--ports` and NSE `*.port` — from
 // the DB's known open ports plus a curated set of well-known ports. Ports open on the current agent's
 // host, then on its subnet neighbours, are promoted via the shared relevance layer, so the operator
 // sees "what's open around here" first. Cached; the cache key carries the agent id.
-func completePortValue(con *client.Client) carapace.Action {
+func PortValue(con *client.Client) carapace.Action {
 	return completePortValueMode(con, false)
 }
 
-// completePortSpec is completePortValue plus named-service tokens (ssh, http, …), for nmap's `-p`,
+// PortSpec is PortValue plus named-service tokens (ssh, http, …), for nmap's `-p`,
 // which — unlike masscan — accepts a service name and expands it via nmap-services. The service group
 // renders last, after the numeric ports.
-func completePortSpec(con *client.Client) carapace.Action {
+func PortSpec(con *client.Client) carapace.Action {
 	return completePortValueMode(con, true)
 }
 
@@ -455,7 +455,7 @@ func commonPorts() []namedPort {
 // [ Secrets — known credentials, typed and agent-promoted ] -------------------------------------
 //
 
-// completeSecret completes a secret value — an NSE `*.password`/`*.passphrase` arg, and any
+// Secret completes a secret value — an NSE `*.password`/`*.passphrase` arg, and any
 // brute/auth tool's secret flag later — from the credential store, so known passwords/hashes can be
 // reused (AIMS's whole point). Secrets are grouped by credential type (the PrivateType axis), and
 // the credentials used on the current agent's host are promoted to the top via the relevance layer
@@ -464,7 +464,7 @@ func commonPorts() []namedPort {
 //
 // Note: this deliberately surfaces plaintext secrets as completion values — that is the point of
 // credential reuse, and the operator owns the store (cf. Sliver's GetPlaintextCredsByHashType).
-func completeSecret(con *client.Client) carapace.Action {
+func Secret(con *client.Client) carapace.Action {
 	return cachedCompleter(con, "scan:secret", "secret", func() carapace.Action {
 		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
 		if err = aims.CheckError(err); err != nil {
@@ -614,13 +614,13 @@ const (
 // hash we hold, then the bare usernames.
 var usernameGroupOrder = agentctx.PromotedOrder(tagUserWithSecret, tagUserNoSecret)
 
-// completeUsername completes a username value — an NSE `*.username`/`*.user` arg, and any auth tool's
+// Username completes a username value — an NSE `*.username`/`*.user` arg, and any auth tool's
 // user flag later — from the credential store, and is the username half of the credential pair: each
 // candidate is described by the secret it is paired with (its type and realm), so the operator picks
-// a username *knowing* whether its password is on hand. It mirrors completeSecret's agent-context
+// a username *knowing* whether its password is on hand. It mirrors Secret's agent-context
 // promotion on the username axis — usernames whose login is on the agent's host lead. This replaces
 // the flat credentials.CompleteByUsername for scan slots. Cached; the key carries the agent id.
-func completeUsername(con *client.Client) carapace.Action {
+func Username(con *client.Client) carapace.Action {
 	return cachedCompleter(con, "scan:username", "username", func() carapace.Action {
 		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
 		if err = aims.CheckError(err); err != nil {
@@ -717,11 +717,11 @@ const tagMACKnown = "known MAC addresses"
 // macGroupOrder: agent-context relevance groups first, then all other known MACs.
 var macGroupOrder = agentctx.PromotedOrder(tagMACKnown)
 
-// completeMAC completes a MAC-address value — nmap's `--spoof-mac`, masscan's `--router-mac`/
+// MAC completes a MAC-address value — nmap's `--spoof-mac`, masscan's `--router-mac`/
 // `--adapter-mac`/`--spoof-mac`, and an NSE `*.mac` arg — from the MACs already in the database (the
 // `Host.MAC` field and any address of type "mac", which carries an OUI vendor). MACs on the agent's
 // host, then its subnet, are promoted via the relevance layer. Cached; the key carries the agent id.
-func completeMAC(con *client.Client) carapace.Action {
+func MAC(con *client.Client) carapace.Action {
 	return cachedHostCompleter(con, "scan:macs", "mac", nil, "no hosts in database", groupedMACs)
 }
 
@@ -849,12 +849,12 @@ var webPorts = map[uint32]bool{
 	8080: true, 8081: true, 8443: true, 8888: true, 4443: true, 9443: true,
 }
 
-// completeWebURL completes a URL value — an NSE `*.url`/`*.uri` arg, and any web scanner's
+// WebURL completes a URL value — an NSE `*.url`/`*.uri` arg, and any web scanner's
 // `-u`/`--url` later — by synthesizing `scheme://host[:port]/` from the DB's web services rather
 // than completing free text. Endpoints on the current agent's host, then its subnet, are promoted
 // via the relevance layer; the rest are grouped by scheme (with un-fingerprinted web ports flagged
 // as guesses). Cached; the cache key carries the agent id.
-func completeWebURL(con *client.Client) carapace.Action {
+func WebURL(con *client.Client) carapace.Action {
 	return cachedHostCompleter(con, "scan:nmap:urls", "web-url",
 		&hostrpc.HostFilters{Ports: true}, "", groupedURLs)
 }
@@ -1213,7 +1213,7 @@ const (
 // natural zone to enumerate), then the deeper subdomains.
 var domainGroupOrder = agentctx.PromotedOrder(tagDomainRegistered, tagDomainSub)
 
-// completeDomain completes a domain value — an NSE `dns-*` arg (dns-brute.domain, …), and any
+// Domain completes a domain value — an NSE `dns-*` arg (dns-brute.domain, …), and any
 // DNS/recon tool's domain flag later — from the DNS names already in the database. Each known
 // hostname contributes its parent zones (every suffix of ≥2 labels, minus the host name itself),
 // aggregated by how many known hosts fall under each; zones under the current agent's host are
@@ -1221,7 +1221,7 @@ var domainGroupOrder = agentctx.PromotedOrder(tagDomainRegistered, tagDomainSub)
 //
 // The value is intentionally *not* a full host FQDN (that is the target completer's job) — it is the
 // zone an operator hands to a brute/transfer tool to enumerate.
-func completeDomain(con *client.Client) carapace.Action {
+func Domain(con *client.Client) carapace.Action {
 	return cachedHostCompleter(con, "scan:domains", "domain", nil, "no hosts in database", groupedDomains)
 }
 

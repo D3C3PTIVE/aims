@@ -20,7 +20,6 @@ package scan
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -33,9 +32,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
-	"github.com/d3c3ptive/aims/cmd/agentctx"
-	pb "github.com/d3c3ptive/aims/host/pb"
-	hostrpc "github.com/d3c3ptive/aims/host/pb/rpc"
+	"github.com/d3c3ptive/aims/cmd/completers"
 )
 
 // completeRunNmap is the single positional-tail completer for `scan run nmap`. Because the
@@ -46,7 +43,7 @@ import (
 //   - a flag being typed (-…) → a curated, described set of high-value nmap flags
 //   - otherwise (target slot) → hosts/addresses from the database, sub-grouped by locality
 //
-// It never touches the DB directly: targets come through completeTargets, which queries the
+// It never touches the DB directly: targets come through completers.Targets, which queries the
 // teamserver over RPC — correct whether the CLI is the in-process teamserver or a remote
 // teamclient. (NSE names are read from the local nmap script.db; see completeNSEScripts.)
 //
@@ -56,7 +53,7 @@ import (
 // pre-NSE stub that drops --script and friends — supplemented, deduped, by the carapace-bridge
 // long-tail for whatever extra the local `_nmap` knows.
 func completeRunNmap(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(guard("nmap", func(c carapace.Context) carapace.Action {
+	return carapace.ActionCallback(completers.Guard("nmap", func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 {
 			switch c.Args[n-1] {
 			case "--script":
@@ -64,96 +61,20 @@ func completeRunNmap(con *client.Client) carapace.Action {
 			case "--script-args":
 				return completeNSEScriptArgs(con)
 			case "-e":
-				return completeInterface()
+				return completers.Interface()
 			case "-p":
-				return completePortSpec(con)
+				return completers.PortSpec(con)
 			case "--spoof-mac":
-				return completeMAC(con)
+				return completers.MAC(con)
 			case "-S":
-				return completeSourceAddr()
+				return completers.SourceAddr()
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
 			return nmapFlagCompletions()
 		}
-		return completeTargets(con)
+		return completers.Targets(con)
 	}))
-}
-
-// guard wraps a completion callback so a panic degrades to a visible carapace message instead of
-// crashing the exec-once `_carapace` subprocess — which the shell experiences as completion hanging
-// with no output. The message also surfaces the failure (with its location in the panic text) so it
-// can be diagnosed rather than silently swallowed. label names the completer for the message.
-func guard(label string, fn carapace.CompletionCallback) carapace.CompletionCallback {
-	return func(c carapace.Context) (action carapace.Action) {
-		defer func() {
-			if r := recover(); r != nil {
-				action = carapace.ActionMessage("%s completion panicked: %v", label, r)
-			}
-		}()
-		return fn(c)
-	}
-}
-
-// cachedCompleter is the shared shell every DB-backed completer wears: an agent-scoped on-disk cache
-// (the agent id is folded into the cache name so a different loaded context is a distinct entry), a
-// guard so a panic degrades to a message, and the teamclient connect. body does the actual read +
-// render — it only runs on a cache miss with a live connection, never touching the DB directly.
-func cachedCompleter(con *client.Client, name, label string, body func() carapace.Action) carapace.Action {
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
-	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard(label, func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-		return body()
-	})))
-}
-
-// cachedHostCompleter specialises cachedCompleter for the host-set-backed completers (targets, ports,
-// URLs, domains): it does the Hosts.Read with the given filters and resolves the agent host once,
-// then hands both to render. emptyHostsMsg, when non-empty, short-circuits an empty database with
-// that message; pass "" to let render own the empty case (e.g. groupedPorts says "no ports known").
-func cachedHostCompleter(con *client.Client, name, label string, filters *hostrpc.HostFilters, emptyHostsMsg string, render func(hosts []*pb.Host, agentHost *pb.Host) carapace.Action) carapace.Action {
-	return cachedCompleter(con, name, label, func() carapace.Action {
-		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{Host: &pb.Host{}, Filters: filters})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-		if emptyHostsMsg != "" && len(res.GetHosts()) == 0 {
-			return carapace.ActionMessage(emptyHostsMsg)
-		}
-		agentHost, _ := agentctx.CurrentHost(con)
-		return render(res.GetHosts(), agentHost)
-	})
-}
-
-// renderGroups turns tag→(value, description…) buckets into a batched action — one tagged carapace
-// group per tag in order, empty groups skipped, each group passed through the optional decorate funcs
-// (e.g. a NoSpace). When nothing rendered it returns emptyMsg as an ActionMessage, or an empty action
-// when emptyMsg is "" (so the group contributes nothing to a shared slot). This is the shared tail of
-// every grouped completer (targets, ports, subnets, URLs, domains).
-func renderGroups(order []string, buckets map[string][]string, emptyMsg string, decorate ...func(carapace.Action) carapace.Action) carapace.Action {
-	actions := make([]carapace.Action, 0, len(order))
-	for _, tag := range order {
-		pairs := buckets[tag]
-		if len(pairs) == 0 {
-			continue
-		}
-		a := carapace.ActionValuesDescribed(pairs...).Tag(tag)
-		for _, d := range decorate {
-			a = d(a)
-		}
-		actions = append(actions, a)
-	}
-	if len(actions) == 0 {
-		if emptyMsg == "" {
-			return carapace.ActionValues()
-		}
-		return carapace.ActionMessage(emptyMsg)
-	}
-	return carapace.Batch(actions...).ToA()
 }
 
 //
@@ -340,19 +261,19 @@ func classifyNmapFlag(flag string) string {
 // no key=value arg surface, so there is no argValueKind classifier; the preceding flag is the
 // classifier.
 func completeRunMasscan(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(guard("masscan", func(c carapace.Context) carapace.Action {
+	return carapace.ActionCallback(completers.Guard("masscan", func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 {
 			switch c.Args[n-1] {
 			case "-p", "--ports":
-				return completePortValue(con)
+				return completers.PortValue(con)
 			case "-e", "--interface", "--adapter":
-				return completeInterface()
+				return completers.Interface()
 			case "--router-mac", "--adapter-mac", "--spoof-mac":
-				return completeMAC(con)
+				return completers.MAC(con)
 			case "--source-ip", "--adapter-ip":
-				return completeSourceAddr()
+				return completers.SourceAddr()
 			case "--exclude", "--range":
-				return completeTargets(con) // a host or CIDR — the target completer offers both
+				return completers.Targets(con) // a host or CIDR — the target completer offers both
 			case "-iL", "--excludefile", "-oX", "-oJ", "-oL", "-oG":
 				return carapace.ActionFiles()
 			}
@@ -360,7 +281,7 @@ func completeRunMasscan(con *client.Client) carapace.Action {
 		if strings.HasPrefix(c.Value, "-") {
 			return masscanFlagCompletions()
 		}
-		return completeTargets(con)
+		return completers.Targets(con)
 	}))
 }
 
@@ -595,29 +516,29 @@ func nseArgNames(con *client.Client, selectors []string) carapace.Action {
 }
 
 // completeNSEArgValue dispatches the value side of an NSE `key=value` arg to an existing AIMS
-// completer, chosen from the key's shape (see nseArgValueKind). Reusing completeTargets and the
+// completer, chosen from the key's shape (see nseArgValueKind). Reusing completers.Targets and the
 // credentials completer means these values flow through the same cached teamclient RPC path as the
 // rest of AIMS completion — never the DB directly.
 func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 	switch nseArgValueKind(key) {
 	case "host":
-		return completeTargets(con)
+		return completers.Targets(con)
 	case "username":
-		return completeUsername(con)
+		return completers.Username(con)
 	case "file":
 		return carapace.ActionFiles()
 	case "interface":
-		return completeInterface()
+		return completers.Interface()
 	case "port":
-		return completePortValue(con)
+		return completers.PortValue(con)
 	case "secret":
-		return completeSecret(con)
+		return completers.Secret(con)
 	case "url":
-		return completeWebURL(con)
+		return completers.WebURL(con)
 	case "domain":
-		return completeDomain(con)
+		return completers.Domain(con)
 	case "mac":
-		return completeMAC(con)
+		return completers.MAC(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
