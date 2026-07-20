@@ -19,11 +19,12 @@ package bring
 */
 
 import (
-	"github.com/rsteube/carapace"
+	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
 	"github.com/d3c3ptive/aims/cmd/bring/shell"
+	"github.com/d3c3ptive/aims/cmd/c2"
 )
 
 // groupID places both commands under a dedicated "shell" help group.
@@ -44,10 +45,9 @@ func BringCommand(con *client.Client) *cobra.Command {
 		},
 	}
 
-	// TODO: once the c2 agents API settles, complete the id against live agents (reuse the c2
-	// completion so candidates match `aims agents show`). Deferred with runBring — the only two
-	// spots that touch the agents data model.
-	carapace.Gen(cmd).PositionalCompletion(carapace.ActionMessage("agent id (live completion pending the c2 agents API)"))
+	// Complete the id against live agents, reusing the c2 completer so candidates match exactly
+	// what `aims agents show` accepts — the agent id you Tab here is the one you can then inspect.
+	carapace.Gen(cmd).PositionalCompletion(c2.CompleteByID(con))
 
 	return cmd
 }

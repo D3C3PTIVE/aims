@@ -83,7 +83,15 @@ func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cob
 	})
 
 	argsUsage := fmt.Sprintf("%s files to import", parent.Use)
-	carapace.Gen(importCmd).PositionalAnyCompletion(carapace.ActionFiles().Usage(argsUsage))
+	comps := carapace.Gen(importCmd)
+	comps.PositionalAnyCompletion(carapace.ActionFiles().Usage(argsUsage))
+	comps.FlagCompletion(carapace.ActionMap{
+		// The serialization formats AIMS actually (un)marshals — json is the default, xml the alternate.
+		"format": carapace.ActionValuesDescribed(
+			"json", "JSON (default)",
+			"xml", "XML",
+		).Usage("serialization format"),
+	})
 
 	return importCmd
 }

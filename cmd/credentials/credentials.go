@@ -30,6 +30,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	cred "github.com/d3c3ptive/aims/credential"
@@ -210,6 +211,9 @@ func addCommand(con *client.Client) *cobra.Command {
 	carapace.Gen(cmd).FlagCompletion(carapace.ActionMap{
 		"hash-type": completeHashType(),
 		"username":  CompleteByUsername(con),
+		// A realm value is a domain (an AD/Kerberos realm is its DNS domain): reuse the shared
+		// domain completer so --realm offers the zones AIMS has actually observed, agent-promoted.
+		"realm": completers.Domain(con),
 	})
 
 	return cmd

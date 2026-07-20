@@ -87,6 +87,9 @@ func Commands(client *client.Client) *cobra.Command {
 	aims.BindFlags(addCmd.Name(), false, addCmd, func(f *pflag.FlagSet) {
 		f.StringP("file", "f", "", "Path to file containing hosts data")
 	})
+	carapace.Gen(addCmd).FlagCompletion(carapace.ActionMap{
+		"file": carapace.ActionFiles().Usage("file containing hosts data"),
+	})
 
 	hostsCmd.AddCommand(addCmd)
 
