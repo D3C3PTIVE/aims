@@ -20,6 +20,7 @@ package scan
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,18 +128,47 @@ func histDur(d time.Duration) string {
 	}
 }
 
-// colorChange tints a summary line by its leading marker: added green, removed red, changed yellow.
+var stateCountRE = regexp.MustCompile(`(\d+) (open|filtered|closed)`)
+
+// colorChange tints a drift summary token. The leading marker sets the base colour (added green,
+// removed red, changed yellow); inside a port digest like "(1 open, 307 closed)" each state count is
+// tinted on its own — open green, filtered yellow, closed dim — so the port picture reads at a glance
+// rather than as one flat block.
 func colorChange(line string) string {
-	switch marker(line) {
-	case '+':
-		return color.HiGreenString("%s", line)
-	case '-':
-		return color.HiRedString("%s", line)
-	case '~':
-		return color.HiYellowString("%s", line)
-	default:
-		return line
+	m := marker(line)
+	if i := strings.Index(line, "("); i >= 0 && strings.HasSuffix(line, ")") {
+		return tint(m, line[:i]) + colorStates(line[i:])
 	}
+	return tint(m, line)
+}
+
+// tint applies the change-direction colour to a fragment.
+func tint(m byte, s string) string {
+	switch m {
+	case '+':
+		return color.HiGreenString("%s", s)
+	case '-':
+		return color.HiRedString("%s", s)
+	case '~':
+		return color.HiYellowString("%s", s)
+	default:
+		return s
+	}
+}
+
+// colorStates tints each "N open|filtered|closed" count inside a port digest by state.
+func colorStates(digest string) string {
+	return stateCountRE.ReplaceAllStringFunc(digest, func(m string) string {
+		sub := stateCountRE.FindStringSubmatch(m)
+		switch sub[2] {
+		case "open":
+			return color.HiGreenString("%s open", sub[1])
+		case "filtered":
+			return color.HiYellowString("%s filtered", sub[1])
+		default: // closed
+			return color.HiBlackString("%s closed", sub[1])
+		}
+	})
 }
 
 func marker(line string) byte {
