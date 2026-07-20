@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/d3c3ptive/aims/client"
-	"github.com/d3c3ptive/aims/db"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	network "github.com/d3c3ptive/aims/network/pb"
@@ -47,23 +46,21 @@ func newInMemoryStack(t testing.TB) *client.Client {
 	// per test, isolated state.
 	t.Setenv("AIMS_ROOT_DIR", t.TempDir())
 
-	teamserver, opts, err := transport.NewTeamserver()
+	teamserver, handler, err := transport.NewTeamserver()
 	if err != nil {
 		t.Fatalf("NewTeamserver: %v", err)
 	}
 
-	con, err := client.New(opts...)
+	con, err := client.New(transport.InMemoryClientOptions(handler)...)
 	if err != nil {
 		t.Fatalf("client.New: %v", err)
 	}
 
-	// Mirror preRunServer + ConnectRun from cmd/aims: serve the in-memory teamclient (this also
-	// connects it), migrate the AIMS schema onto team's builtin DB, then register the RPC stubs.
+	// Mirror preRunServer + ConnectRun from cmd/aims: serving the in-memory teamclient also
+	// migrates the AIMS schema (the transport's registerServices serve hook) and registers the
+	// RPC services, then connects the client.
 	if err := teamserver.Serve(con.Teamclient); err != nil {
 		t.Fatalf("teamserver.Serve: %v", err)
-	}
-	if err := db.Migrate(teamserver.Database()); err != nil {
-		t.Fatalf("migrate: %v", err)
 	}
 	if err := con.Teamclient.Connect(); err != nil { // idempotent (sync.Once) after Serve.
 		t.Fatalf("teamclient.Connect: %v", err)

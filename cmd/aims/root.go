@@ -20,51 +20,101 @@ package main
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"github.com/carapace-sh/carapace"
+	"github.com/reeflective/team/boot"
+	teamclient "github.com/reeflective/team/client"
 	"github.com/reeflective/team/server"
 	"github.com/reeflective/team/server/commands"
 	"github.com/spf13/cobra"
 
 	"github.com/d3c3ptive/aims/client"
-	"github.com/d3c3ptive/aims/db"
 	"github.com/d3c3ptive/aims/server/transport"
 )
 
 func main() {
-	// Create a new Sliver Teamserver: the latter is able to serve all remote
-	// clients for its users, over any of the available transport stacks (MTLS/TS.
-	// Persistent teamserver client listeners are not started by default.
-	teamserver, opts, err := transport.NewTeamserver()
+	// Resolve the run mode once and dispatch. The teamserver — and thus its
+	// database, listeners and server-side filesystem — is built ONLY in the
+	// server callback, so a thin client never constructs or touches any of it.
+	//
+	// A `teamserver ...` invocation (daemon/listen/user, ...) always runs as a
+	// server so the local server can be administered even when a system client
+	// config is present; otherwise the presence of that config selects client
+	// mode.
+	err := boot.Run(boot.Boot{
+		App:         "aims",
+		ForceServer: isTeamserverCommand(os.Args),
+		Client:      runClient,
+		Server:      runServer,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
+}
 
-	// AIMS RPC client, access to database/server.
-	// No working connection yet, handled by teamclient.
-	aimsClient, err := client.New(opts...)
+// runServer builds and runs aims in embedded-server mode. This is the ONLY code
+// path that constructs the teamserver (and therefore opens/migrates the AIMS
+// database), and it distinguishes two sub-cases:
+//
+//   - A `teamserver ...` invocation (daemon/listen/user, ...) administers the
+//     local server over real network listeners. It must NOT prime an in-memory
+//     bufconn — that would make the daemon serve the in-memory pipe instead of
+//     binding its TCP address — and needs no in-process console client.
+//   - Any other command runs the embedded local console: an in-process
+//     teamclient connected to the teamserver over an in-memory bufconn, served
+//     on first use.
+func runServer() error {
+	teamserver, handler, err := transport.NewTeamserver()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	aimsClient.AddConnectHooks(preRunServer(teamserver, aimsClient))
+	var aimsClient *client.Client
 
-	// Generate and bind all AIM objects' subcommand/trees.
+	if isTeamserverCommand(os.Args) {
+		// Network server administration: no bufconn, no console client.
+		aimsClient, err = client.New()
+	} else {
+		// Embedded local console: connect an in-process teamclient over an
+		// in-memory bufconn, and serve the teamserver on first use.
+		aimsClient, err = client.New(transport.InMemoryClientOptions(handler)...)
+		if err == nil {
+			aimsClient.AddConnectHooks(preRunServer(teamserver, aimsClient))
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
 	bindCommands(aimsCmd, aimsClient)
-
-	teamserverCmds := commands.Generate(teamserver, aimsClient.Teamclient)
-	aimsCmd.AddCommand(teamserverCmds)
-
+	aimsCmd.AddCommand(commands.Generate(teamserver, aimsClient.Teamclient))
 	bindRunners(aimsCmd, true, aimsClient.ConnectRun)
-
-	// Completions (also pre-connect to the server)
 	carapace.Gen(aimsCmd)
 
-	// Execution
-	err = aimsCmd.Execute()
+	return aimsCmd.Execute()
+}
+
+// runClient builds and runs aims as a thin client of a remote teamserver. No
+// teamserver is constructed and no database is opened: the client connects to
+// the resolved remote config (cfg), and only data/consumption commands are
+// bound — server administration lives under `teamserver`, which forces server
+// mode.
+func runClient(cfg *teamclient.Config) error {
+	aimsClient, err := client.New()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	aimsClient.SetServerConfig(cfg)
+
+	bindCommands(aimsCmd, aimsClient)
+	bindRunners(aimsCmd, true, aimsClient.ConnectRun)
+	carapace.Gen(aimsCmd)
+
+	return aimsCmd.Execute()
 }
 
 var aimsCmd = &cobra.Command{
@@ -73,25 +123,29 @@ var aimsCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
-// preRunServer is the server-binary-specific pre-run; it ensures that the server
-// has everything it needs to perform any client-side command/task.
+// isTeamserverCommand reports whether the program was invoked as a teamserver
+// administration command (`aims teamserver ...`: daemon, listen, user, ...).
+// Those manage the local embedded server, so they must force embedded mode even
+// when a system client config would otherwise select thin-client mode. It looks
+// at the first positional argument (skipping leading flags).
+func isTeamserverCommand(args []string) bool {
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+
+		return arg == "teamserver"
+	}
+
+	return false
+}
+
+// preRunServer is the embedded-console pre-run: it serves the in-memory
+// teamserver to the in-process teamclient. The AIMS schema is migrated by the
+// transport's serve hook (registerServices), which runs for both the in-memory
+// and network serve paths, so nothing else is needed here.
 func preRunServer(teamserver *server.Server, con *client.Client) func() error {
 	return func() error {
-		// TODO: Move this out of here.
-		// serverConfig := configs.GetServerConfig()
-		// c2.StartPersistentJobs(serverConfig)
-
-		// Let our in-memory teamclient be served.
-		if err := teamserver.Serve(con.Teamclient); err != nil {
-			return err
-		}
-
-		// Ensure the server has what it needs.
-		aimsDB := teamserver.Database()
-		if err := db.Migrate(aimsDB); err != nil {
-			return err
-		}
-
-		return nil
+		return teamserver.Serve(con.Teamclient)
 	}
 }

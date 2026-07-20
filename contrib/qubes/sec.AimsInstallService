@@ -1,0 +1,55 @@
+#!/bin/sh
+# sec.AimsInstallService — Qubes qrexec service (install in the `sec` qube).
+#
+# Companion to sec.AimsInstall (which installs the aims *binary*). This service
+# installs and enables the aims *teamserver* as a systemd USER service, so it:
+#   - persists across AppVM reboots (the unit lives under ~/.config/systemd/user,
+#     and /home is the persistent volume), and
+#   - starts at boot without an interactive login (loginctl enable-linger).
+#
+# One-time wiring (mirrors sec.AimsInstall):
+#   1. Copy this file into the `sec` qube alongside sec.AimsInstall, e.g.
+#        ~/.local/etc/qubes-rpc/sec.AimsInstallService      (then: chmod +x)
+#      (or /etc/qubes-rpc/… via the template / a bind-dir for a system-wide one).
+#   2. In dom0, add a policy line mirroring sec.AimsInstall — e.g. in
+#      /etc/qubes/policy.d/30-user.policy:
+#        sec.AimsInstallService * sec-dev sec allow
+#
+# Bind host/port default to 127.0.0.1:31337 and MUST match the config created by
+# `aims teamserver user --system --host … --port …`, so auto client-mode
+# detection reaches this daemon. Change both here and in that command to move it.
+set -eu
+
+BIN="$HOME/.local/bin/aims"
+HOST="127.0.0.1"
+PORT="31337"
+
+UNIT_DIR="$HOME/.config/systemd/user"
+UNIT="$UNIT_DIR/aims-teamserver.service"
+
+[ -x "$BIN" ] || { echo "aims not found at $BIN — run sec.AimsInstall first" >&2; exit 1; }
+
+mkdir -p "$UNIT_DIR"
+
+# Render a USER unit from the binary's own generator: drop the header comment
+# and the system-only User= directive, and retarget the install to the user
+# session. %h is expanded by systemd to the user's home at runtime.
+"$BIN" teamserver systemd --binpath "%h/.local/bin/aims" --host "$HOST" --port "$PORT" \
+  | sed -e '/^## /d' -e '/^User=/d' -e 's/^WantedBy=multi-user.target/WantedBy=default.target/' \
+  > "$UNIT"
+
+# Ensure a persistent per-user systemd instance (survives logout, runs at boot),
+# then (re)load and enable the service.
+loginctl enable-linger "$(id -un)" 2>/dev/null || true
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+i=0
+while [ "$i" -lt 10 ] && ! systemctl --user show >/dev/null 2>&1; do
+	sleep 0.5
+	i=$((i + 1))
+done
+
+systemctl --user daemon-reload
+systemctl --user enable --now aims-teamserver.service
+
+echo "aims teamserver enabled on ${HOST}:${PORT}"
+systemctl --user --no-pager status aims-teamserver.service 2>&1 | head -4 || true

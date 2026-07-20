@@ -31,17 +31,26 @@ import (
 	"tailscale.com/tsnet"
 
 	"github.com/reeflective/team/server"
+	grpcserver "github.com/reeflective/team/transports/grpc/server"
 )
 
 // tailscaleTeamserver is unexported since we only need it as
 // a reeflective/team/server.Handler interface implementation.
+//
+// It embeds the shared team gRPC handler to reuse its full server stack
+// (buffering, audit/logging, panic recovery, token authentication and the AIMS
+// service registration hook) and only overrides how the listener is created:
+// instead of a TCP+TLS bind, it stands up a Tailscale/tsnet listener and serves
+// the same gRPC stack on it via the handler's exported ServeOn.
 type tailscaleTeamserver struct {
-	*teamserver
+	*grpcserver.Handler
 }
 
 // newTeamserverTailScale returns an AIMS teamserver backend using Tailscale.
 func newTeamserverTailScale(opts ...grpc.ServerOption) server.Handler {
-	core := newTeamserverTLS(opts...)
+	core := grpcserver.NewListener(opts...)
+	core.WithCoreServices()
+	core.PostServe(registerServices(core))
 
 	return &tailscaleTeamserver{core}
 }
@@ -51,9 +60,9 @@ func (ts *tailscaleTeamserver) Name() string {
 	return "gRPC/TSNet"
 }
 
-// Close implements team/server.Handler.Close().
-// Instead of serving a classic TCP+TLS listener,
-// we start a tailscale stack and create the listener out of it.
+// Listen implements team/server.Handler.Listen(). Instead of serving a classic
+// TCP+TLS listener, we start a tailscale stack and create the listener out of
+// it, then reuse the shared gRPC server stack via ServeOn.
 func (ts *tailscaleTeamserver) Listen(addr string) (ln net.Listener, err error) {
 	tsNetLog := ts.NamedLogger("transport", "tailscale")
 
@@ -81,7 +90,7 @@ func (ts *tailscaleTeamserver) Listen(addr string) (ln net.Listener, err error) 
 		return nil, fmt.Errorf("TS_AUTHKEY not set")
 	}
 
-	tsnetDir := filepath.Join(ts.Server.LogsDir(), "tsnet")
+	tsnetDir := filepath.Join(ts.LogsDir(), "tsnet")
 	if err := os.MkdirAll(tsnetDir, 0o700); err != nil {
 		return nil, err
 	}
@@ -102,7 +111,7 @@ func (ts *tailscaleTeamserver) Listen(addr string) (ln net.Listener, err error) 
 		return nil, err
 	}
 
-	ts.serve(ln)
+	ts.ServeOn(ln)
 
 	return ln, nil
 }

@@ -28,8 +28,9 @@ import (
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 
+	grpcclient "github.com/reeflective/team/transports/grpc/client"
+
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
-	"github.com/d3c3ptive/aims/client/transport"
 	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	network "github.com/d3c3ptive/aims/network/pb/rpc"
@@ -42,7 +43,8 @@ import (
 type Client struct {
 	// Teamclient & remotes
 	Teamclient   *client.Client
-	dialer       *transport.TeamClient
+	dialer       *grpcclient.Dialer
+	serverConfig *client.Config
 	connectHooks []func() error
 
 	// Services
@@ -58,7 +60,7 @@ type Client struct {
 
 func New(opts ...grpc.DialOption) (con *Client, err error) {
 	con = &Client{} // Our reeflective/team.Client needs our gRPC stack.
-	con.dialer = transport.NewClient(opts...)
+	con.dialer = grpcclient.NewClient(opts...)
 
 	var clientOpts []client.Options
 	clientOpts = append(clientOpts,
@@ -76,13 +78,33 @@ func New(opts ...grpc.DialOption) (con *Client, err error) {
 	return con, err
 }
 
+// SetServerConfig pins the remote teamserver configuration this client will
+// connect to, instead of letting the teamclient auto-select one from disk (or
+// prompt for it). It is used by the thin-client boot mode: when the app finds a
+// system user config at startup, it pins it here so every subsequent Connect
+// reaches that remote server deterministically.
+func (con *Client) SetServerConfig(cfg *client.Config) {
+	con.serverConfig = cfg
+}
+
+// teamConnectOptions returns the teamclient Connect options implied by this
+// client's state: a pinned server config when one was set (thin-client mode),
+// otherwise none (the teamclient auto-selects / uses the in-memory dialer).
+func (con *Client) teamConnectOptions() []client.Options {
+	if con.serverConfig == nil {
+		return nil
+	}
+
+	return []client.Options{client.WithConfig(con.serverConfig)}
+}
+
 // Init registers all gRPC clients to the existing teamclient connection.
 func (c *Client) Init() error {
-	if c.dialer.Conn == nil {
+	if c.dialer.Conn() == nil {
 		return errors.New("No grpc client connection")
 	}
 
-	conn := c.dialer.Conn
+	conn := c.dialer.Conn()
 
 	c.Hosts = hosts.NewHostsClient(conn)
 	c.users = hosts.NewUsersClient(conn)
@@ -96,56 +118,21 @@ func (c *Client) Init() error {
 	return nil
 }
 
-// Users returns a list of all users registered with the app teamserver.
-// If the gRPC teamclient is not connected or does not have an RPC client,
-// an ErrNoRPC is returned.
+// Users returns a list of all users registered with the app teamserver. It is
+// answered by the shared team gRPC transport's core Team service (enabled with
+// WithCoreServices() on the server side), through the teamclient backend.
 func (con *Client) Users() (users []team.User, err error) {
-	// if con.Rpc == nil {
-	// 	return nil, errors.New("No Sliver client RPC")
-	// }
-	//
-	// res, err := con.Rpc.GetUsers(context.Background(), &commonpb.Empty{})
-	// if err != nil {
-	// 	return nil, con.UnwrapServerErr(err)
-	// }
-	//
-	// for _, user := range res.GetUsers() {
-	// 	users = append(users, team.User{
-	// 		Name:     user.Name,
-	// 		Online:   user.Online,
-	// 		LastSeen: time.Unix(user.LastSeen, 0),
-	// 	})
-	// }
-	//
-	return
+	return con.Teamclient.Users()
 }
 
 func (con *Client) VersionClient() (version team.Version, err error) {
 	return con.Teamclient.VersionClient()
 }
 
-// VersionServer returns the version information of the server to which
-// the client is connected, or nil and an error if it could not retrieve it.
+// VersionServer returns the version information of the server to which the
+// client is connected, via the transport's core Team service.
 func (con *Client) VersionServer() (version team.Version, err error) {
-	// if con.Rpc == nil {
-	// 	return version, errors.New("No Sliver client RPC")
-	// }
-	//
-	// ver, err := con.Rpc.GetVersion(context.Background(), &commonpb.Empty{})
-	// if err != nil {
-	// 	return version, errors.New(status.Convert(err).Message())
-	// }
-
-	return team.Version{
-		// Major:      ver.Major,
-		// Minor:      ver.Minor,
-		// Patch:      ver.Patch,
-		// Commit:     ver.Commit,
-		// Dirty:      ver.Dirty,
-		// CompiledAt: ver.CompiledAt,
-		// OS:         ver.OS,
-		// Arch:       ver.Arch,
-	}, nil
+	return con.Teamclient.VersionServer()
 }
 
 // ConnectRun is a spf13/cobra-compliant runner function to be included
@@ -169,7 +156,7 @@ func (con *Client) ConnectRun(cmd *cobra.Command, _ []string) error {
 	// Let our teamclient connect the transport/RPC stack.
 	// Note that this uses a sync.Once to ensure we don't
 	// connect more than once.
-	if err := con.Teamclient.Connect(); err != nil {
+	if err := con.Teamclient.Connect(con.teamConnectOptions()...); err != nil {
 		return err
 	}
 
@@ -205,7 +192,7 @@ func (con *Client) ConnectComplete() (carapace.Action, error) {
 		return carapace.ActionMessage("connection error: %s", err), err
 	}
 
-	err = con.Teamclient.Connect()
+	err = con.Teamclient.Connect(con.teamConnectOptions()...)
 	if err != nil {
 		return carapace.ActionMessage("connection error: %s", err), err
 	}

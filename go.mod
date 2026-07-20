@@ -6,7 +6,6 @@ require (
 	github.com/carapace-sh/carapace-bridge v1.6.2
 	github.com/fatih/color v1.15.0
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/infobloxopen/atlas-app-toolkit/v2 v2.2.1
 	github.com/infobloxopen/protoc-gen-gorm v1.0.1
 	github.com/jedib0t/go-pretty/v6 v6.4.6
@@ -25,6 +24,7 @@ require (
 )
 
 require (
+	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/iafan/cwalk v0.0.0-20210125030640-586a8832a711 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/muesli/termenv v0.11.0 // indirect
@@ -135,3 +135,8 @@ require (
 )
 
 replace github.com/d3c3ptive/nmap => ../nmap
+
+// Develop against the local reeflective/team checkout (ahead of v0.3.2): it
+// carries the new transports/grpc packages and client.SystemConfig(). Drop this
+// once a tagged team release ships those and bump the require above.
+replace github.com/reeflective/team => ../../reeflective/team

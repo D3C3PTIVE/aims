@@ -1,0 +1,32 @@
+# aims teamserver — systemd USER service.
+#
+# Why a *user* service? On Qubes AppVMs the root filesystem is non-persistent
+# (it reverts on reboot), so a unit dropped in /etc/systemd/system would vanish.
+# A user unit lives under ~/.config/systemd/user, which is on the persistent
+# /home volume, and `loginctl enable-linger` starts it at boot without a login.
+#
+# Manual install (in the qube that should run the teamserver, e.g. `sec`):
+#   mkdir -p ~/.config/systemd/user
+#   cp aims-teamserver.service ~/.config/systemd/user/
+#   loginctl enable-linger "$USER"
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now aims-teamserver.service
+#
+# The bind host:port MUST match the config used by auto client-mode detection:
+#   aims teamserver user --system --host 127.0.0.1 --port 31337
+#
+# (The `aims teamserver systemd` subcommand renders an equivalent *system* unit;
+# this file is the user-service form used on Qubes.)
+
+[Unit]
+Description=aims teamserver daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/aims teamserver daemon --host 127.0.0.1 --port 31337
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
