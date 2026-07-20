@@ -71,6 +71,33 @@ func WithAutoSmallID() Options {
 	}
 }
 
+// HeaderSet accumulates weighted headers through a fluent Add, replacing the
+// `add := func(name string, weight int){ headers = append(...) }` closure that every domain's
+// DisplayHeaders / DisplayDetails / Completions used to re-declare. Start one with Headers().
+type HeaderSet struct {
+	options []Options
+}
+
+// Headers begins a fluent header set:
+//
+//	return display.Headers().Add("ID", 1).Add("Name", 2).Options()
+func Headers() *HeaderSet {
+	return &HeaderSet{}
+}
+
+// Add appends a header with its layout weight (1 = highest priority, shown first / on the
+// narrowest terminals) and returns the set for chaining.
+func (h *HeaderSet) Add(name string, weight int) *HeaderSet {
+	h.options = append(h.options, WithHeader(name, weight))
+	return h
+}
+
+// Options returns the accumulated header options, ready to spread into Table / Details /
+// Completions.
+func (h *HeaderSet) Options() []Options {
+	return h.options
+}
+
 // WithHeader adds a specific header for the cmd/display using these options.
 func WithHeader(name string, weight int) Options {
 	return func(opts *opts) *opts {

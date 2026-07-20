@@ -109,12 +109,6 @@ func Commands(client *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			traceroute, _ := command.Flags().GetBool("traceroute")
 
-			options := host.DisplayDetails()
-
-			if traceroute {
-				options = append(options, display.WithHeader("Route", 4))
-			}
-
 			// Request
 			res, err := client.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
 				Host: &pb.Host{},
@@ -123,13 +117,20 @@ func Commands(client *client.Client) *cobra.Command {
 					Trace: true,
 				},
 			})
-			err = aims.CheckError(err)
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
 
-			// Display
+			// Display. With no arguments, show every host; otherwise only
+			// those whose ID has one of the given (ANSI-stripped) prefixes.
+			// Each host renders through the shared Banner/Panes/Insights/Sections
+			// detail layout, identical to the credential and service info views.
 			for _, h := range res.GetHosts() {
-				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, host.DisplayFields, options...))
+				if len(args) > 0 && !aims.MatchesAnyPrefix(h.Id, args) {
+					continue
 				}
+				fmt.Println(host.Detail(h, traceroute).Render(0))
+				fmt.Println()
 			}
 
 			return nil
@@ -236,7 +237,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 			// Display
 			for _, arg := range args {
 				for _, h := range res.GetHosts() {
-					if strings.HasPrefix(h.Id, strip(arg)) {
+					if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
 						scanList = append(scanList, h)
 					}
 				}
@@ -246,9 +247,4 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 	}
 
 	return exportRunE
-}
-
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
 }

@@ -12,6 +12,21 @@ service Scans {
    rpc List(ReadScanRequest) returns (ReadScanResponse) {}
    rpc Upsert(UpsertScanRequest) returns (UpsertScanResponse) {}
    rpc Delete(DeleteScanRequest) returns (DeleteScanResponse) {}
+
+   // Run executes a scanner server-side against the given targets and streams progress,
+   // hosts, and the final stored run back as RunUpdate frames. Foreground clients consume the
+   // stream to completion; background clients (Background=true) get the JobId frame and may
+   // disconnect while the server-side job keeps running.
+   rpc Run(RunScanRequest) returns (stream RunUpdate) {}
+
+   // Jobs lists the scans currently running server-side.
+   rpc Jobs(JobsRequest) returns (JobsResponse) {}
+
+   // Attach re-subscribes to a running job's stream, yielding the same RunUpdate frames as Run.
+   rpc Attach(AttachRequest) returns (stream RunUpdate) {}
+
+   // Stop cancels a running job, killing its scanner process.
+   rpc Stop(StopRequest) returns (StopResponse) {}
 }
 
 message RunFilters {
@@ -64,5 +79,61 @@ message DeleteScanRequest{
 
 message DeleteScanResponse{
     repeated scan.Run Scans = 1;
+}
+
+// RunScanRequest asks the server to run a scanner against targets (and/or raw args).
+message RunScanRequest {
+    // Scanner is the tool to drive (e.g. "nmap"); it names a server-side Scanner adapter.
+    string Scanner = 1;
+    // Args are extra tool arguments (raw passthrough), placed before the target specs.
+    repeated string Args = 2;
+    // Targets are the scan targets (typically derived from stored hosts).
+    repeated scan.Target Targets = 3;
+    // Background detaches the job: the server returns the JobId frame and keeps running.
+    bool Background = 4;
+}
+
+// RunUpdate is one frame of a running scan's stream: exactly one of the fields is set.
+message RunUpdate {
+    oneof update {
+        // JobId identifies the server-side job; sent as the first frame.
+        string JobId = 1;
+        // Progress is a taskprogress frame from the scanner.
+        scan.TaskProgress Progress = 2;
+        // Host is a host the scan has finished, streamed as it is found.
+        host.Host Host = 3;
+        // Final is the completed, stored run; sent as the last frame of a foreground stream.
+        scan.Run Final = 4;
+        // Error carries a fatal scan error (the stream ends after it).
+        string Error = 5;
+    }
+}
+
+message JobsRequest {}
+
+// ScanJob describes one running server-side scan.
+message ScanJob {
+    string Id = 1;
+    string Scanner = 2;
+    repeated string Args = 3;
+    int64 StartedAt = 4;
+    repeated scan.Target Targets = 5;
+}
+
+message JobsResponse {
+    repeated ScanJob Jobs = 1;
+}
+
+message AttachRequest {
+    string JobId = 1;
+}
+
+message StopRequest {
+    string JobId = 1;
+}
+
+message StopResponse {
+    string JobId = 1;
+    bool Stopped = 2;
 }
 

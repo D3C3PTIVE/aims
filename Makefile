@@ -25,6 +25,12 @@ build:
 	# commented out of the surrounding go.work (plain `go build` errors).
 	GOWORK=off $(GO) build -o aims ./cmd/aims
 
+.PHONY: install
+install:
+	# Install the aims binary into $(GOBIN) (or $(GOPATH)/bin). GOWORK=off is
+	# required for the same reason as build.
+	GOWORK=off $(GO) install ./cmd/aims
+
 .PHONY: deps
 deps:
 	# Install protoc plugins

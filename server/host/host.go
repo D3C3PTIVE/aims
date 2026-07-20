@@ -30,7 +30,6 @@ import (
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/internal/db"
 	network "github.com/d3c3ptive/aims/network/pb"
-	"github.com/d3c3ptive/aims/provenance"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
 )
 
@@ -61,9 +60,7 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	query := s.db.Where(hst)
 	// Per-tool scoping: restrict to hosts contributed by a given tool ("give me only my
 	// objects") via the host_sources provenance join. Empty Source is a no-op (all hosts).
-	if tool := filts.GetSource(); tool != "" {
-		query = query.Scopes(provenance.WhereContributedBy("host_sources", "host_id", tool))
-	}
+	query = db.ScopeBySource(query, "host_sources", "host_id", filts.GetSource())
 	database := db.Preload(query, filters)
 
 	// Query
@@ -439,45 +436,12 @@ func indexSameHost(h *pb.Host, in []*pb.Host) int {
 }
 
 func findSameHost(h *pb.Host, in []*pb.Host) *pb.Host {
-	if i := indexSameHost(h, in); i >= 0 {
-		return in[i]
-	}
-	return nil
+	m, _ := db.FindMatch(in, func(e *pb.Host) bool { return host.SameHost(e, h) })
+	return m
 }
 
 func (s *server) Delete(ctx context.Context, req *hosts.DeleteHostRequest) (*hosts.DeleteHostResponse, error) {
-	// Convert to ORM model
-	var hostsORM []*pb.HostORM
-
-	for _, h := range req.GetHosts() {
-		horm, _ := h.ToORM(ctx)
-		hostsORM = append(hostsORM, &horm)
-	}
-
-	// Filter hosts to add according to AIMS criteria first.
-	dbHosts := []*pb.HostORM{}
-	hostFilters := WithPreloads(&hosts.HostFilters{
-		Trace: true,
-		Ports: true,
-	})
-	database := db.Preload(s.db, hostFilters)
-	database.Find(&dbHosts)
-
-	// // Query
-	// hosts := []*host.HostORM{}
-	// err = s.db.Where(h).First(&hosts).Error
-	//
-	// hostspb := []*h.Host{}
-	// for _, host := range hosts {
-	// 	pb, _ := host.ToPB(ctx)
-	// 	hostspb = append(hostspb, &pb)
-	// }
-	//
-	// // Response
-	// res := &h.ReadHostResponse{Hosts: hostspb}
-	//
-	// return res, err
-	return nil, status.Errorf(codes.Unimplemented, "method CreateHost not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteHost not implemented")
 }
 
 // WithPreloads returns a map DB clauses, to dynamically load child struct fields.

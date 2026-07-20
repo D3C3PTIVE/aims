@@ -21,7 +21,6 @@ package c2
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
@@ -32,7 +31,6 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
-	"github.com/d3c3ptive/aims/scan"
 )
 
 // ChannelsCommands returns all agent management commands.
@@ -61,8 +59,8 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 				return nil
 			}
 
-			// Generate the table of hosts.
-			table := display.Table(res.GetChannels(), nil, scan.DisplayHeaders()...)
+			// Generate the table of channels.
+			table := display.Table(res.GetChannels(), core.DisplayFieldsChannel, core.DisplayHeadersChannel()...)
 			fmt.Println(table.Render())
 
 			return nil
@@ -77,7 +75,7 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 		RunE: func(command *cobra.Command, args []string) error {
 			tasks, _ := command.Flags().GetBool("tasks")
 
-			options := scan.DisplayDetails()
+			options := core.DisplayDetailsChannel()
 
 			if tasks {
 				options = append(options, display.WithHeader("Tasks Details", 3))
@@ -88,13 +86,16 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 				Channel: &pb.Channel{},
 				Filters: &c2.ChannelFilters{},
 			})
-			err = aims.CheckError(err)
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
 
-			// Display
+			// Display: with no args show every channel, else those whose ID has a given prefix.
 			for _, h := range res.GetChannels() {
-				if strings.HasPrefix(h.Id, strip(args[0])) {
-					fmt.Println(display.Details(h, nil, options...))
+				if len(args) > 0 && !aims.MatchesAnyPrefix(h.Id, args) {
+					continue
 				}
+				fmt.Println(display.Details(h, core.DisplayFieldsChannel, options...))
 			}
 
 			return nil
@@ -111,7 +112,7 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 
 // CompleteChannelByID returns channel completions with their smallened IDs as keys.
 func CompleteChannelByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	return aims.CacheCompletion(client, "channels:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -124,11 +125,11 @@ func CompleteChannelByID(client *client.Client) carapace.Action {
 			return carapace.ActionMessage("Error: %s", err)
 		}
 
-		options := core.Completions()
+		options := core.CompletionsChannel()
 		options = append(options, display.WithCandidateValue("ID", ""))
 
 		results := display.Completions(res.Channels, core.DisplayFieldsChannel, options...)
 
 		return carapace.ActionValuesDescribed(results...).Tag("channels ")
-	})
+	}))
 }

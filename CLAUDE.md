@@ -7,14 +7,11 @@
 > [`SCAN.md`](./SCAN.md) — scan model & scanner-plug substrate ·
 > [`ROADMAP.md`](./ROADMAP.md) — re-entry plan.
 >
-> ✅ **Build status (updated 2026-07-19): the AIMS core now compiles.** The `maltego`/`gondor`
-> blocker was isolated behind a `maltego` build tag, and the heavy Tailscale transport (which
-> dragged in gvisor and broke on Go 1.26) behind a `tailscale` build tag. Default
-> `GOWORK=off go build ./...` now compiles every domain, the generated `pb` layer, all
-> per-domain gRPC servers, the `client`, and all CLI packages. **The one remaining non-building
-> package is `server/transport/` (a `reeflective/team` v0.3.2 API migration — slog loggers +
-> `WithHandler`/`Handler` + changed config/auth signatures), and `cmd/aims` transitively.**
-> See STATE.md → Build status for the current boundary.
+> ✅ **Build status: the whole tree builds and the `aims` binary runs.** `GOWORK=off go build ./...`
+> compiles every domain, the generated `pb` layer, all per-domain gRPC servers, `server/transport`,
+> the `client`, and all CLI packages including `cmd/aims`. The `maltego`/`gondor` blocker is gated
+> behind a `maltego` build tag and the heavy Tailscale transport (gvisor, breaks on Go 1.26) behind
+> a `tailscale` tag; both are opt-in. See STATE.md → Build status for how it was unblocked.
 
 ## What this project is
 
@@ -171,12 +168,12 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 
 | Service | Read/List | Create | Update/Delete/Upsert | Notes |
 |---------|:---------:|:------:|:--------------------:|-------|
-| host (Hosts) | ✅ | ✅ (dedup) | Upsert ✅ | reference impl. Ingest now wired to the shared `host.MergeHost`/`SameHost` fold: Create is additive+idempotent (skip-if-identical), Upsert merges by field-class. Delete still stubbed; deep in-place child enrichment is a follow-up (`server/host/host.go`) |
+| host (Hosts) | ✅ | ✅ (dedup) | Upsert ✅ | reference impl. Ingest wired to the shared `host.MergeHost`/`SameHost` fold: Create is additive+idempotent (skip-if-identical), Upsert merges by field-class. Deep in-place child enrichment is DONE (`saveMergedHost`/`saveMergedPorts` write back a new NSE script / filled `Service.Product` / new reason inside an already-persisted port). Delete still stubbed (`server/host/host.go`) |
 | host Users | ❌ | ❌ | ❌ | all methods stubbed |
 | network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; server CRUD still stubbed |
-| credential Credentials | ✅ | ✅ | Upsert ✅ | full slice done (merge, display, completions, CLI) |
+| credential Credentials | ✅ | ✅ | Upsert ✅ · Delete ✅ | full slice done (merge, display, completions, CLI); Delete resolves by identity when no ID given — the worked Delete example |
 | credential Logins | ❌ | ❌ | ❌ | all methods stubbed |
-| scan Scans | ✅ | ✅ | ❌ stub | in-memory ingest fold done; CLI slice in progress |
+| scan Scans | ✅ | ✅ | Upsert/Delete/List ✅ | Full CRUD. DB-level host fold (via `host.IngestHosts` + `run_hosts` join, cross-run host unification). Delete clears run_hosts so shared hosts survive; Upsert is idempotent insert-or-return-existing. CLI: `list`/`show` (new `Detail` renderer, `runState` live axis) + `rm` (running-scan guard via `scan.IsRunning`) |
 | c2 Agents/Channels | ✅ | ✅ | ❌ stub | see type-name note below |
 
 ### Known rough edges / gotchas
@@ -203,16 +200,22 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 
 ### Suggested re-entry points if resuming
 
-1. **Deep in-place child enrichment for `server/host` ingest** — Upsert now merges via the shared
-   fold and persists *new* children additively (`server/host/host.go`, tested in `host_test.go`),
-   but enrichment landing *inside* an already-persisted child (a new NSE script on a known port,
-   a filled `Service.Product`) is not yet written back. See the `saveMergedHost` note + [[aims-gorm-pb-orm-fk-loss]].
-2. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services (credential
-   Upsert and now host Upsert are the worked examples; host Delete is still a stub).
-3. Optionally rename the c2 Agents server `type server`→`agentServer` for symmetry with
+1. Finish the **Update/Delete/Upsert** gRPC methods across the still-stubbed services. Worked
+   examples to copy: credential Create/Upsert/**Delete** (full CRUD), **scan Create/Read/List/Upsert/
+   Delete** (full CRUD as of this session), and host Create/Upsert. Still stubs: host Delete
+   (scaffolding present, ends in Unimplemented at `server/host/host.go:480`), network Create/Upsert/
+   Delete, and both c2 Upsert/Delete. The DB-level ingest fold — including deep in-place child
+   enrichment (`saveMergedHost`/`saveMergedPorts`) — is DONE and is the shared primitive these
+   should reuse. For scan Delete, note the run_hosts-shared-host invariant (unlink, don't delete).
+2. Wire the remaining CLI **`rm`** handlers to their `Delete` RPCs (`scan rm` is done — reference for
+   the ID-prefix + running-scan-guard pattern; `hosts rm` `RunE` is still a stub).
+3. The scanner-plug substrate (SCAN.md Part C) — all genuinely absent: live/streaming scans
+   (`Scans` is unary-only, `scan run nmap` blocks to completion), the `Ingestor`/`Scanner` plug
+   interfaces, the stored-`Host`/`Service` → `Target` bridge, and run-to-run diff.
+4. Optionally rename the c2 Agents server `type server`→`agentServer` for symmetry with
    `channelServer` (filenames already match contents; this is cosmetic, not a blocker).
-4. Complete the **Users/Logins** services (both fully stubbed).
-5. Decide the **`maxlandon/gondor`** dependency's fate as part of the org migration.
+5. Complete the **Users/Logins** services (both fully stubbed).
+6. Decide the **`maxlandon/gondor`** dependency's fate as part of the org migration.
 
 When extending: prefer changing the **`.proto`** and regenerating (`make gen`) over editing
 generated `*.pb.go`/`*.pb.gorm.go` by hand; put Go-idiomatic behavior in the domain root

@@ -39,62 +39,51 @@ var Reveal bool
 //
 
 // DisplayHeaders returns the weighted table headers for a list of credentials.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	add("ID", 1)
-	add("Public", 1)
-	add("Private", 1)
-	add("Realm", 1)
-
-	add("Type", 2)
-	add("Logins", 2)
-	add("Origin", 2)
-
-	add("Updated", 3)
-
-	return headers
+func DisplayHeaders() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Public", 1).
+		Add("Private", 1).
+		Add("Realm", 1).
+		Add("Type", 2).
+		Add("Logins", 2).
+		Add("Origin", 2).
+		Add("Updated", 3).
+		Options()
 }
 
 // DisplayDetails returns the weighted headers for a single-credential `info` view. Weight groups
 // become blank-line-separated sections (Identity / Provenance / Classification / Timestamps).
-func DisplayDetails() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	// Identity
-	add("Public", 1)
-	add("Private", 1)
-	add("Realm", 1)
-
-	// Provenance
-	add("Origin", 2)
-	add("Session", 2)
-	add("Discovered", 2)
-
-	// Classification
-	add("Type", 3)
-
-	// Timestamps
-	add("Updated", 4)
-
-	return headers
+func DisplayDetails() []display.Options {
+	return display.Headers().
+		// Identity
+		Add("Public", 1).
+		Add("Private", 1).
+		Add("Realm", 1).
+		// Provenance
+		Add("Origin", 2).
+		Add("Session", 2).
+		Add("Discovered", 2).
+		// Classification
+		Add("Type", 3).
+		// Timestamps
+		Add("Updated", 4).
+		Options()
 }
 
 // Completions returns the columns combined into completion candidates and their descriptions.
 // Whichever column is chosen as the candidate (via WithCandidateValue) is inserted; the remaining
 // columns form the aligned description shown next to it — so a user completing an opaque ID still
 // sees who/what/where it is.
-func Completions() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	add("ID", 1)
-	add("Public", 1)
-	add("Private", 2)
-	add("Type", 2)
-	add("Realm", 3)
-	add("Origin", 3)
-
-	return headers
+func Completions() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Public", 1).
+		Add("Private", 2).
+		Add("Type", 2).
+		Add("Realm", 3).
+		Add("Origin", 3).
+		Options()
 }
 
 // DisplayFields maps column names to per-credential value generators. This is the single source

@@ -21,73 +21,49 @@
 
 ## Priority-ordered phases
 
-### Phase 0 — Unblock the build ⛔ (do this first; ~half a day)
+### Phase 0 — Unblock the build ✅ DONE
 
-The tree does not compile: `github.com/maxlandon/gondor/maltego` is broken at the pinned
-version, and every domain root package imports it (see STATE.md → Build status).
+The tree builds and the `aims` binary runs. gondor/maltego was isolated behind `//go:build
+maltego` (option A) and the Tailscale transport behind `//go:build tailscale`; the
+`reeflective/team` v0.3.2 migration and the ~1-year dependency drift it masked are resolved.
+`GOWORK=off go build ./...` is green; `make build`/`make install` recipes exist. (Deferred: a
+fixed `d3c3ptive/gondor` fork to make Maltego always-on — folds into the org migration below.)
 
-**Key fact that makes this cheap:** `AsEntity()` / `maltego.*` is **defined but never called**
-anywhere in `server/`, `client/`, `cmd/`, or `db/`. The Maltego integration is currently dead
-weight, so we can decouple it without losing any working functionality. Options, cheapest first:
+### Phase 1 — Correctness & hygiene sweep ✅ DONE
 
-- **(A) Isolate behind a build tag (recommended).** Move every `AsEntity()` method into
-  `*_maltego.go` files guarded by `//go:build maltego`. Default builds drop the gondor import
-  entirely and compile; the Maltego path is opt-in and can be repaired later. Lowest risk,
-  reversible, preserves intent.
-- **(B) Fork/vendor & fix gondor.** Point the module at a fixed fork (e.g. `d3c3ptive/gondor`)
-  via `replace` and repair the compile errors (`undefined: base`, `getDirectory`,
-  `configuration.Entity`, `getNamePlural`). More work, but keeps Maltego always-on. Fits the
-  org migration (gondor is also `maxlandon`-namespaced).
-- **(C) Delete the Maltego integration** outright (remove imports + `AsEntity`). Simplest, but
-  throws away a stated secondary goal of the project. Only if Maltego is truly out of scope.
+Debug leftovers removed, the crossed `cmd/display/defaults.go` `init()` corrected, and the stray
+copy-pasted `ReadHost`/`ListHost`/`UpsertHost` stubs pruned from `server/network/service.go`.
+Only residual: the c2 Agents server is still the generic `type server` vs Channels' `channelServer`
+— a cosmetic `server`→`agentServer` rename, not a blocker.
 
-**Acceptance:** `GOWORK=off go build ./...` succeeds (allow first-run for the large
-tailscale/gvisor download). Add a CI or a Makefile `build`/`test` target to keep it green.
+### Phase 2 — Complete the gRPC CRUD (the core functional gap; in progress)
 
-> Sub-note: the full build pulls tailscale + gvisor via `reeflective/team`. If that transport
-> weight is unwanted long-term, consider whether the teamserver transport should be optional.
+**Done:** scan (**full CRUD**) and credential (**full CRUD**); host (Create/Read/Upsert). **Still
+stubbed:** host Delete; network Create/Upsert/Delete; c2 Upsert/Delete;
+and the entirely-stubbed Users and Logins services. The RPC protos define **Create / Read /
+Upsert / Delete** (List folds into Read via `*Filters`; Update via Upsert).
 
-### Phase 1 — Correctness & hygiene sweep (~half a day, right after it compiles)
+Use **`server/credential/credential.go` (full CRUD)** and **`server/host/host.go`** as templates.
+The pattern is: PB→ORM (`ToORM`), build preload clauses (`WithPreloads`/`db.PreloadAll`),
+query/write via GORM, ORM→PB (`db.ToPBs`).
 
-Cheap fixes that remove confusion before building on top:
-
-- **Untangle the c2 file/type swap.** `server/c2/channel.go` implements the Agent server and
-  `server/c2/agent.go` the Channel server (`type channelServer`). Rename files/types to match
-  contents and fix the mislabeled `Unimplemented` messages ("UpsertChannel" in the agent file,
-  etc.). Do this *before* extending c2.
-- **Remove debug leftovers:** `println(c.Type)` in `host/host.go` (`Purpose`); `fmt.Println(val)`
-  and the empty `if head == "Purpose" {}` blocks in `cmd/display/details.go`.
-- **Fix `cmd/display/defaults.go` `init()`:** the `stdoutTerm/stdinTerm/stderrTerm` assignments
-  are crossed (stdout←os.Stderr, stderr←os.Stdin, stdinTerm never set). Table sizing reads
-  `stderrTerm.Fd()` — verify it points at a real terminal.
-- **Prune the stray `network` service stubs** copied from host (`ReadHost`/`ListHost`/
-  `UpsertHost` in `server/network/service.go`) — dead, misleading methods.
-
-### Phase 2 — Complete the gRPC CRUD (the core functional gap; ~1 week)
-
-Read/Create exist for exercised domains; **Upsert and Delete are stubbed almost everywhere,
-and two whole services (Users, Logins) are fully stubbed.** The RPC protos define
-**Create / Read / Upsert / Delete** (List folds into Read via `*Filters`; Update via Upsert).
-
-Use **`server/host/host.go` as the template** for every method. The pattern is:
-PB→ORM (`ToORM`), build preload clauses (`WithPreloads`), query/write via GORM, ORM→PB (`ToPB`).
-
-Task list (each = copy the host pattern + wire dedup/preloads):
+Remaining task list:
 
 | Domain/service | Implement | Reference / notes |
 |---|---|---|
-| host Hosts | `Upsert`, `Delete` | finish the commented-out bodies already sketched in `host.go` |
+| host Hosts | `Delete` | Upsert done (additive+idempotent fold + deep child enrichment `saveMergedHost`/`saveMergedPorts`); Delete has scaffolding ending in Unimplemented (`host.go:480`) |
 | host **Users** | all: `Create/Read/Upsert/Delete` | fully stubbed; mirror Hosts |
-| network Services | `Create`, `Upsert`, `Delete` | Read/List done; reuse `identical.go` for dedup |
-| credential Credentials | `Create`, `Upsert`, `Delete` | Read/List done |
+| network Services | `Create`, `Upsert`, `Delete` | Read/List done; reuse the shared `host` fold for dedup |
 | credential **Logins** | all | fully stubbed |
-| scan Scans | `Upsert`, `Delete` | Create/Read done |
-| c2 Agents/Channels | `Upsert`, `Delete` | after Phase 1 rename |
+| scan Scans | ✅ **done** | Full CRUD. Create folds hosts via `host.IngestHosts` + `run_hosts` join (cross-run unification); Delete unlinks the shared join (hosts survive); Upsert idempotent; List delegates to Read. CLI `scan rm` with a running-scan guard. |
+| c2 Agents/Channels | `Upsert`, `Delete` | mirror credential/host |
 
 Cross-cutting for this phase:
-- **Standardize the dedup story.** `internal/db.FilterNew` + per-domain `AreXIdentical`
-  (`*/identical.go`) already exist for hosts/scans/services — extend to credentials/users so
-  re-imports don't duplicate.
+- **Standardize the dedup story.** ✅ Largely done for hosts/scans: the canonical primitive is now
+  the shared `host.MergeHost`/`host.SameHost` fold (`host/merge.go`) driving `host.IngestHosts`
+  (DB-level, additive+idempotent), which replaced the old `FilterNew` drop-not-merge path on the
+  host and scan servers. Remaining: extend the same fold to credentials/users so re-imports merge
+  rather than duplicate.
 - **Decide List vs Read.** Some server types expose a `List` method not in the proto. Either
   add `List` RPCs to the protos and regenerate, or drop the extra methods for consistency.
 - **Delete semantics.** Confirm GORM cascade behavior (README claims sane cascade defaults);
@@ -141,17 +117,23 @@ The command tree, flags, and completions exist, but several handlers are no-ops.
   table/completion rendering at high row counts. Seed a big sqlite DB fixture and track
   latency/allocs so regressions in "feels instant" are caught.
 - **Refactoring & cleanup sweep.** Do a repo-wide pass for reuse/simplification/dead-code:
-  the known crossed `server/c2` file↔type naming, stubbed handlers returning `nil`, the empty
-  `credential/core.go` scope helpers, the dead `Client.conn` field and unchecked `client.New`
-  error in `cmd/aims/root.go`, duplicated PB↔ORM boilerplate across `server/<domain>`, and the
-  commented-out blocks left in `server/host/host.go` `Delete`. Fold shared shapes into helpers
-  where the domains have diverged only cosmetically.
+  the cosmetic `server/c2` Agents `type server`→`agentServer` rename, stubbed handlers returning
+  `nil`, the empty `credential/core.go` scope helpers, the dead `Client.conn` field and unchecked
+  `client.New` error in `cmd/aims/root.go`, and the commented-out blocks left in
+  `server/host/host.go` `Delete`. (Some PB↔ORM boilerplate has since been folded into
+  `db.ToPBs`/`db.PreloadAll` and `cmd/display`'s `Headers()` builder.) Fold remaining shared
+  shapes into helpers where the domains have diverged only cosmetically.
 - **Doc drift.** Update `README.md`: no `vendor/` (module cache), generated code sits next to
   each `.proto` (not `proto/gen/`), codegen files are at repo root. Keep `CLAUDE.md`/`STATE.md`
   current as the source of truth.
 
-## Suggested first sitting (if you only have a few hours)
+## Suggested next sitting (if you only have a few hours)
 
-1. Phase 0 option (A): build-tag the Maltego methods → get `go build ./...` green.
-2. Phase 1: c2 rename + delete the debug prints + fix the `init()` swap.
-3. Commit. You now have a compiling, coherent base to grow from — everything else is additive.
+Phases 0–1 are done; the base compiles and runs. Highest-leverage remaining slices, each
+copyable from the credential/host CRUD templates:
+
+1. **host `Delete`** — finish the scaffolded body (`server/host/host.go:480`), then wire the
+   `hosts rm` CLI `RunE` (Phase 3) to it. Smallest end-to-end Delete slice.
+2. **scan `Delete`/`List`** + a `scan rm` CLI command — Delete is the natural pair to the working
+   ingest.
+3. Then widen: network mutations, c2 Upsert/Delete, and the fully-stubbed Users/Logins services.

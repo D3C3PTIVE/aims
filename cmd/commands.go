@@ -20,6 +20,7 @@ package cmd
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/d3c3ptive/aims/client"
+	"github.com/d3c3ptive/aims/cmd/display"
 )
 
 // BindGroup is a helper used to bind a list of root commands to a given menu, for a given "command help group".
@@ -82,6 +84,23 @@ func CompleteFlags(cmd *cobra.Command, bind func(comp *carapace.ActionMap)) {
 	bind(&comps)
 
 	carapace.Gen(cmd).FlagCompletion(comps)
+}
+
+// StripANSI removes all ANSI escaped color sequences from a string. It is the shared
+// spelling of the per-package helper that every CLI subtree used to redefine identically.
+func StripANSI(str string) string {
+	return display.StripANSI(str)
+}
+
+// MatchesAnyPrefix reports whether id has any of the (ANSI-stripped) prefixes. With no
+// prefixes it returns false; callers that want "no filter = match all" test len(args) first.
+func MatchesAnyPrefix(id string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(id, StripANSI(p)) {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckError tries to unwrap an error, assuming its a gRPC error.

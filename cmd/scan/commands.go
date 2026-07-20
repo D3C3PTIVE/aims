@@ -32,6 +32,7 @@ import (
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/scan"
+	"github.com/d3c3ptive/aims/scan/ingest"
 	"github.com/d3c3ptive/aims/scan/nmap"
 	pb "github.com/d3c3ptive/aims/scan/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
@@ -47,7 +48,12 @@ func Commands(con *client.Client) *cobra.Command {
 
 	scanCmd.AddCommand(listCommand(con))
 	scanCmd.AddCommand(showCommand(con))
+	scanCmd.AddCommand(rmCommand(con))
 	scanCmd.AddCommand(runCommand(con))
+	scanCmd.AddCommand(diffCommand(con))
+	scanCmd.AddCommand(jobsCommand(con))
+	scanCmd.AddCommand(attachCommand(con))
+	scanCmd.AddCommand(stopCommand(con))
 
 	// Import
 	importCmd := export.ImportCommand(scanCmd, con, importCommand(con))
@@ -55,6 +61,11 @@ func Commands(con *client.Client) *cobra.Command {
 
 	aims.BindFlags(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.BoolP("nmap", "N", false, "Hint (or force) parsing the file(s) as nmap scans (default nmap format used is xml)")
+		f.String("scanner", "", "Parse the file(s) with a named ingestor (e.g. zgrab2); overrides format sniffing")
+	})
+
+	carapace.Gen(importCmd).FlagCompletion(carapace.ActionMap{
+		"scanner": carapace.ActionValues(ingest.Names()...).Usage("scanner ingestor"),
 	})
 
 	carapace.Gen(importCmd).PositionalAnyCompletion(carapace.ActionFiles().Usage("scan files to import"))
@@ -66,9 +77,11 @@ func Commands(con *client.Client) *cobra.Command {
 	return scanCmd
 }
 
-// CompleteByID returns hosts completions with their smallened IDs as keys.
+// CompleteByID returns scan completions with their smallened IDs as keys. The live-DB read is
+// wrapped in CacheCompletion (once, filter many); the per-invocation Filter(c.Args...) that drops
+// already-selected IDs is applied OUTSIDE the cache, since the cache key is static.
 func CompleteByID(client *client.Client) carapace.Action {
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+	cached := aims.CacheCompletion(client, "scans:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if msg, err := client.ConnectComplete(); err != nil {
 			return msg
 		}
@@ -87,7 +100,11 @@ func CompleteByID(client *client.Client) carapace.Action {
 
 		results := display.Completions(res.Scans, scan.DisplayFields, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("scans").Filter(c.Args...)
+		return carapace.ActionValuesDescribed(results...).Tag("scans")
+	}))
+
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		return cached.Filter(c.Args...)
 	})
 }
 
@@ -126,6 +143,75 @@ func listCommand(con *client.Client) *cobra.Command {
 	return listCmd
 }
 
+func rmCommand(con *client.Client) *cobra.Command {
+	rmCmd := &cobra.Command{
+		Use:   "rm",
+		Short: "Remove one or more scans from the database (by ID prefix)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			force, _ := command.Flags().GetBool("force")
+
+			// Read every scan through the teamclient (never the DB directly), then resolve each
+			// ID-prefix argument against them — the same prefix match `show` uses. Only the Id is
+			// needed to delete, so hosts are left unpreloaded (a light Delete payload); the
+			// unconditional Begin/Progress/Stats preloads are enough for the running-scan guard.
+			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+				Scan:    &pb.Run{},
+				Filters: &scans.RunFilters{},
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			// A mid-flight run must not be dropped out from under a live scan: deleting its row
+			// would not stop the scanner (there is no cancellation path yet) and a later progress
+			// write could recreate it. Skip running scans with a warning unless --force. Today no
+			// running run is ever persisted, so this only bites once streaming lands (SCAN.md C).
+			var matched []*pb.Run
+			var skipped int
+			for _, r := range res.GetScans() {
+				for _, arg := range args {
+					if !strings.HasPrefix(r.GetId(), aims.StripANSI(arg)) {
+						continue
+					}
+					if scan.IsRunning(r) && !force {
+						fmt.Printf("Skipping running scan %s (use --force to remove it anyway)\n",
+							display.FormatSmallID(r.GetId()))
+						skipped++
+					} else {
+						matched = append(matched, r)
+					}
+					break
+				}
+			}
+			if len(matched) == 0 {
+				if skipped > 0 {
+					return fmt.Errorf("no scan removed (%d running scan(s) skipped; use --force)", skipped)
+				}
+				return fmt.Errorf("no matching scan")
+			}
+
+			del, err := con.Scans.Delete(command.Context(), &scans.DeleteScanRequest{
+				Scans: matched,
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			fmt.Printf("Removed %d scan(s).\n", len(del.GetScans()))
+			return nil
+		},
+	}
+
+	aims.BindFlags(rmCmd.Name(), false, rmCmd, func(f *pflag.FlagSet) {
+		f.BoolP("force", "f", false, "Remove even running scans (does not stop the scanner)")
+	})
+
+	carapace.Gen(rmCmd).PositionalAnyCompletion(CompleteByID(con))
+
+	return rmCmd
+}
+
 func showCommand(con *client.Client) *cobra.Command {
 	showCmd := &cobra.Command{
 		Use:   "show",
@@ -157,7 +243,7 @@ func showCommand(con *client.Client) *cobra.Command {
 			for _, r := range all {
 				matched := false
 				for _, arg := range args {
-					if strings.HasPrefix(r.Id, strip(arg)) {
+					if strings.HasPrefix(r.Id, aims.StripANSI(arg)) {
 						matched = true
 						break
 					}
@@ -231,6 +317,23 @@ func importCommand(con *client.Client) func(cmd *cobra.Command, arg string, data
 
 func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, error) {
 	scanList := make([]*pb.Run, 0)
+
+	// If a named ingestor was requested, fold the file through the scanner substrate
+	// (SCAN.md Part C): any registered tool's native output — nmap XML, zgrab2 JSON, ... —
+	// becomes a scan.Run that Scans.Create dedups/merges into the same objects. This takes
+	// precedence over format sniffing and the --nmap hint.
+	if scanner, _ := command.Flags().GetString("scanner"); scanner != "" {
+		run, err := ingest.Ingest(scanner, data)
+		if err != nil {
+			return scanList, err
+		}
+		if run != nil {
+			scanList = append(scanList, run)
+			fmt.Printf("Importing 1 %s scan from %s\n", scanner, arg)
+		}
+		return scanList, nil
+	}
+
 	// If forced to parse an NMAP XML file.
 	if asNmap, _ := command.Flags().GetBool("nmap"); asNmap {
 		nmapScans, err := importNmap(data, arg)
@@ -299,7 +402,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 			// Display
 			for _, arg := range args {
 				for _, h := range res.GetScans() {
-					if strings.HasPrefix(h.Id, strip(arg)) {
+					if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
 						scanList = append(scanList, h)
 					}
 				}
@@ -309,9 +412,4 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 	}
 
 	return exportRunE
-}
-
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
 }

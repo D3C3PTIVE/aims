@@ -184,6 +184,13 @@ func stateOf(r *scan.Run) runState {
 	return stateCreated
 }
 
+// IsRunning reports whether the run appears to be mid-flight — task activity (Begin/Progress) with
+// no terminal Finished stats. Today no running run is ever persisted (`scan run` blocks to
+// completion before storing), so this is always false for stored runs; it exists so destructive
+// operations can refuse an in-flight run once live/streaming scans land (SCAN.md Part C), rather
+// than silently dropping a partial record while the scanner keeps going.
+func IsRunning(r *scan.Run) bool { return stateOf(r) == stateRunning }
+
 // runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
 func runPercent(r *scan.Run) float32 {
 	var max float32
@@ -219,57 +226,49 @@ func stateToken(r *scan.Run) string {
 // DisplayHeaders returns all weighted table headers for a table of scans. Weight-1 columns are
 // the always-on signal (identity, scanner, live status, host outcome, recency); heavier columns
 // shed first on narrow terminals.
-func DisplayHeaders() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	add("ID", 1)
-	add("Scanner", 1)
-	add("Status", 1)
-	add("Hosts", 1)
-	add("When", 1)
-
-	add("Name", 2)
-	add("Targets", 2)
-	add("Args", 2)
-
-	add("Info", 3)
-	add("Tasks", 3)
-
-	return headers
+func DisplayHeaders() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Scanner", 1).
+		Add("Status", 1).
+		Add("Hosts", 1).
+		Add("When", 1).
+		Add("Name", 2).
+		Add("Targets", 2).
+		Add("Args", 2).
+		Add("Info", 3).
+		Add("Tasks", 3).
+		Options()
 }
 
 // DisplayDetails is retained only for the c2 agent/channel `show` placeholders, which reuse this
 // weighted header set against their own DisplayFields map. Scan's own `show` uses the richer
 // Detail renderer (banner + panes + insights + sections); prefer that. Deprecated: do not build on
 // this for the scan domain.
-func DisplayDetails() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	add("ID", 1)
-	add("Scanner", 1)
-	add("Name", 1)
-	add("Status", 1)
-	add("Info", 1)
-	add("Hosts", 1)
-	add("Tasks", 1)
-	add("Targets", 1)
-	add("Args", 1)
-
-	return headers
+func DisplayDetails() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Scanner", 1).
+		Add("Name", 1).
+		Add("Status", 1).
+		Add("Info", 1).
+		Add("Hosts", 1).
+		Add("Tasks", 1).
+		Add("Targets", 1).
+		Add("Args", 1).
+		Options()
 }
 
 // Completions returns the columns combined into completion candidates and their descriptions.
-func Completions() (headers []display.Options) {
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-
-	add("ID", 1)
-	add("Scanner", 1)
-	add("Status", 1)
-	add("Name", 2)
-	add("Info", 2)
-	add("Args", 3)
-
-	return headers
+func Completions() []display.Options {
+	return display.Headers().
+		Add("ID", 1).
+		Add("Scanner", 1).
+		Add("Status", 1).
+		Add("Name", 2).
+		Add("Info", 2).
+		Add("Args", 3).
+		Options()
 }
 
 // DisplayFields maps column names to per-run value generators — the single source of truth feeding
@@ -770,12 +769,11 @@ func getTasks(r *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask)
 }
 
 func tasksHeaders() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-	add("Time", 1)
-	add("Name", 1)
-	add("Info", 1)
-	return headers
+	return display.Headers().
+		Add("Time", 1).
+		Add("Name", 1).
+		Add("Info", 1).
+		Options()
 }
 
 var tasksFields = map[string]func(h *scan.ScanTask) string{
@@ -787,12 +785,11 @@ var tasksFields = map[string]func(h *scan.ScanTask) string{
 }
 
 func tasksProgressHeaders() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) { headers = append(headers, display.WithHeader(n, w)) }
-	add("Time", 1)
-	add("Name", 1)
-	add("Percent", 1)
-	return headers
+	return display.Headers().
+		Add("Time", 1).
+		Add("Name", 1).
+		Add("Percent", 1).
+		Options()
 }
 
 var tasksProgressFields = map[string]func(h *scan.TaskProgress) string{

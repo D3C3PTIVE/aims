@@ -39,59 +39,43 @@ type Channel c2.Channel
 //
 
 // DisplayHeaders returns all weighted table headers for a table of.Channels.
-func DisplayHeadersChannel() (headers []display.Options) {
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("Order", 1)
-	add("ID", 1)
-	add("Connection", 1)
-	add("Try/Fails", 1)
-	add("Beaconing", 1)
-	add("Last/Next Check-in", 1)
-	add("Proxy", 1)
-
-	return headers
+func DisplayHeadersChannel() []display.Options {
+	return display.Headers().
+		Add("Order", 1).
+		Add("ID", 1).
+		Add("Connection", 1).
+		Add("Try/Fails", 1).
+		Add("Beaconing", 1).
+		Add("Last/Next Check-in", 1).
+		Add("Proxy", 1).
+		Options()
 }
 
 // DetailHeaders returns the headers for a detailed.Channel view.
 func DisplayDetailsChannel() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	// Core
-	add("Order", 1)
-	add("ID", 1)
-	add("Connection", 1)
-	add("Protocol", 1)
-
-	// Health & cadence
-	add("Try/Fails", 2)
-	add("Beaconing", 2)
-	add("Last/Next Check-in", 2)
-
-	// Routing
-	add("Proxy", 3)
-
-	return headers
+	return display.Headers().
+		// Core
+		Add("Order", 1).
+		Add("ID", 1).
+		Add("Connection", 1).
+		Add("Protocol", 1).
+		// Health & cadence
+		Add("Try/Fails", 2).
+		Add("Beaconing", 2).
+		Add("Last/Next Check-in", 2).
+		// Routing
+		Add("Proxy", 3).
+		Options()
 }
 
 // Completions returns some columns to be combined into
 // completion candidates and/or their descriptions.
 func CompletionsChannel() []display.Options {
-	var headers []display.Options
-	add := func(n string, w int) {
-		headers = append(headers, display.WithHeader(n, w))
-	}
-
-	add("ID", 1)
-	add("Connection", 1)
-	add("Protocol", 1)
-
-	return headers
+	return display.Headers().
+		Add("ID", 1).
+		Add("Connection", 1).
+		Add("Protocol", 1).
+		Options()
 }
 
 // Fields maps field names to their value generators.

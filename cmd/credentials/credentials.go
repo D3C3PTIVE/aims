@@ -270,11 +270,8 @@ func readAll(con *client.Client, command *cobra.Command) ([]*credential.Core, er
 // filterByIDPrefix returns credentials whose (short) ID starts with any of the given prefixes.
 func filterByIDPrefix(all []*credential.Core, prefixes []string) (matched []*credential.Core) {
 	for _, c := range all {
-		for _, p := range prefixes {
-			if strings.HasPrefix(c.Id, p) {
-				matched = append(matched, c)
-				break
-			}
+		if aims.MatchesAnyPrefix(c.Id, prefixes) {
+			matched = append(matched, c)
 		}
 	}
 	return matched

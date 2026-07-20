@@ -20,11 +20,12 @@ package scan
 
 import (
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/gofrs/uuid"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	hostrpcpb "github.com/d3c3ptive/aims/host/pb/rpc"
@@ -39,11 +40,20 @@ import (
 type server struct {
 	db *gorm.DB
 	*scanrpcpb.UnimplementedScansServer
+
+	// jobs holds the scans currently (and recently) running server-side, so a foreground scan
+	// survives the operator detaching and other operators can list/attach/stop it. See run.go.
+	jobsMu sync.Mutex
+	jobs   map[string]*scanJob
 }
 
 // New returns a new database scan server, from a given db.
 func New(db *gorm.DB) *server {
-	return &server{db: db, UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{}}
+	return &server{
+		db:                       db,
+		UnimplementedScansServer: &scanrpcpb.UnimplementedScansServer{},
+		jobs:                     make(map[string]*scanJob),
+	}
 }
 
 // Create stores one or more new scan runs, unifying the hosts they observed with the shared host
@@ -125,8 +135,13 @@ func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, 
 		// makes Create write only the run_hosts join entries (the host records are left as the
 		// already-persisted shared rows), and the join insert is OnConflict-DoNothing, so
 		// re-linking a host a run already references is idempotent.
+		//
+		// OnConflict{UpdateAll} makes this an UPSERT by run Id: a fresh-Id run (Create/Upsert
+		// import path) simply inserts, but a run persisted repeatedly under the same Id (a live
+		// streaming scan snapshotting itself as hosts arrive, see run.go) updates in place rather
+		// than erroring on the primary key. The run's non-host children are re-linked idempotently.
 		runORM.Hosts = sharedStubs(sharedHosts)
-		if err := tx.Omit("Hosts.*").Create(&runORM).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{UpdateAll: true}).Omit("Hosts.*").Create(&runORM).Error; err != nil {
 			return err
 		}
 
@@ -207,18 +222,25 @@ func stampScanProvenance(run *scanpb.Run) {
 // would never be linked to it. (AreScansIdentical scores two runs with empty task-lists as matching
 // regardless of RawXML, so it cannot be the sole gate.)
 func isDuplicateRun(run *scanpb.RunORM, existing []*scanpb.RunORM) bool {
+	return findDuplicateRun(run, existing) != nil
+}
+
+// findDuplicateRun returns the stored run that `run` duplicates (by the same RawXML-authoritative
+// rule as isDuplicateRun), or nil if it is genuinely new. Upsert uses it to echo the canonical
+// stored Id back for an already-present run instead of silently skipping it.
+func findDuplicateRun(run *scanpb.RunORM, existing []*scanpb.RunORM) *scanpb.RunORM {
 	for _, e := range existing {
 		if run.RawXML != "" && e.RawXML != "" {
 			if run.RawXML == e.RawXML {
-				return true
+				return e
 			}
 			continue // different raw documents: definitively distinct runs
 		}
 		if scan.AreScansIdentical(run, e) {
-			return true
+			return e
 		}
 	}
-	return false
+	return nil
 }
 
 // sharedStubs reduces persisted host rows to bare {Id} stubs — enough to write the run_hosts join
@@ -245,8 +267,26 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 
 	dbScans := []*scanpb.RunORM{}
 
-	// Preloads
+	// Preloads. When hosts are requested, preload the run's host subtrees THROUGH the run_hosts
+	// join: Preload("Hosts") (via clause.Associations in db.Preload) loads each run's OWN hosts,
+	// scoped by the many-to-many, and the "Hosts.<assoc>" entries pull the nested host tree
+	// (ports, services, OS, trace, ...). This replaces a former per-run `Find(&run.Hosts)` that
+	// queried the whole hosts table and so loaded EVERY host into EVERY run — which made
+	// `scan diff` see identical host sets ("no changes") and `scan show --hosts` wrong.
 	scanFilters := WithPreloads(filters)
+	if filters.Hosts {
+		hostClauses := hosts.WithPreloads(&hostrpcpb.HostFilters{Trace: true, Ports: filters.Ports})
+		for name, load := range hostClauses {
+			if load {
+				scanFilters["Hosts."+name] = true
+			}
+		}
+		// Addresses are the host's identity anchor but are not in hosts.WithPreloads (the host
+		// server loads them via clause.Associations on the Host model); preload them explicitly
+		// so a run's hosts come back with their addresses.
+		scanFilters["Hosts.Addresses"] = true
+	}
+
 	query := s.db.Where(hst)
 	// Per-tool scoping: a run's producing tool is its Scanner, so scoping to a tool is a
 	// direct Scanner match (no join needed). Empty Source is a no-op (all runs).
@@ -263,19 +303,11 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 	}
 
 	scansResp := []*scanpb.Run{}
-
-	// Load hosts if required
 	for _, run := range dbScans {
-		if filters.Hosts {
-			filters := hosts.WithPreloads(&hostrpcpb.HostFilters{
-				Trace: true,
-				Ports: true,
-			})
-			database = db.Preload(s.db, filters)
-			database.Find(&run.Hosts)
+		pb, err := run.ToPB(ctx)
+		if err != nil {
+			return nil, err
 		}
-
-		pb, _ := run.ToPB(ctx)
 		scansResp = append(scansResp, &pb)
 	}
 
@@ -285,16 +317,97 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 	return res, database.Error
 }
 
-func (server) List(context.Context, *scanrpcpb.ReadScanRequest) (*scanrpcpb.ReadScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetScanMany not implemented")
+// List returns all scans matching the request filters. A Run has no natural key to match on (it is
+// identified by its Id / RawXML), so listing is a plain filtered read — List shares Read's preload
+// and host-loading path rather than maintaining a second, divergent query.
+func (s *server) List(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*scanrpcpb.ReadScanResponse, error) {
+	return s.Read(ctx, req)
 }
 
-func (server) Upsert(context.Context, *scanrpcpb.UpsertScanRequest) (*scanrpcpb.UpsertScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpsertScan not implemented")
+// Upsert stores runs that are new and returns the canonical stored run for ones already present. It
+// is the idempotent sibling of Create: the same RawXML-authoritative duplicate detection and the
+// same host unification via host.IngestHosts (persistRun), except a duplicate is echoed back tagged
+// with the Id it already has rather than being silently dropped. A Run is an immutable historical
+// record, so there is no in-place field merge here; enriching a stored run as it runs (the live-scan
+// case) is the streaming follow-on (SCAN.md Part C), not an Upsert concern.
+func (s *server) Upsert(ctx context.Context, req *scanrpcpb.UpsertScanRequest) (*scanrpcpb.UpsertScanResponse, error) {
+	dbScans := []*scanpb.RunORM{}
+	if err := s.db.Find(&dbScans).Error; err != nil {
+		return nil, err
+	}
+
+	var out []*scanpb.Run
+	for _, run := range req.GetScans() {
+		if run == nil {
+			continue
+		}
+
+		// Same intra-run host fold + provenance stamping Create performs, so identity and
+		// provenance match whichever path first stored the run.
+		folded := &scan.Run{}
+		folded.AddHosts(run.GetHosts()...)
+		run.Hosts = folded.Hosts
+		stampScanProvenance(run)
+
+		runORM, err := run.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Already stored: return the caller's run tagged with the canonical Id (its full data is
+		// what the caller passed; only the Id needs reconciling with the persisted row).
+		if match := findDuplicateRun(&runORM, dbScans); match != nil {
+			run.Id = match.Id
+			out = append(out, run)
+			continue
+		}
+
+		saved, err := s.persistRun(ctx, run)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, saved)
+		dbScans = append(dbScans, &runORM) // catch a duplicate later in the same batch
+	}
+
+	return &scanrpcpb.UpsertScanResponse{Scans: out}, nil
 }
 
-func (server) Delete(context.Context, *scanrpcpb.DeleteScanRequest) (*scanrpcpb.DeleteScanResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteScan not implemented")
+// Delete removes scans by Id. A run *owns* its task/result/target/script rows but only *references*
+// the hosts it observed — the run_hosts join is a many2many shared across runs (cross-run host
+// unification). Deleting with Select(clause.Associations) therefore clears the run's join entries,
+// unlinking the shared host rows without deleting them, and removes the run itself; every host a
+// sibling run still references survives untouched. (The run's own now-unlinked task/result rows are
+// left as orphans — a storage-GC concern, not a correctness one, since nothing references them.)
+func (s *server) Delete(ctx context.Context, req *scanrpcpb.DeleteScanRequest) (*scanrpcpb.DeleteScanResponse, error) {
+	var deleted []*scanpb.Run
+
+	for _, run := range req.GetScans() {
+		if run.GetId() == "" {
+			continue // Delete is by Id; the CLI resolves an ID prefix to a full Id first
+		}
+
+		// Load the stored run so the response echoes what was removed, then delete it.
+		var stored scanpb.RunORM
+		if err := s.db.Where("id = ?", run.GetId()).First(&stored).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			return nil, err
+		}
+
+		if err := s.db.Select(clause.Associations).Delete(&stored).Error; err != nil {
+			return nil, err
+		}
+
+		pb, err := stored.ToPB(ctx)
+		if err != nil {
+			return nil, err
+		}
+		deleted = append(deleted, &pb)
+	}
+
+	return &scanrpcpb.DeleteScanResponse{Scans: deleted}, nil
 }
 
 func WithPreloads(from *scanrpcpb.RunFilters) (clauses map[string]bool) {
