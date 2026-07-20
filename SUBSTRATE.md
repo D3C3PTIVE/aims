@@ -210,10 +210,12 @@ assume, defer.
   until it finishes. The live view today is the foreground stream / `scan attach`. For the
   poll-based `watch scan show` view (SCAN.md), persist the run incrementally (upsert on each
   host/progress tick) so the stored Run reflects live state.
-- **jobs/attach/stop need a persistent teamserver.** The all-in-one `aims` binary boots an
-  ephemeral in-process teamserver per command, so a `--background` job dies when that process
-  exits; `scan jobs`/`attach`/`stop` are only meaningful against a long-running `aims teamserver`
-  daemon. The RPC/CLI paths are correct and unit-tested; end-to-end jobs testing needs the daemon.
+- **jobs/attach/stop need a persistent teamserver.** ✅ *Job-model logic validated*
+  (`TestJobsAttachStopLive`: background scan → Jobs lists it → Attach streams it → Stop cancels it,
+  against one persistent server). The all-in-one `aims` binary still boots an ephemeral in-process
+  teamserver per command, so a `--background` job dies when that process exits — `scan jobs`/
+  `attach`/`stop` are only *useful* against a long-running `aims teamserver` daemon. Remaining: a
+  real daemon + teamclient smoke test (deployment, not logic).
 - **nmap fork async reads `s.stdout` concurrently with `io.Copy` writes.** `YieldHosts`/
   `YieldProgress` poll `s.stdout.Bytes()` (a `bytes.Buffer`) while `RunAsync`'s copier writes it —
   a data race (`go test -race` would flag). Pre-existing design; a proper fix wraps the buffer in a
@@ -242,14 +244,12 @@ assume, defer.
     covers the in-memory fold; the persisted round-trip is untested for non-nmap.
   - Port/Service identity across tools: `SamePort` keys on (proto, number) only — a zgrab port with
     `Protocol:"tcp"` must line up with an nmap port that may store protocol differently.
-- **`server/scan.Read` loads hosts UNSCOPED (bug, gates stored-run diff).** The host-loading loop
-  (`server/scan/scan.go` ~275–283) does `database.Find(&run.Hosts)` — a plain Find over the whole
-  hosts table — instead of loading via the `run_hosts` association. Result: **every run comes back
-  with all hosts in the DB**, not its own. `scan diff` between any two runs therefore sees identical
-  host sets ("no changes"); `scan show --hosts` is similarly wrong. Fix: load via the many2many
-  association (`s.db.Model(&run).Association("Hosts").Find(...)` or preload `Hosts` in the main
-  query with the join). Sits squarely in the uncertain dedup/cascade/relationship area — verify the
-  `run_hosts` join semantics while fixing.
+- **`server/scan.Read` loaded hosts UNSCOPED.** ✅ *Fixed* (`24b6bfd`): the per-run
+  `database.Find(&run.Hosts)` (whole-table Find → every run got all hosts) is replaced by preloading
+  the host subtree through the `run_hosts` many2many in the main query (`Preload("Hosts")` scopes per
+  run; `Hosts.<assoc>` pulls the nested tree; explicit `Hosts.Addresses`). `TestReadScopesHostsPerRun`
+  + live `scan diff` now report real drift. This also un-gates stored-run diff for DISJOINT-host
+  runs; the *shared-host* snapshot limitation below still stands.
 - **Cross-run unification vs. run diff (design tension).** Ingest MERGES a host observed by N runs
   into ONE shared row (the `sharedRunCount` insight), so even with the Read bug fixed, two runs that
   saw the same physical host both point at the *merged* current state — per-run host/port snapshots
