@@ -52,10 +52,11 @@ import (
 // teamserver over RPC — correct whether the CLI is the in-process teamserver or a remote
 // teamclient. (NSE names are read from the local nmap script.db; see completeNSEScripts.)
 //
-// SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we declare none of
-// nmap's flags ourselves. The flag long-tail — values *and* descriptions — comes from the system's
-// zsh `_nmap` completer via carapace-bridge; AIMS adds only a per-value tag so those flags arrive
-// grouped the way `nmap --help` sections them (see nmapFlagCompletions).
+// SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we still add no
+// typed cobra flags. Flag completion (see nmapFlagCompletions) is a curated, described, tagged set
+// of the high-value flags AIMS owns — because the system's zsh `_nmap` completer is often a stale,
+// pre-NSE stub that drops --script and friends — supplemented, deduped, by the carapace-bridge
+// long-tail for whatever extra the local `_nmap` knows.
 func completeRunNmap(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 && c.Args[n-1] == "--script" {
@@ -177,14 +178,129 @@ func localityOf(addr string) string {
 // [ Flags — bridged from zsh _nmap, tagged by AIMS ] --------------------------------------------
 //
 
-// nmapFlagCompletions completes an nmap `-flag`. AIMS declares no nmap flags itself (SCAN.md):
-// the values and their descriptions come straight from the system's zsh `_nmap` completion via
-// carapace-bridge. All AIMS adds is what the bridge drops — a group tag per value, applied with
-// TagF over the classifier below, so the flags arrive sectioned like `nmap --help` instead of as
-// one flat list. carapace-bin has no nmap spec (checked), so the zsh bridge is the only source; it
-// spawns `zsh` per completion and needs `_nmap` present, yielding nothing if either is absent.
+// nmapFlagCompletions completes an nmap `-flag`. It merges two sources, both grouped through the
+// same classifyNmapFlag so the sections are one source of truth:
+//
+//   - curatedNmapFlags — an AIMS-owned set of the high-value modern flags, with AIMS-authored
+//     descriptions. This is authoritative, not decoration: the system's zsh `_nmap` completion is
+//     frequently a stale, pre-NSE stub (the one on this dev box has no --script, -sV, -sC, -sn or
+//     -Pn and exposes scan types as a `-s-` argument), so leaning on the bridge alone silently
+//     drops exactly the flags that matter. --script especially must always be here — it is the
+//     one flag AIMS deeply integrates (completeNSEScripts).
+//   - the carapace-bridge zsh `_nmap` long-tail, Filter'd to drop anything already curated, as a
+//     best-effort supplement: on a box with a richer `_nmap` it adds whatever extra flags exist;
+//     on a stale one it simply adds little. Both are tagged by the same classifier.
+//
+// carapace-bin has no nmap spec (checked), so the zsh bridge is the only external source; it spawns
+// `zsh` per completion and needs `_nmap` present, contributing nothing if either is absent — which
+// is exactly why the curated set carries the essentials on its own.
 func nmapFlagCompletions() carapace.Action {
-	return bridge.ActionZsh("nmap").TagF(classifyNmapFlag)
+	curated := carapace.ActionValuesDescribed(curatedNmapFlags()...).TagF(classifyNmapFlag)
+	longTail := bridge.ActionZsh("nmap").Filter(curatedFlagNames()...).TagF(classifyNmapFlag)
+	return carapace.Batch(curated, longTail).ToA()
+}
+
+// curatedNmapFlags is the AIMS-owned (flag, description, …) set of high-value nmap flags, flat for
+// carapace.ActionValuesDescribed and grouped at render time by classifyNmapFlag. It targets the
+// modern surface an operator actually reaches for — the NSE, service/version, host-discovery and
+// timing flags a stale system `_nmap` tends to lack — rather than mirroring nmap's whole flag list.
+func curatedNmapFlags() []string {
+	return []string{
+		// scan techniques
+		"-sS", "TCP SYN (half-open) scan — default, fast, stealthy",
+		"-sT", "TCP connect scan (no raw-socket privilege needed)",
+		"-sU", "UDP scan",
+		"-sA", "TCP ACK scan (map firewall rulesets)",
+		"-sN", "TCP null scan",
+		"-sF", "TCP FIN scan",
+		"-sX", "TCP Xmas scan",
+		"-sO", "IP protocol scan",
+		// service / OS detection
+		"-sV", "Probe open ports for service/version info",
+		"--version-intensity", "Set version-scan intensity (0–9)",
+		"-O", "Enable OS detection",
+		"--osscan-guess", "Guess OS more aggressively",
+		"-A", "Aggressive: OS detection, version, default scripts, traceroute",
+		// scripts (NSE)
+		"-sC", "Run the default NSE script set (= --script=default)",
+		"--script", "Run NSE scripts by name, category, dir, or wildcard",
+		"--script-args", "Provide arguments to NSE scripts",
+		"--script-help", "Show help for the given NSE scripts",
+		"--script-updatedb", "Update the NSE script database",
+		// host discovery
+		"-sn", "Ping scan — host discovery only, no port scan",
+		"-Pn", "Treat all hosts as online — skip host discovery",
+		"-PS", "TCP SYN ping to the given ports",
+		"-PA", "TCP ACK ping to the given ports",
+		"-PU", "UDP ping to the given ports",
+		"-PE", "ICMP echo ping",
+		"-n", "Never do DNS resolution",
+		"-R", "Always resolve DNS",
+		"--traceroute", "Trace the network path to each host",
+		"--dns-servers", "Use the given DNS servers",
+		// port specification
+		"-p", "Port ranges to scan (e.g. -p22,80,443 or -p1-65535)",
+		"-F", "Fast scan — fewer ports than the default",
+		"-r", "Scan ports in order (don't randomize)",
+		"--top-ports", "Scan the N most common ports",
+		"--exclude-ports", "Exclude the given ports from scanning",
+		// timing & performance
+		"-T0", "paranoid — serial, slowest, IDS-evasive",
+		"-T1", "sneaky — serial, slow",
+		"-T2", "polite — less bandwidth/target load",
+		"-T3", "normal — the default timing",
+		"-T4", "aggressive — fast, assumes a reliable network",
+		"-T5", "insane — fastest, may sacrifice accuracy",
+		"--min-rate", "Send at least N packets per second",
+		"--max-rate", "Send at most N packets per second",
+		"--max-retries", "Cap probe retransmissions",
+		"--host-timeout", "Give up on a host after this long",
+		"--scan-delay", "Wait at least this long between probes",
+		// firewall / IDS evasion
+		"-f", "Fragment packets",
+		"-D", "Decoy scan — cloak the real source among decoys",
+		"-S", "Spoof the source address",
+		"-e", "Use the given network interface",
+		"-g", "Spoof the source port",
+		"--source-port", "Spoof the source port",
+		"--data-length", "Append random data to packets",
+		"--spoof-mac", "Spoof the MAC address",
+		"--mtu", "Set a custom fragmentation MTU",
+		"--proxies", "Relay connections through the given proxies",
+		"--badsum", "Send packets with a bogus checksum",
+		// output
+		"-oN", "Write normal (human-readable) output to a file",
+		"-oX", "Write XML output to a file",
+		"-oG", "Write grepable output to a file",
+		"-oA", "Write output in all major formats (given a base name)",
+		"-v", "Verbose (repeat for more)",
+		"-d", "Debugging (repeat for more)",
+		"--reason", "Explain why a port is in a given state",
+		"--open", "Show only open (or possibly-open) ports",
+		"--packet-trace", "Show every packet sent and received",
+		"--resume", "Resume an aborted scan from its output file",
+		// target specification
+		"-iL", "Read target specifications from a file",
+		"-iR", "Choose random targets",
+		"--exclude", "Exclude the given hosts/networks",
+		"--excludefile", "Exclude hosts/networks listed in a file",
+		// other
+		"-6", "Enable IPv6 scanning",
+		"--datadir", "Use a custom nmap data directory",
+		"--privileged", "Assume the user is fully privileged",
+		"-V", "Print the nmap version",
+	}
+}
+
+// curatedFlagNames returns just the flag names from curatedNmapFlags (the even indices), used to
+// Filter the bridge long-tail so a curated flag is never listed twice.
+func curatedFlagNames() []string {
+	pairs := curatedNmapFlags()
+	names := make([]string, 0, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		names = append(names, pairs[i])
+	}
+	return names
 }
 
 // classifyNmapFlag buckets an nmap flag into the group nmap's own `--help` uses, matching on the
@@ -219,7 +335,7 @@ func classifyNmapFlag(flag string) string {
 		strings.HasPrefix(flag, "--append-output") || strings.HasPrefix(flag, "--resume"):
 		return "output"
 	case flag == "-f" || flag == "-D" || flag == "-S" || flag == "-e" || flag == "-g" ||
-		strings.HasPrefix(flag, "--source-port") || strings.HasPrefix(flag, "--data") ||
+		strings.HasPrefix(flag, "--source-port") || flag == "--data" || strings.HasPrefix(flag, "--data-") ||
 		strings.HasPrefix(flag, "--spoof-mac") || flag == "--badsum" ||
 		strings.HasPrefix(flag, "--mtu") || strings.HasPrefix(flag, "--proxies") ||
 		strings.HasPrefix(flag, "--ttl"):

@@ -160,29 +160,73 @@ func TestClassifyNmapFlag(t *testing.T) {
 		"-sV":           "service / OS detection",
 		"-O":            "service / OS detection",
 		"-A":            "service / OS detection",
-		"-sC":           "scripts (NSE)",
-		"--script":      "scripts (NSE)",
-		"--script-help": "scripts (NSE)",
-		"-T4":           "timing & performance",
-		"--min-rate":    "timing & performance",
-		"--max-retries": "timing & performance",
-		"-p":            "port specification",
-		"-F":            "port specification",
-		"-Pn":           "host discovery",
-		"-sn":           "host discovery",
-		"--traceroute":  "host discovery",
-		"-oX":           "output",
-		"-v":            "output",
-		"-f":            "firewall / IDS evasion",
-		"--spoof-mac":   "firewall / IDS evasion",
-		"-iL":           "target specification",
-		"--exclude":     "target specification",
-		"-6":            "other nmap flags",
-		"--datadir":     "other nmap flags",
+		"-sC":            "scripts (NSE)",
+		"--script":       "scripts (NSE)",
+		"--script-help":  "scripts (NSE)",
+		"--script-args":  "scripts (NSE)",
+		"-T4":            "timing & performance",
+		"--min-rate":     "timing & performance",
+		"--max-retries":  "timing & performance",
+		"-p":             "port specification",
+		"-F":             "port specification",
+		"--top-ports":    "port specification",
+		"-Pn":            "host discovery",
+		"-sn":            "host discovery",
+		"-PS":            "host discovery",
+		"--dns-servers":  "host discovery",
+		"--traceroute":   "host discovery",
+		"-oX":            "output",
+		"-oA":            "output",
+		"-v":             "output",
+		"-f":             "firewall / IDS evasion",
+		"--spoof-mac":    "firewall / IDS evasion",
+		"--data-length":  "firewall / IDS evasion",
+		"-iL":            "target specification",
+		"--exclude":      "target specification",
+		"--excludefile":  "target specification",
+		"-6":             "other nmap flags",
+		"--datadir":      "other nmap flags",
 	}
 	for flag, want := range cases {
 		if got := classifyNmapFlag(flag); got != want {
 			t.Errorf("classifyNmapFlag(%q) = %q, want %q", flag, got, want)
 		}
+	}
+}
+
+// TestCuratedNmapFlags guards the AIMS-owned flag set: it must be well-formed (flag, description)
+// pairs with no empties and no leading-dash-less tokens, no duplicate flags, and it must carry the
+// high-value modern flags a stale system `_nmap` tends to drop — above all --script, the flag AIMS
+// integrates NSE completion for.
+func TestCuratedNmapFlags(t *testing.T) {
+	pairs := curatedNmapFlags()
+	if len(pairs)%2 != 0 {
+		t.Fatalf("curatedNmapFlags must be (flag, description) pairs, got odd length %d", len(pairs))
+	}
+
+	seen := map[string]bool{}
+	for i := 0; i < len(pairs); i += 2 {
+		flag, desc := pairs[i], pairs[i+1]
+		if !strings.HasPrefix(flag, "-") {
+			t.Errorf("%q is not a flag (want a leading -)", flag)
+		}
+		if strings.TrimSpace(desc) == "" {
+			t.Errorf("flag %q has an empty description", flag)
+		}
+		if seen[flag] {
+			t.Errorf("flag %q listed more than once", flag)
+		}
+		seen[flag] = true
+	}
+
+	for _, must := range []string{"--script", "-sC", "-sV", "-sn", "-Pn", "-oA", "-T4", "--min-rate", "-A", "-O"} {
+		if !seen[must] {
+			t.Errorf("curated flag set is missing %q", must)
+		}
+	}
+
+	// curatedFlagNames must be exactly the flags (the even indices), so the bridge filter dedups.
+	if got := len(curatedFlagNames()); got != len(pairs)/2 {
+		t.Errorf("curatedFlagNames returned %d names, want %d", got, len(pairs)/2)
 	}
 }
