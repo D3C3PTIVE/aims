@@ -210,12 +210,13 @@ assume, defer.
   Stats.Finished so a done scan reads "done". `TestRunSnapshotVisibleMidScan` confirms the run is
   readable mid-scan. Remaining nicety: mid-scan state shows "queued" (no Begin/Progress persisted —
   task-stream children would duplicate on upsert); hosts still appear live, which is the signal.
-- **jobs/attach/stop need a persistent teamserver.** ✅ *Job-model logic validated*
-  (`TestJobsAttachStopLive`: background scan → Jobs lists it → Attach streams it → Stop cancels it,
-  against one persistent server). The all-in-one `aims` binary still boots an ephemeral in-process
-  teamserver per command, so a `--background` job dies when that process exits — `scan jobs`/
-  `attach`/`stop` are only *useful* against a long-running `aims teamserver` daemon. Remaining: a
-  real daemon + teamclient smoke test (deployment, not logic).
+- **jobs/attach/stop need a persistent teamserver.** ✅ *Validated at both levels*:
+  `TestJobsAttachStopLive` (server struct) and `TestScanJobsOverTeamClient` (full transport —
+  client → teamclient → bufconn → teamserver → server/scan → drive → nmap). Background scan →
+  Jobs → Attach → Stop, run persists under the job id. The all-in-one `aims` binary still boots an
+  ephemeral in-process teamserver per command, so a `--background` job dies on process exit —
+  jobs/attach/stop are only *useful* against a long-running `aims teamserver` daemon (deployment,
+  fully test-covered).
 - **nmap fork async `s.stdout` race** — ✅ *fixed* (fork `0ace558`): wrapped `stdout` in a
   mutex-guarded `syncBuffer` whose `Bytes()` returns a snapshot copy, so `YieldHosts`/`YieldProgress`
   read without racing `io.Copy`. Verified with a `go build -race` driver (no data race).
