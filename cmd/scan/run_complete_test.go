@@ -19,6 +19,7 @@ package scan
 */
 
 import (
+	"net"
 	"strings"
 	"testing"
 
@@ -293,10 +294,42 @@ func TestNSEArgValueKind(t *testing.T) {
 		"unpwdb.passlimit":        "",
 		"http.useragent":          "",
 		"creds.global":            "",
+		"broadcast-*.interface":   "interface",
+		"snmp.interface":          "interface",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
 			t.Errorf("nseArgValueKind(%q) = %q, want %q", k, got, want)
+		}
+	}
+}
+
+// TestInterfaceLabel pins the interface description: addresses joined with the mask stripped, a
+// loopback marker, and the empty-address fallbacks.
+func TestInterfaceLabel(t *testing.T) {
+	ipnet := func(cidr string) *net.IPNet {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			t.Fatalf("bad test CIDR %q: %v", cidr, err)
+		}
+		n.IP = net.ParseIP(strings.SplitN(cidr, "/", 2)[0]) // keep the host IP, not the network addr
+		return n
+	}
+
+	cases := []struct {
+		name     string
+		loopback bool
+		addrs    []net.Addr
+		want     string
+	}{
+		{"v4+v6", false, []net.Addr{ipnet("192.168.1.10/24"), ipnet("fe80::1/64")}, "192.168.1.10, fe80::1"},
+		{"loopback", true, []net.Addr{ipnet("127.0.0.1/8")}, "127.0.0.1 (loopback)"},
+		{"no-addr", false, nil, "no address"},
+		{"loopback-no-addr", true, nil, "(loopback)"},
+	}
+	for _, c := range cases {
+		if got := interfaceLabel(c.loopback, c.addrs); got != c.want {
+			t.Errorf("%s: interfaceLabel = %q, want %q", c.name, got, c.want)
 		}
 	}
 }

@@ -66,6 +66,8 @@ func completeRunNmap(con *client.Client) carapace.Action {
 				return completeNSEScripts(con)
 			case "--script-args":
 				return completeNSEScriptArgs(con)
+			case "-e":
+				return completeInterface()
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
@@ -542,6 +544,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return credentials.CompleteByUsername(con)
 	case "file":
 		return carapace.ActionFiles()
+	case "interface":
+		return completeInterface()
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -569,9 +573,73 @@ func nseArgValueKind(key string) string {
 		return "host"
 	case strings.Contains(base, "username") || base == "user" || strings.HasSuffix(base, "user"):
 		return "username"
+	case strings.Contains(base, "interface"):
+		return "interface"
 	default:
 		return ""
 	}
+}
+
+// completeInterface completes a network-interface value — nmap's `-e`, an NSE `*.interface` arg,
+// and any other scanner's interface flag — from the LOCAL machine's interfaces (the box the
+// completion process runs on). It is deliberately not agent-context aware: interfaces belong to the
+// operator's host, not the possibly-remote loaded agent. Purely local and cheap, so it is not
+// cached. Interfaces are grouped up vs down (you scan from an up interface), each described by its
+// addresses.
+func completeInterface() carapace.Action {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return carapace.ActionMessage("cannot list interfaces: %s", err)
+	}
+
+	var up, down []string
+	for _, ic := range ifaces {
+		addrs, _ := ic.Addrs()
+		desc := interfaceLabel(ic.Flags&net.FlagLoopback != 0, addrs)
+		if ic.Flags&net.FlagUp != 0 {
+			up = append(up, ic.Name, desc)
+		} else {
+			down = append(down, ic.Name, desc)
+		}
+	}
+
+	actions := make([]carapace.Action, 0, 2)
+	if len(up) > 0 {
+		actions = append(actions, carapace.ActionValuesDescribed(up...).Tag("up interfaces"))
+	}
+	if len(down) > 0 {
+		actions = append(actions, carapace.ActionValuesDescribed(down...).Tag("down interfaces"))
+	}
+	if len(actions) == 0 {
+		return carapace.ActionMessage("no network interfaces found")
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// interfaceLabel describes an interface for its completion candidate: its addresses (IPs, mask
+// stripped) and a loopback marker, or "no address". Split from completeInterface so it can be
+// tested without the machine's real interfaces.
+func interfaceLabel(loopback bool, addrs []net.Addr) string {
+	var ips []string
+	for _, a := range addrs {
+		ip := a.String()
+		if ipn, ok := a.(*net.IPNet); ok {
+			ip = ipn.IP.String()
+		}
+		ips = append(ips, ip)
+	}
+
+	label := strings.Join(ips, ", ")
+	if loopback {
+		if label != "" {
+			label += " "
+		}
+		label += "(loopback)"
+	}
+	if label == "" {
+		label = "no address"
+	}
+	return label
 }
 
 // nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment
