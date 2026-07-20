@@ -204,6 +204,25 @@ in. Grow it as more surface; do NOT stop the build-out to fix these. They are co
 in the shared persistence/display layer that non-nmap ingest is the first to stress — track, don't
 assume, defer.
 
+**Phase-4 follow-ups (streaming):**
+- **Live view `watch scan show` needs incremental persistence.** The streaming server persists the
+  run only at completion (`consume` → `persistRun` once), so `scan show` during a run shows nothing
+  until it finishes. The live view today is the foreground stream / `scan attach`. For the
+  poll-based `watch scan show` view (SCAN.md), persist the run incrementally (upsert on each
+  host/progress tick) so the stored Run reflects live state.
+- **jobs/attach/stop need a persistent teamserver.** The all-in-one `aims` binary boots an
+  ephemeral in-process teamserver per command, so a `--background` job dies when that process
+  exits; `scan jobs`/`attach`/`stop` are only meaningful against a long-running `aims teamserver`
+  daemon. The RPC/CLI paths are correct and unit-tested; end-to-end jobs testing needs the daemon.
+- **nmap fork async reads `s.stdout` concurrently with `io.Copy` writes.** `YieldHosts`/
+  `YieldProgress` poll `s.stdout.Bytes()` (a `bytes.Buffer`) while `RunAsync`'s copier writes it —
+  a data race (`go test -race` would flag). Pre-existing design; a proper fix wraps the buffer in a
+  mutex. Works in practice (1s polling, burst writes).
+- **Codegen unblock is a workaround, not a fix.** `buf generate` is blocked on BSR auth; scans.pb.go
+  was regenerated with local `protoc` (gorm proto from the module cache, M-mapped go_package). Fine
+  for scans (no ormable messages), but any proto change touching gorm-ormable messages still needs
+  buf (BSR) or a vendored gorm proto. See the `aims-provenance-source-domain` memory.
+
 - **Host display is not nil-safe for non-nmap hosts.** `host/host.go` `DisplayFields` dereference
   `h.Status.State` (lines 100/131–137) and `h.OS.Matches` (line 169) with no nil-guard. nmap hosts
   always carry `Status`/`OS`, so this never fired; a service scanner like zgrab legitimately yields
