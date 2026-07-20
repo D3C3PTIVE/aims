@@ -205,21 +205,20 @@ in the shared persistence/display layer that non-nmap ingest is the first to str
 assume, defer.
 
 **Phase-4 follow-ups (streaming):**
-- **Live view `watch scan show` needs incremental persistence.** The streaming server persists the
-  run only at completion (`consume` → `persistRun` once), so `scan show` during a run shows nothing
-  until it finishes. The live view today is the foreground stream / `scan attach`. For the
-  poll-based `watch scan show` view (SCAN.md), persist the run incrementally (upsert on each
-  host/progress tick) so the stored Run reflects live state.
+- **Live view `watch scan show`** — ✅ *done* (`71c02bc`): `consume` snapshots the run (upsert by
+  job id, `persistRun` OnConflict UpdateAll) as hosts arrive; run id = job id; final persist marks
+  Stats.Finished so a done scan reads "done". `TestRunSnapshotVisibleMidScan` confirms the run is
+  readable mid-scan. Remaining nicety: mid-scan state shows "queued" (no Begin/Progress persisted —
+  task-stream children would duplicate on upsert); hosts still appear live, which is the signal.
 - **jobs/attach/stop need a persistent teamserver.** ✅ *Job-model logic validated*
   (`TestJobsAttachStopLive`: background scan → Jobs lists it → Attach streams it → Stop cancels it,
   against one persistent server). The all-in-one `aims` binary still boots an ephemeral in-process
   teamserver per command, so a `--background` job dies when that process exits — `scan jobs`/
   `attach`/`stop` are only *useful* against a long-running `aims teamserver` daemon. Remaining: a
   real daemon + teamclient smoke test (deployment, not logic).
-- **nmap fork async reads `s.stdout` concurrently with `io.Copy` writes.** `YieldHosts`/
-  `YieldProgress` poll `s.stdout.Bytes()` (a `bytes.Buffer`) while `RunAsync`'s copier writes it —
-  a data race (`go test -race` would flag). Pre-existing design; a proper fix wraps the buffer in a
-  mutex. Works in practice (1s polling, burst writes).
+- **nmap fork async `s.stdout` race** — ✅ *fixed* (fork `0ace558`): wrapped `stdout` in a
+  mutex-guarded `syncBuffer` whose `Bytes()` returns a snapshot copy, so `YieldHosts`/`YieldProgress`
+  read without racing `io.Copy`. Verified with a `go build -race` driver (no data race).
 - **Codegen unblock is a workaround, not a fix.** `buf generate` is blocked on BSR auth; scans.pb.go
   was regenerated with local `protoc` (gorm proto from the module cache, M-mapped go_package). Fine
   for scans (no ormable messages), but any proto change touching gorm-ormable messages still needs
