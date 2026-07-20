@@ -32,6 +32,7 @@ import (
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/scan"
+	"github.com/d3c3ptive/aims/scan/ingest"
 	"github.com/d3c3ptive/aims/scan/nmap"
 	pb "github.com/d3c3ptive/aims/scan/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
@@ -56,6 +57,11 @@ func Commands(con *client.Client) *cobra.Command {
 
 	aims.BindFlags(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.BoolP("nmap", "N", false, "Hint (or force) parsing the file(s) as nmap scans (default nmap format used is xml)")
+		f.String("scanner", "", "Parse the file(s) with a named ingestor (e.g. zgrab2); overrides format sniffing")
+	})
+
+	carapace.Gen(importCmd).FlagCompletion(carapace.ActionMap{
+		"scanner": carapace.ActionValues(ingest.Names()...).Usage("scanner ingestor"),
 	})
 
 	carapace.Gen(importCmd).PositionalAnyCompletion(carapace.ActionFiles().Usage("scan files to import"))
@@ -155,7 +161,7 @@ func rmCommand(con *client.Client) *cobra.Command {
 			var skipped int
 			for _, r := range res.GetScans() {
 				for _, arg := range args {
-					if !strings.HasPrefix(r.GetId(), strip(arg)) {
+					if !strings.HasPrefix(r.GetId(), aims.StripANSI(arg)) {
 						continue
 					}
 					if scan.IsRunning(r) && !force {
@@ -227,7 +233,7 @@ func showCommand(con *client.Client) *cobra.Command {
 			for _, r := range all {
 				matched := false
 				for _, arg := range args {
-					if strings.HasPrefix(r.Id, strip(arg)) {
+					if strings.HasPrefix(r.Id, aims.StripANSI(arg)) {
 						matched = true
 						break
 					}
@@ -301,6 +307,23 @@ func importCommand(con *client.Client) func(cmd *cobra.Command, arg string, data
 
 func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, error) {
 	scanList := make([]*pb.Run, 0)
+
+	// If a named ingestor was requested, fold the file through the scanner substrate
+	// (SCAN.md Part C): any registered tool's native output — nmap XML, zgrab2 JSON, ... —
+	// becomes a scan.Run that Scans.Create dedups/merges into the same objects. This takes
+	// precedence over format sniffing and the --nmap hint.
+	if scanner, _ := command.Flags().GetString("scanner"); scanner != "" {
+		run, err := ingest.Ingest(scanner, data)
+		if err != nil {
+			return scanList, err
+		}
+		if run != nil {
+			scanList = append(scanList, run)
+			fmt.Printf("Importing 1 %s scan from %s\n", scanner, arg)
+		}
+		return scanList, nil
+	}
+
 	// If forced to parse an NMAP XML file.
 	if asNmap, _ := command.Flags().GetBool("nmap"); asNmap {
 		nmapScans, err := importNmap(data, arg)
@@ -369,7 +392,7 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 			// Display
 			for _, arg := range args {
 				for _, h := range res.GetScans() {
-					if strings.HasPrefix(h.Id, strip(arg)) {
+					if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
 						scanList = append(scanList, h)
 					}
 				}
@@ -381,7 +404,3 @@ func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) a
 	return exportRunE
 }
 
-// strip removes all ANSI escaped color sequences in a string.
-func strip(str string) string {
-	return display.StripANSI(str)
-}
