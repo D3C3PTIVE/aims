@@ -283,6 +283,8 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		job.finish(errorUpdate(err.Error()))
 		return
 	}
+	// A completed scan supersedes older runs of the same definition, so `scan list` self-collapses.
+	s.autoSupersede(context.Background(), stored.GetId())
 	job.finish(finalUpdate(stored))
 }
 
@@ -349,6 +351,12 @@ func (s *server) attachFromDB(ctx context.Context, id string, stream updateStrea
 	sent := map[string]bool{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
+	// An initial job-id frame so the client's live view renders its header immediately (the poll
+	// loop below then feeds it hosts) rather than showing a blank screen until the first host lands.
+	if err := stream.Send(jobIDUpdate(id)); err != nil {
+		return err
+	}
 
 	for {
 		run, err := s.readRun(ctx, id)

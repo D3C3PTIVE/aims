@@ -138,7 +138,9 @@ func completeJobs(con *client.Client) carapace.Action {
 		var pairs []string
 		for _, j := range res.GetJobs() {
 			desc := strings.TrimSpace(j.GetScanner() + " " + strings.Join(j.GetArgs(), " "))
-			pairs = append(pairs, j.GetId(), desc)
+			// Offer the abbreviated id (as hosts/services/scans do); resolveJobID prefix-matches it
+			// back to the full job id, so the short form works as the argument.
+			pairs = append(pairs, display.FormatSmallID(j.GetId()), desc)
 		}
 		return carapace.ActionValuesDescribed(pairs...).Tag("scan jobs")
 	})

@@ -329,7 +329,11 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 		}
 		return strings.Join(parts, "/")
 	},
-	"Args": func(r *scan.Run) string { return r.GetArgs() },
+	// Args shows the full command as invoked — the scanner name (the `nmap`/`zgrab` leaf of
+	// `aims scan run <scanner> …`) then its arguments — so the column reads as a complete,
+	// copy-pasteable command rather than a bare flag list. Scanner is also its own column, but
+	// leading the command with it keeps Args self-describing wherever the Scanner column is dropped.
+	"Args": func(r *scan.Run) string { return strings.TrimSpace(r.GetScanner() + " " + r.GetArgs()) },
 	"Series": func(r *scan.Run) string {
 		// On a surviving head, advertise how many earlier runs of the same definition it absorbed.
 		if n := r.GetFormerRuns(); n > 0 {

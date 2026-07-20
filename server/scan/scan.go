@@ -108,6 +108,12 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 		dbScans = append(dbScans, &runORM) // so a duplicate later in the same batch is caught too
 	}
 
+	// Auto-collapse each new run's series: a fresh scan of an existing definition supersedes its
+	// older completed siblings so `scan list` self-collapses without a manual `scan cleanup`.
+	for _, r := range created {
+		s.autoSupersede(ctx, r.GetId())
+	}
+
 	return &scanrpcpb.CreateScanResponse{Scans: created}, nil
 }
 
@@ -461,11 +467,25 @@ func (s *server) Cleanup(ctx context.Context, req *scanrpcpb.CleanupScanRequest)
 		return resp, nil
 	}
 
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Tombstone each non-prunable sibling by writing only its superseded_by column. UpdateColumn
-		// (not Update) so the write does NOT bump updated_at: that timestamp is the liveness heartbeat
-		// stateOf reads, and refreshing it would make a tombstoned interrupted/done run masquerade as
-		// running. A tombstone is bookkeeping, not scanner activity.
+	if err := s.applyCleanup(plan, req.GetPrune()); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// applyCleanup persists a cleanup plan in one transaction: tombstones (superseded_by), each head's
+// FormerRuns, and — when prune — the hard-delete of the byte-identical subset. Writes are
+// column-scoped (UpdateColumn, not Update) so a tombstone never bumps updated_at, the liveness
+// heartbeat stateOf reads (else a tombstoned interrupted/done run would masquerade as running — a
+// tombstone is bookkeeping, not scanner activity). Shared by the Cleanup RPC and auto-supersede.
+func (s *server) applyCleanup(plan scan.CleanupPlan, prune bool) error {
+	prunable := map[string]bool{}
+	if prune {
+		for _, r := range plan.Prunable {
+			prunable[r.GetId()] = true
+		}
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		for _, r := range plan.Tombstoned {
 			if prunable[r.GetId()] {
 				continue // hard-deleted below instead
@@ -475,34 +495,46 @@ func (s *server) Cleanup(ctx context.Context, req *scanrpcpb.CleanupScanRequest)
 				return err
 			}
 		}
-		// Persist each head's recomputed (monotonic) FormerRuns trace — likewise without a heartbeat bump.
 		for _, h := range plan.Heads {
 			if err := tx.Model(&scanpb.RunORM{}).Where("id = ?", h.GetId()).
 				UpdateColumn("former_runs", h.GetFormerRuns()).Error; err != nil {
 				return err
 			}
 		}
-		// Prune the byte-identical subset: hard-delete, unlinking run_hosts so shared hosts survive
-		// (the run_hosts-shared-host invariant from Delete).
-		for _, r := range plan.Prunable {
-			var stored scanpb.RunORM
-			if err := tx.Where("id = ?", r.GetId()).First(&stored).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					continue
+		if prune {
+			// Hard-delete the byte-identical subset, unlinking run_hosts so shared hosts survive (the
+			// run_hosts-shared-host invariant from Delete).
+			for _, r := range plan.Prunable {
+				var stored scanpb.RunORM
+				if err := tx.Where("id = ?", r.GetId()).First(&stored).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						continue
+					}
+					return err
 				}
-				return err
-			}
-			if err := tx.Select(clause.Associations).Delete(&stored).Error; err != nil {
-				return err
+				if err := tx.Select(clause.Associations).Delete(&stored).Error; err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
+}
 
-	return resp, nil
+// autoSupersede collapses the series of a just-completed run: its older completed siblings are
+// tombstoned under the newest so `scan list` self-collapses without a manual `scan cleanup`. It is
+// best-effort — the run is already stored, so a collapse failure must not fail the scan; errors are
+// swallowed and left for a later `scan cleanup`. Never prunes (tombstone only, so history survives).
+func (s *server) autoSupersede(ctx context.Context, runID string) {
+	all, err := s.loadRuns(ctx)
+	if err != nil {
+		return
+	}
+	plan := scan.SupersedeFor(all, runID)
+	if plan.Empty() {
+		return
+	}
+	_ = s.applyCleanup(plan, false)
 }
 
 func WithPreloads(from *scanrpcpb.RunFilters) (clauses map[string]bool) {

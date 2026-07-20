@@ -66,14 +66,18 @@ func readRuns(t *testing.T, s *server, ctx context.Context, f *scanrpcpb.RunFilt
 func TestCleanupCollapsesSeries(t *testing.T) {
 	s, gdb, ctx := newTestServer(t)
 
-	// Same args + same target host, drifting output -> one series of three instances.
+	// Same args + same target host, drifting output -> one series of three instances. Persist them
+	// directly (persistRun does NOT auto-supersede, unlike Create) so this test exercises the manual
+	// Cleanup RPC on a still-uncollapsed series; auto-supersede-via-Create is covered separately.
 	runs := []*scanpb.Run{
 		seriesRun("<xml>A</xml>", "-sT -p1-100", 100, "10.0.0.1"),
 		seriesRun("<xml>B</xml>", "-sT -p1-100", 200, "10.0.0.1"),
 		seriesRun("<xml>C</xml>", "-sT -p1-100", 300, "10.0.0.1"), // newest -> head
 	}
-	if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: runs}); err != nil {
-		t.Fatalf("create series: %v", err)
+	for _, r := range runs {
+		if _, err := s.persistRun(ctx, r); err != nil {
+			t.Fatalf("persist run: %v", err)
+		}
 	}
 	if n := countRows(t, gdb, "runs"); n != 3 {
 		t.Fatalf("expected 3 persisted runs, got %d", n)
@@ -150,6 +154,38 @@ func TestCleanupCollapsesSeries(t *testing.T) {
 	}
 	if again.GetTombstoned() != 0 {
 		t.Errorf("second cleanup pass tombstoned %d, want 0 (idempotent)", again.GetTombstoned())
+	}
+}
+
+// TestCreateAutoSupersedesSeries asserts a completed scan auto-collapses its series: creating three
+// instances of one definition (as three separate `scan run`s would) leaves a single visible head —
+// the newest — with the older two tombstoned under it, no manual `scan cleanup` needed. History is
+// preserved (all three remain readable with IncludeSuperseded).
+func TestCreateAutoSupersedesSeries(t *testing.T) {
+	s, _, ctx := newTestServer(t)
+
+	for _, r := range []*scanpb.Run{
+		seriesRun("<xml>A</xml>", "-sT -p1-100", 100, "10.0.0.1"),
+		seriesRun("<xml>B</xml>", "-sT -p1-100", 200, "10.0.0.1"),
+		seriesRun("<xml>C</xml>", "-sT -p1-100", 300, "10.0.0.1"), // newest -> head
+	} {
+		if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{r}}); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+
+	heads := readRuns(t, s, ctx, &scanrpcpb.RunFilters{})
+	if len(heads) != 1 {
+		t.Fatalf("after 3 identical scans, default read = %d, want 1 auto-collapsed head", len(heads))
+	}
+	if heads[0].GetRawXML() != "<xml>C</xml>" {
+		t.Errorf("head = %q, want the newest (C)", heads[0].GetRawXML())
+	}
+	if heads[0].GetFormerRuns() != 2 {
+		t.Errorf("head FormerRuns = %d, want 2", heads[0].GetFormerRuns())
+	}
+	if all := readRuns(t, s, ctx, &scanrpcpb.RunFilters{IncludeSuperseded: true}); len(all) != 3 {
+		t.Errorf("all runs = %d, want 3 (history preserved, not deleted)", len(all))
 	}
 }
 

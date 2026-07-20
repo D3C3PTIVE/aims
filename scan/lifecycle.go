@@ -256,6 +256,33 @@ func resolveHead(r *scan.Run, all []*scan.Run) string {
 	return cur.GetId()
 }
 
+// SupersedeFor computes a cleanup plan limited to the series containing runID — the auto-collapse a
+// server runs when a new scan of the same definition finishes, so `scan list` self-collapses without
+// a manual `scan cleanup`. It restricts the run set to that one series and reuses ComputeCleanup, so
+// the newest clean run becomes the head and older completed siblings are tombstoned under it; a
+// still-running sibling is left alone (ComputeCleanup skips running runs). Returns an empty plan when
+// the run is unknown or its series has nothing to collapse.
+func SupersedeFor(all []*scan.Run, runID string) CleanupPlan {
+	var target *scan.Run
+	for _, r := range all {
+		if r.GetId() == runID {
+			target = r
+			break
+		}
+	}
+	if target == nil {
+		return CleanupPlan{}
+	}
+	key := seriesKey(target)
+	var series []*scan.Run
+	for _, r := range all {
+		if seriesKey(r) == key {
+			series = append(series, r)
+		}
+	}
+	return ComputeCleanup(series)
+}
+
 // SeriesOf returns a head run together with every run tombstoned under it (directly), ordered
 // head-first then by recency — the browse set behind `scan history`.
 func SeriesOf(all []*scan.Run, head *scan.Run) []*scan.Run {
