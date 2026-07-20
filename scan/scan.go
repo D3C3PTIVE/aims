@@ -22,6 +22,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -333,7 +334,20 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 	// `aims scan run <scanner> …`) then its arguments — so the column reads as a complete,
 	// copy-pasteable command rather than a bare flag list. Scanner is also its own column, but
 	// leading the command with it keeps Args self-describing wherever the Scanner column is dropped.
-	"Args": func(r *scan.Run) string { return strings.TrimSpace(r.GetScanner() + " " + r.GetArgs()) },
+	"Args": func(r *scan.Run) string {
+		args, scanner := r.GetArgs(), r.GetScanner()
+		if scanner == "" {
+			return args
+		}
+		// Don't double the scanner when the args already lead with it: an imported run carries the
+		// full command line (e.g. "/usr/bin/nmap -sV …"), while a streamed run carries only flags.
+		if fields := strings.Fields(args); len(fields) > 0 {
+			if first := fields[0]; first == scanner || path.Base(first) == scanner {
+				return args
+			}
+		}
+		return strings.TrimSpace(scanner + " " + args)
+	},
 	"Series": func(r *scan.Run) string {
 		// On a surviving head, advertise how many earlier runs of the same definition it absorbed.
 		if n := r.GetFormerRuns(); n > 0 {

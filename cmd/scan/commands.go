@@ -306,21 +306,21 @@ that has absorbed at least one run; given a run's ID prefix it resolves that run
 shows the head together with all the (tombstoned) runs superseded under it — the instances hidden
 from the default 'scan list'.`,
 		RunE: func(command *cobra.Command, args []string) error {
-			// Read the surviving heads (server-side default filter) — the small set both branches
-			// resolve against, rather than pulling every tombstoned run and triaging client-side.
-			headsRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+			// Read every run (superseded included, no host tree — light) so an id argument can name ANY
+			// member of a series, not just its surviving head, and still resolve to the head.
+			allRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan:    &pb.Run{},
-				Filters: &scans.RunFilters{},
+				Filters: &scans.RunFilters{IncludeSuperseded: true},
 			})
 			if err = aims.CheckError(err); err != nil {
 				return err
 			}
-			heads := headsRes.GetScans()
+			allRuns := allRes.GetScans()
 
-			// No argument: list every head that has collapsed at least one sibling.
+			// No argument: list every visible head that has collapsed at least one sibling.
 			if len(args) == 0 {
 				var collapsed []*pb.Run
-				for _, r := range heads {
+				for _, r := range scan.VisibleRuns(allRuns) {
 					if r.GetFormerRuns() > 0 {
 						collapsed = append(collapsed, r)
 					}
@@ -335,38 +335,48 @@ from the default 'scan list'.`,
 				return nil
 			}
 
-			// Argument(s): resolve each ID prefix to a head, then fetch exactly that head's
-			// superseded children from the server (SupersededBy filter) — one scoped query per series.
+			// Argument(s): resolve each ID prefix to any run, walk to its series head, then fetch that
+			// head's series WITH hosts+ports (scoped) for the drift/stability analysis.
 			shown := 0
 			for _, arg := range args {
-				var head *pb.Run
-				for _, r := range heads {
+				var target *pb.Run
+				for _, r := range allRuns {
 					if strings.HasPrefix(r.GetId(), aims.StripANSI(arg)) {
-						head = r
+						target = r
 						break
 					}
 				}
-				if head == nil {
+				if target == nil {
 					continue
 				}
+				head := scan.HeadOf(allRuns, target)
 
-				childRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
-					Scan:    &pb.Run{},
-					Filters: &scans.RunFilters{SupersededBy: head.GetId(), IncludeSuperseded: true},
+				// Fetch the whole series WITH hosts+ports (the drift timeline and stability panel diff
+				// them): the head by id, and its superseded children, both host-loaded.
+				hostFilter := func(f *scans.RunFilters) *scans.RunFilters {
+					f.Hosts, f.Ports = true, true
+					return f
+				}
+				headRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+					Scan:    &pb.Run{Id: head.GetId()},
+					Filters: hostFilter(&scans.RunFilters{IncludeSuperseded: true}),
 				})
 				if err = aims.CheckError(err); err != nil {
 					return err
 				}
-				series := append([]*pb.Run{head}, childRes.GetScans()...)
-				scan.SortRuns(series)
+				childRes, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+					Scan:    &pb.Run{},
+					Filters: hostFilter(&scans.RunFilters{SupersededBy: head.GetId(), IncludeSuperseded: true}),
+				})
+				if err = aims.CheckError(err); err != nil {
+					return err
+				}
+				series := append(headRes.GetScans(), childRes.GetScans()...)
 
 				if shown > 0 {
 					fmt.Println()
 				}
-				fmt.Printf("Series head %s (%s) — %d instance(s):\n",
-					display.FormatSmallID(head.GetId()), head.GetScanner(), len(series))
-				table := display.Table(series, scan.DisplayFields, scan.DisplayHeaders()...)
-				fmt.Println(table.Render())
+				fmt.Println(renderSeriesHistory(scan.BuildHistory(series)))
 				shown++
 			}
 			if shown == 0 {
