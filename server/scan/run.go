@@ -275,7 +275,12 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	pbRun := run.ToPB()
 	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
-	pbRun.Stats = &scanpb.Stats{Finished: &scanpb.Finished{Time: time.Now().Unix(), Exit: "success"}}
+	now := time.Now().Unix()
+	pbRun.Stats = &scanpb.Stats{Finished: &scanpb.Finished{
+		Time:    now,
+		Exit:    "success",
+		Elapsed: float32(now - job.started), // measured duration, so the Info column can show it
+	}}
 	stampScanProvenance(pbRun)
 
 	stored, err := s.persistRun(context.Background(), pbRun)

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -316,38 +317,12 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 	"Scanner": func(r *scan.Run) string { return r.GetScanner() },
 	"Name":    func(r *scan.Run) string { return r.GetProfileName() },
 	"Status":  func(r *scan.Run) string { return stateToken(r) },
-	"Info": func(r *scan.Run) string {
-		info := r.GetInfo()
-		if info == nil {
-			return ""
-		}
-		var parts []string
-		if info.Protocol != "" {
-			parts = append(parts, info.Protocol)
-		}
-		if info.Type != "" {
-			parts = append(parts, info.Type)
-		}
-		return strings.Join(parts, "/")
-	},
+	"Info":    func(r *scan.Run) string { return scanInfo(r) },
 	// Args shows the full command as invoked — the scanner name (the `nmap`/`zgrab` leaf of
 	// `aims scan run <scanner> …`) then its arguments — so the column reads as a complete,
 	// copy-pasteable command rather than a bare flag list. Scanner is also its own column, but
 	// leading the command with it keeps Args self-describing wherever the Scanner column is dropped.
-	"Args": func(r *scan.Run) string {
-		args, scanner := r.GetArgs(), r.GetScanner()
-		if scanner == "" {
-			return args
-		}
-		// Don't double the scanner when the args already lead with it: an imported run carries the
-		// full command line (e.g. "/usr/bin/nmap -sV …"), while a streamed run carries only flags.
-		if fields := strings.Fields(args); len(fields) > 0 {
-			if first := fields[0]; first == scanner || path.Base(first) == scanner {
-				return args
-			}
-		}
-		return strings.TrimSpace(scanner + " " + args)
-	},
+	"Args": func(r *scan.Run) string { return fullCommand(r) },
 	"Series": func(r *scan.Run) string {
 		// On a surviving head, advertise how many earlier runs of the same definition it absorbed.
 		if n := r.GetFormerRuns(); n > 0 {
@@ -355,10 +330,15 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 		}
 		return ""
 	},
-	"When":    func(r *scan.Run) string { return whenLabel(r) },
-	"Hosts":   func(r *scan.Run) string { return hostsUpDown(r) },
-	"Targets": func(r *scan.Run) string { return targetsSummary(r) },
-	"Tasks":   func(r *scan.Run) string { return tasksSummary(r) },
+	"When":  func(r *scan.Run) string { return whenLabel(r) },
+	"Hosts": func(r *scan.Run) string { return hostsUpDown(r) },
+	"Targets": func(r *scan.Run) string {
+		if label := targetsLabel(r); label != "" {
+			return color.HiCyanString("%s", label)
+		}
+		return ""
+	},
+	"Tasks": func(r *scan.Run) string { return tasksSummary(r) },
 }
 
 // SortRuns orders runs for listing: running scans first (most actionable), then interrupted
@@ -475,7 +455,7 @@ func infoPanes(r *scan.Run) []display.Pane {
 		{"Protocol", info.GetProtocol()},
 		{"Type", info.GetType()},
 		{"Services", info.GetServices()},
-		{"Targets", targetsSummary(r)},
+		{"Targets", targetsLabel(r)},
 	})
 	results := display.KVLines([][2]string{
 		{"Hosts", hostsTotal(r)},
@@ -613,16 +593,98 @@ func hostsTotal(r *scan.Run) string {
 	return ""
 }
 
-// targetsSummary is the compact "services(n) hosts(n)" scope shown in the list and Scope pane.
-func targetsSummary(r *scan.Run) string {
-	var b strings.Builder
-	if n := r.GetInfo().GetNumServices(); n > 0 {
-		fmt.Fprintf(&b, "services(%d) ", n)
+// fullCommand renders the run's invocation as "scanner args", without doubling the scanner when the
+// args already lead with it (an imported run carries the full command line, e.g. "/usr/bin/nmap …";
+// a streamed run carries only flags).
+func fullCommand(r *scan.Run) string {
+	args, scanner := r.GetArgs(), r.GetScanner()
+	if scanner == "" {
+		return args
 	}
-	if n := len(r.GetTargets()); n > 0 {
-		fmt.Fprintf(&b, "hosts(%d)", n)
+	if fields := strings.Fields(args); len(fields) > 0 {
+		if first := fields[0]; first == scanner || path.Base(first) == scanner {
+			return args
+		}
 	}
-	return strings.TrimSpace(b.String())
+	return strings.TrimSpace(scanner + " " + args)
+}
+
+// targetsLabel is the run's actual target specification for the Targets column: the structured
+// Targets' addresses/domains when present (a --from-db scan), else the host/CIDR/domain tokens
+// parsed out of the raw command line (a `scan run nmap … <target>` keeps its targets in Args).
+// Deduped and capped so the column stays a glance.
+func targetsLabel(r *scan.Run) string {
+	seen := map[string]bool{}
+	var specs []string
+	add := func(s string) {
+		if s == "" || seen[s] {
+			return
+		}
+		seen[s] = true
+		specs = append(specs, s)
+	}
+	for _, t := range r.GetTargets() {
+		if a := t.GetAddress(); a != "" {
+			add(a)
+		} else {
+			add(t.GetDomain())
+		}
+	}
+	if len(specs) == 0 {
+		for _, tok := range hostTokens(r.GetArgs()) {
+			add(tok)
+		}
+	}
+	if len(specs) > 3 {
+		return strings.Join(specs[:3], " ") + fmt.Sprintf(" +%d", len(specs)-3)
+	}
+	return strings.Join(specs, " ")
+}
+
+// targetTokenRE recognises a scan target token: an IPv4 (optionally CIDR), a dotted hostname, or an
+// IPv6 (optionally CIDR). Deliberately conservative — a bare single-word hostname (no dot) is not
+// matched, avoiding false positives on flag values like "250ms".
+var targetTokenRE = regexp.MustCompile(`^(\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?|([a-zA-Z0-9_]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|[0-9a-fA-F:]*:[0-9a-fA-F:]+(/\d{1,3})?)$`)
+
+// hostTokens extracts target specs (host/CIDR/domain) from a raw scanner command line: the non-flag
+// tokens that look like a target.
+func hostTokens(args string) []string {
+	var out []string
+	for _, tok := range strings.Fields(args) {
+		if strings.HasPrefix(tok, "-") {
+			continue
+		}
+		if targetTokenRE.MatchString(tok) {
+			out = append(out, tok)
+		}
+	}
+	return out
+}
+
+// scanInfo is the Info column: the scan's shape and cost — protocol/type, how many ports/services it
+// covered, and how long it took — digested from the scaninfo/runstats (present on imported nmap runs;
+// a streamed run contributes its measured elapsed). Dotted so it reads as one compact cell.
+func scanInfo(r *scan.Run) string {
+	var parts []string
+	if info := r.GetInfo(); info != nil {
+		var shape []string
+		if info.Protocol != "" {
+			shape = append(shape, info.Protocol)
+		}
+		if info.Type != "" {
+			shape = append(shape, info.Type)
+		}
+		if len(shape) > 0 {
+			parts = append(parts, strings.Join(shape, "/"))
+		}
+		if info.NumServices > 0 {
+			parts = append(parts, fmt.Sprintf("%d ports", info.NumServices))
+		}
+	}
+	if e := elapsedStr(r); e != "" {
+		parts = append(parts, e)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // tasksSummary is the "done/total" task count for the list; the running count is highlighted when

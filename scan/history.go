@@ -135,16 +135,12 @@ func summarizeDelta(d *RunDiff) []string {
 		return nil
 	}
 	var lines []string
+	// A whole new/gone host is one compact token (its port count, not a line per port).
 	for _, nh := range d.NewHosts {
-		lines = append(lines, "+ host "+hostAddr(nh))
-		for _, p := range nh.GetPorts() {
-			if portState(p) == "open" {
-				lines = append(lines, "  + "+portLabel(p))
-			}
-		}
+		lines = append(lines, fmt.Sprintf("+ %s (%d open)", hostAddr(nh), countOpenPorts(nh)))
 	}
 	for _, gh := range d.GoneHosts {
-		lines = append(lines, "- host "+hostAddr(gh))
+		lines = append(lines, "- "+hostAddr(gh))
 	}
 	for _, hd := range d.Changed {
 		for _, p := range hd.NewPorts {
@@ -161,6 +157,16 @@ func summarizeDelta(d *RunDiff) []string {
 	}
 	sort.Strings(lines)
 	return lines
+}
+
+func countOpenPorts(h *host.Host) int {
+	n := 0
+	for _, p := range h.GetPorts() {
+		if portState(p) == "open" {
+			n++
+		}
+	}
+	return n
 }
 
 // buildSurface classifies every (addr, proto, port) ever seen open across the series.

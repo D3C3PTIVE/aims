@@ -54,23 +54,20 @@ func renderSeriesHistory(h scan.SeriesHistory) string {
 	}
 	fmt.Fprintf(&b, "   %s\n", color.HiBlackString(strings.Join(meta, " · ")))
 
-	// Drift timeline (newest first).
+	// Drift timeline (newest first) — one line per run: id, when, then the change tokens inline.
 	fmt.Fprintf(&b, "\n%s\n", color.New(color.Bold).Sprint("Drift"))
 	for _, e := range h.Timeline {
 		if e.Unchanged > 0 {
-			fmt.Fprintf(&b, "  %s\n", color.HiBlackString("×%d unchanged", e.Unchanged))
+			fmt.Fprintf(&b, "  %s   %s\n", color.HiBlackString("⋯"), color.HiBlackString("×%d unchanged", e.Unchanged))
 			continue
 		}
 		id := scan.DisplayFields["ID"](e.Run)
-		when := scan.DisplayFields["When"](e.Run)
-		if e.Delta == nil {
-			fmt.Fprintf(&b, "  %s  %s  %s\n", id, when, color.HiBlackString("baseline"))
-			continue
+		when := padVisible(scan.DisplayFields["When"](e.Run), 9)
+		change := color.HiBlackString("baseline")
+		if e.Delta != nil {
+			change = compactDelta(e.Summary)
 		}
-		fmt.Fprintf(&b, "  %s  %s\n", id, when)
-		for _, line := range e.Summary {
-			fmt.Fprintf(&b, "      %s\n", colorChange(line))
-		}
+		fmt.Fprintf(&b, "  %s  %s  %s\n", id, when, change)
 	}
 
 	// Stability panel.
@@ -78,14 +75,43 @@ func renderSeriesHistory(h scan.SeriesHistory) string {
 		fmt.Fprintf(&b, "\n%s\n", color.New(color.Bold).Sprint("Attack surface"))
 		for _, ps := range h.Surface {
 			portCol := fmt.Sprintf("%d/%s", ps.Port, ps.Proto)
-			fmt.Fprintf(&b, "  %-15s %-9s %-10s %s  %-9s %s\n",
-				ps.Addr, portCol, ps.Service,
-				colorSpark(ps.Class, ps.Sparkline()), classLabel(ps.Class),
-				color.HiBlackString(ps.Ratio()))
+			fmt.Fprintf(&b, "  %-15s %-9s %-16s %s  %-8s %s\n",
+				ps.Addr, portCol, truncate(ps.Service, 16),
+				colorSpark(ps.Class, ps.Sparkline()), classLabel(ps.Class), ps.Ratio())
 		}
 	}
 
 	return b.String()
+}
+
+// compactDelta joins a run's change tokens onto one line, coloured by marker, capped so a busy run
+// stays a glance.
+func compactDelta(summary []string) string {
+	const max = 5
+	var parts []string
+	for i, s := range summary {
+		if i == max {
+			parts = append(parts, color.HiBlackString("…+%d", len(summary)-max))
+			break
+		}
+		parts = append(parts, colorChange(s))
+	}
+	return strings.Join(parts, "   ")
+}
+
+// padVisible right-pads s to n visible columns (ANSI-agnostic; here s is plain).
+func padVisible(s string, n int) string {
+	if len(s) >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-len(s))
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-1] + "…"
 }
 
 // histDur renders a duration compactly for the history header ("42s", "3m", "1h05m").
