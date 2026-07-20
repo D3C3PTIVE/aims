@@ -179,32 +179,32 @@ func TestClassifyNmapFlag(t *testing.T) {
 		"-sV":           "service / OS detection",
 		"-O":            "service / OS detection",
 		"-A":            "service / OS detection",
-		"-sC":            "scripts (NSE)",
-		"--script":       "scripts (NSE)",
-		"--script-help":  "scripts (NSE)",
-		"--script-args":  "scripts (NSE)",
-		"-T4":            "timing & performance",
-		"--min-rate":     "timing & performance",
-		"--max-retries":  "timing & performance",
-		"-p":             "port specification",
-		"-F":             "port specification",
-		"--top-ports":    "port specification",
-		"-Pn":            "host discovery",
-		"-sn":            "host discovery",
-		"-PS":            "host discovery",
-		"--dns-servers":  "host discovery",
-		"--traceroute":   "host discovery",
-		"-oX":            "output",
-		"-oA":            "output",
-		"-v":             "output",
-		"-f":             "firewall / IDS evasion",
-		"--spoof-mac":    "firewall / IDS evasion",
-		"--data-length":  "firewall / IDS evasion",
-		"-iL":            "target specification",
-		"--exclude":      "target specification",
-		"--excludefile":  "target specification",
-		"-6":             "other nmap flags",
-		"--datadir":      "other nmap flags",
+		"-sC":           "scripts (NSE)",
+		"--script":      "scripts (NSE)",
+		"--script-help": "scripts (NSE)",
+		"--script-args": "scripts (NSE)",
+		"-T4":           "timing & performance",
+		"--min-rate":    "timing & performance",
+		"--max-retries": "timing & performance",
+		"-p":            "port specification",
+		"-F":            "port specification",
+		"--top-ports":   "port specification",
+		"-Pn":           "host discovery",
+		"-sn":           "host discovery",
+		"-PS":           "host discovery",
+		"--dns-servers": "host discovery",
+		"--traceroute":  "host discovery",
+		"-oX":           "output",
+		"-oA":           "output",
+		"-v":            "output",
+		"-f":            "firewall / IDS evasion",
+		"--spoof-mac":   "firewall / IDS evasion",
+		"--data-length": "firewall / IDS evasion",
+		"-iL":           "target specification",
+		"--exclude":     "target specification",
+		"--excludefile": "target specification",
+		"-6":            "other nmap flags",
+		"--datadir":     "other nmap flags",
 	}
 	for flag, want := range cases {
 		if got := classifyNmapFlag(flag); got != want {
@@ -298,29 +298,33 @@ func TestParseNSEArgs(t *testing.T) {
 // are wordlist files, not usernames; passvar/passlimit/useragent are free-form, not files or creds.
 func TestNSEArgValueKind(t *testing.T) {
 	cases := map[string]string{
-		"http-enum.host":          "host",
-		"ssl.host":                "host",
-		"target":                  "host",
-		"mssql.username":          "username",
-		"smbusername":             "username",
-		"userdb":                  "file",
-		"passdb":                  "file",
-		"brute.outputfile":        "file",
-		"smtp.domain":             "",
-		"http-enum.basepath":      "",
-		"http-form-brute.passvar": "",
-		"unpwdb.passlimit":        "",
-		"http.useragent":          "",
-		"creds.global":            "",
-		"broadcast-*.interface":   "interface",
-		"snmp.interface":          "interface",
-		"smtp.port":               "port",
-		"port":                    "port",
-		"smbpassword":             "secret",
-		"mssql.password":          "secret",
-		"ssh.passphrase":          "secret",
-		"http-enum.url":           "url",
-		"spider.uri":              "url",
+		"http-enum.host":           "host",
+		"ssl.host":                 "host",
+		"target":                   "host",
+		"mssql.username":           "username",
+		"smbusername":              "username",
+		"userdb":                   "file",
+		"passdb":                   "file",
+		"brute.outputfile":         "file",
+		"smtp.domain":              "domain",
+		"http-enum.basepath":       "",
+		"http-form-brute.passvar":  "",
+		"unpwdb.passlimit":         "",
+		"http.useragent":           "",
+		"creds.global":             "",
+		"broadcast-*.interface":    "interface",
+		"snmp.interface":           "interface",
+		"smtp.port":                "port",
+		"port":                     "port",
+		"smbpassword":              "secret",
+		"mssql.password":           "secret",
+		"ssh.passphrase":           "secret",
+		"http-enum.url":            "url",
+		"spider.uri":               "url",
+		"dns-brute.domain":         "domain",
+		"ldap.domains":             "domain",
+		"smbdomain":                "domain",
+		"http-domino.withindomain": "domain",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
@@ -486,13 +490,13 @@ func TestSecretDesc(t *testing.T) {
 // TestSecretTypeGroup: each private type lands in its group, unknown types default to passwords.
 func TestSecretTypeGroup(t *testing.T) {
 	cases := map[credential.PrivateType]string{
-		credential.PrivateType_Password:         "passwords",
-		credential.PrivateType_NTLMHash:         "NTLM hashes",
-		credential.PrivateType_PostgresMD5:      "PostgreSQL hashes",
-		credential.PrivateType_ReplayableHash:   "replayable hashes",
+		credential.PrivateType_Password:          "passwords",
+		credential.PrivateType_NTLMHash:          "NTLM hashes",
+		credential.PrivateType_PostgresMD5:       "PostgreSQL hashes",
+		credential.PrivateType_ReplayableHash:    "replayable hashes",
 		credential.PrivateType_NonReplayableHash: "non-replayable hashes",
-		credential.PrivateType_Key:              "keys",
-		credential.PrivateType_JWT:              "JWTs",
+		credential.PrivateType_Key:               "keys",
+		credential.PrivateType_JWT:               "JWTs",
 	}
 	for typ, want := range cases {
 		if got := secretTypeGroup(typ); got != want {
@@ -736,6 +740,100 @@ func TestLastGateway(t *testing.T) {
 	}
 	if got := lastGateway(mk()); got != "" {
 		t.Errorf("no trace: got %q, want empty", got)
+	}
+}
+
+// TestDomainsFromName pins zone extraction: the parent suffixes of ≥2 labels minus the host name
+// itself, a bare apex kept, and bare IPs / single labels yielding nothing.
+func TestDomainsFromName(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"www.corp.example.com", []string{"corp.example.com", "example.com"}},
+		{"mail.example.com", []string{"example.com"}},
+		{"example.com", []string{"example.com"}},
+		{"EXAMPLE.COM.", []string{"example.com"}}, // lowercased, trailing dot trimmed
+		{"localhost", nil}, // single label
+		{"10.0.0.5", nil},  // bare IP
+		{"", nil},
+	}
+	for _, c := range cases {
+		got := domainsFromName(c.in)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("domainsFromName(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestCollectDomains pins the zone aggregation + agent-context ranking: a host counts once per zone
+// however many names it has there, a zone takes the highest relevance of any host under it, and the
+// result is density-sorted.
+func TestCollectDomains(t *testing.T) {
+	host := func(id, addr string, names ...string) *pb.Host {
+		h := &pb.Host{Id: id}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		for _, n := range names {
+			h.Hostnames = append(h.Hostnames, &pb.Hostname{Name: n})
+		}
+		return h
+	}
+	agent := host("agent", "10.0.0.10", "web01.corp.local")
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", "db.corp.local", "db-alt.corp.local"), // same /24; two names, one zone
+		host("c", "8.8.8.8", "www.example.com"),                      // distant
+	}
+
+	byName := map[string]*domainInfo{}
+	for _, di := range collectDomains(all, agent) {
+		byName[di.name] = di
+	}
+
+	if di := byName["corp.local"]; di == nil || di.rel != agentctx.AgentHost || di.hosts != 2 {
+		t.Errorf("corp.local: got %+v, want rel=AgentHost hosts=2", di)
+	}
+	if di := byName["example.com"]; di == nil || di.rel != agentctx.Normal || di.hosts != 1 {
+		t.Errorf("example.com: got %+v, want rel=Normal hosts=1", di)
+	}
+	// Density-sorted: corp.local (2) before example.com (1).
+	subs := collectDomains(all, agent)
+	for i := 1; i < len(subs); i++ {
+		if subs[i-1].hosts < subs[i].hosts {
+			t.Errorf("collectDomains not sorted by density desc: %v", subs)
+			break
+		}
+	}
+}
+
+// TestDomainTag: agent-context relevance wins, else an apex (one dot) is registered and a deeper name
+// is a subdomain.
+func TestDomainTag(t *testing.T) {
+	cases := []struct {
+		di   *domainInfo
+		want string
+	}{
+		{&domainInfo{name: "example.com", rel: agentctx.AgentHost}, agentctx.TagContext},
+		{&domainInfo{name: "corp.local", rel: agentctx.Nearby}, agentctx.TagNearby},
+		{&domainInfo{name: "example.com"}, tagDomainRegistered},
+		{&domainInfo{name: "corp.example.com"}, tagDomainSub},
+	}
+	for _, c := range cases {
+		if got := domainTag(c.di); got != c.want {
+			t.Errorf("domainTag(%+v) = %q, want %q", c.di, got, c.want)
+		}
+	}
+}
+
+// TestDomainDesc: a correctly pluralised known-host count.
+func TestDomainDesc(t *testing.T) {
+	if got := domainDesc(&domainInfo{hosts: 3}); got != "3 known hosts" {
+		t.Errorf("domainDesc(3) = %q, want %q", got, "3 known hosts")
+	}
+	if got := domainDesc(&domainInfo{hosts: 1}); got != "1 known host" {
+		t.Errorf("domainDesc(1) = %q, want %q", got, "1 known host")
 	}
 }
 
