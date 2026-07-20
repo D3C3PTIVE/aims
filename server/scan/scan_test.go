@@ -240,3 +240,94 @@ func TestCreateSkipsDuplicateRun(t *testing.T) {
 		t.Errorf("db holds %d hosts after duplicate import, want 1", got)
 	}
 }
+
+// TestDeletePreservesSharedHost is the load-bearing Delete invariant: a run only *references* the
+// hosts it observed (run_hosts is a shared many2many), so deleting one of two runs that share a host
+// must remove that run and unlink it — WITHOUT deleting the shared host row a sibling run still
+// references.
+func TestDeletePreservesSharedHost(t *testing.T) {
+	s, gdb, ctx := newTestServer(t)
+
+	// Two distinct runs of the same physical host → one unified host row linked to both.
+	resA, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{runObserving("<xml>A</xml>", 22, "ssh")}})
+	if err != nil {
+		t.Fatalf("create run A: %v", err)
+	}
+	if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{runObserving("<xml>B</xml>", 80, "http")}}); err != nil {
+		t.Fatalf("create run B: %v", err)
+	}
+	if got := countRows(t, gdb, "hosts"); got != 1 {
+		t.Fatalf("precondition: want 1 unified host, got %d", got)
+	}
+
+	// Delete run A.
+	del, err := s.Delete(ctx, &scanrpcpb.DeleteScanRequest{Scans: []*scanpb.Run{{Id: resA.GetScans()[0].GetId()}}})
+	if err != nil {
+		t.Fatalf("delete run A: %v", err)
+	}
+	if len(del.GetScans()) != 1 {
+		t.Fatalf("Delete echoed %d removed runs, want 1", len(del.GetScans()))
+	}
+
+	// Run A is gone; run B remains.
+	if got := countRows(t, gdb, "runs"); got != 1 {
+		t.Errorf("db holds %d runs after deleting A, want 1", got)
+	}
+	// The shared host SURVIVES — it is still referenced by run B.
+	if got := countRows(t, gdb, "hosts"); got != 1 {
+		t.Errorf("db holds %d hosts after deleting A, want 1 (shared host must survive)", got)
+	}
+	// Only run B's join link remains; run A's was cleared.
+	if got := countRows(t, gdb, "run_hosts"); got != 1 {
+		t.Errorf("run_hosts holds %d links after deleting A, want 1 (only B's)", got)
+	}
+}
+
+// TestDeleteMissingRunIsNoOp: deleting an unknown Id removes nothing and does not error.
+func TestDeleteMissingRunIsNoOp(t *testing.T) {
+	s, gdb, ctx := newTestServer(t)
+
+	if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{runObserving("<xml>keep</xml>", 22, "ssh")}}); err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+
+	del, err := s.Delete(ctx, &scanrpcpb.DeleteScanRequest{Scans: []*scanpb.Run{{Id: "does-not-exist"}}})
+	if err != nil {
+		t.Fatalf("delete missing run errored: %v", err)
+	}
+	if len(del.GetScans()) != 0 {
+		t.Errorf("Delete echoed %d removed runs for an unknown Id, want 0", len(del.GetScans()))
+	}
+	if got := countRows(t, gdb, "runs"); got != 1 {
+		t.Errorf("db holds %d runs, want 1 (nothing removed)", got)
+	}
+}
+
+// TestUpsertIsIdempotent: upserting a new run stores it and returns its Id; upserting the identical
+// run again returns the SAME canonical Id and creates no second row.
+func TestUpsertIsIdempotent(t *testing.T) {
+	s, gdb, ctx := newTestServer(t)
+
+	first, err := s.Upsert(ctx, &scanrpcpb.UpsertScanRequest{Scans: []*scanpb.Run{runObserving("<xml>U</xml>", 443, "https")}})
+	if err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+	if len(first.GetScans()) != 1 || first.GetScans()[0].GetId() == "" {
+		t.Fatalf("first upsert returned %d scans (want 1 with an Id)", len(first.GetScans()))
+	}
+	id := first.GetScans()[0].GetId()
+
+	second, err := s.Upsert(ctx, &scanrpcpb.UpsertScanRequest{Scans: []*scanpb.Run{runObserving("<xml>U</xml>", 443, "https")}})
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+	if len(second.GetScans()) != 1 {
+		t.Fatalf("second upsert returned %d scans, want 1", len(second.GetScans()))
+	}
+	if got := second.GetScans()[0].GetId(); got != id {
+		t.Errorf("re-upsert returned Id %q, want the canonical stored Id %q", got, id)
+	}
+	if got := countRows(t, gdb, "runs"); got != 1 {
+		t.Errorf("db holds %d runs after re-upsert, want 1 (idempotent)", got)
+	}
+}

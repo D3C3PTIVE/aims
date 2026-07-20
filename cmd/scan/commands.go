@@ -47,6 +47,7 @@ func Commands(con *client.Client) *cobra.Command {
 
 	scanCmd.AddCommand(listCommand(con))
 	scanCmd.AddCommand(showCommand(con))
+	scanCmd.AddCommand(rmCommand(con))
 	scanCmd.AddCommand(runCommand(con))
 
 	// Import
@@ -124,6 +125,75 @@ func listCommand(con *client.Client) *cobra.Command {
 	}
 
 	return listCmd
+}
+
+func rmCommand(con *client.Client) *cobra.Command {
+	rmCmd := &cobra.Command{
+		Use:   "rm",
+		Short: "Remove one or more scans from the database (by ID prefix)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(command *cobra.Command, args []string) error {
+			force, _ := command.Flags().GetBool("force")
+
+			// Read every scan through the teamclient (never the DB directly), then resolve each
+			// ID-prefix argument against them — the same prefix match `show` uses. Only the Id is
+			// needed to delete, so hosts are left unpreloaded (a light Delete payload); the
+			// unconditional Begin/Progress/Stats preloads are enough for the running-scan guard.
+			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
+				Scan:    &pb.Run{},
+				Filters: &scans.RunFilters{},
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			// A mid-flight run must not be dropped out from under a live scan: deleting its row
+			// would not stop the scanner (there is no cancellation path yet) and a later progress
+			// write could recreate it. Skip running scans with a warning unless --force. Today no
+			// running run is ever persisted, so this only bites once streaming lands (SCAN.md C).
+			var matched []*pb.Run
+			var skipped int
+			for _, r := range res.GetScans() {
+				for _, arg := range args {
+					if !strings.HasPrefix(r.GetId(), strip(arg)) {
+						continue
+					}
+					if scan.IsRunning(r) && !force {
+						fmt.Printf("Skipping running scan %s (use --force to remove it anyway)\n",
+							display.FormatSmallID(r.GetId()))
+						skipped++
+					} else {
+						matched = append(matched, r)
+					}
+					break
+				}
+			}
+			if len(matched) == 0 {
+				if skipped > 0 {
+					return fmt.Errorf("no scan removed (%d running scan(s) skipped; use --force)", skipped)
+				}
+				return fmt.Errorf("no matching scan")
+			}
+
+			del, err := con.Scans.Delete(command.Context(), &scans.DeleteScanRequest{
+				Scans: matched,
+			})
+			if err = aims.CheckError(err); err != nil {
+				return err
+			}
+
+			fmt.Printf("Removed %d scan(s).\n", len(del.GetScans()))
+			return nil
+		},
+	}
+
+	aims.BindFlags(rmCmd.Name(), false, rmCmd, func(f *pflag.FlagSet) {
+		f.BoolP("force", "f", false, "Remove even running scans (does not stop the scanner)")
+	})
+
+	carapace.Gen(rmCmd).PositionalAnyCompletion(CompleteByID(con))
+
+	return rmCmd
 }
 
 func showCommand(con *client.Client) *cobra.Command {

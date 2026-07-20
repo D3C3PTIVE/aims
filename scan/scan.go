@@ -184,6 +184,13 @@ func stateOf(r *scan.Run) runState {
 	return stateCreated
 }
 
+// IsRunning reports whether the run appears to be mid-flight — task activity (Begin/Progress) with
+// no terminal Finished stats. Today no running run is ever persisted (`scan run` blocks to
+// completion before storing), so this is always false for stored runs; it exists so destructive
+// operations can refuse an in-flight run once live/streaming scans land (SCAN.md Part C), rather
+// than silently dropping a partial record while the scanner keeps going.
+func IsRunning(r *scan.Run) bool { return stateOf(r) == stateRunning }
+
 // runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
 func runPercent(r *scan.Run) float32 {
 	var max float32
