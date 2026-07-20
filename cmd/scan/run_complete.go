@@ -605,6 +605,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return completeSecret(con)
 	case "url":
 		return completeWebURL(con)
+	case "domain":
+		return completeDomain(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -640,6 +642,8 @@ func nseArgValueKind(key string) string {
 		return "secret"
 	case base == "url" || base == "uri":
 		return "url"
+	case base == "domain" || base == "domains" || strings.HasSuffix(base, "domain"):
+		return "domain"
 	default:
 		return ""
 	}
@@ -1438,6 +1442,167 @@ func lastGateway(h *pb.Host) string {
 		return ""
 	}
 	return hops[len(hops)-2].GetIPAddr()
+}
+
+//
+// [ Domains — parent zones of DB hostnames, agent-promoted ] ------------------------------------
+//
+
+const (
+	tagDomainRegistered = "registered domains"
+	tagDomainSub        = "subdomains"
+)
+
+// domainGroupOrder: agent-context relevance groups first, then the apex/registered domains (the
+// natural zone to enumerate), then the deeper subdomains.
+var domainGroupOrder = agentctx.PromotedOrder(tagDomainRegistered, tagDomainSub)
+
+// completeDomain completes a domain value — an NSE `dns-*` arg (dns-brute.domain, …), and any
+// DNS/recon tool's domain flag later — from the DNS names already in the database. Each known
+// hostname contributes its parent zones (every suffix of ≥2 labels, minus the host name itself),
+// aggregated by how many known hosts fall under each; zones under the current agent's host are
+// promoted via the relevance layer. Cached; the cache key carries the agent id.
+//
+// The value is intentionally *not* a full host FQDN (that is the target completer's job) — it is the
+// zone an operator hands to a brute/transfer tool to enumerate.
+func completeDomain(con *client.Client) carapace.Action {
+	name := "scan:domains"
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(guard("domain", func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
+			return msg
+		}
+
+		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{Host: &pb.Host{}})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		if len(res.GetHosts()) == 0 {
+			return carapace.ActionMessage("no hosts in database")
+		}
+
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedDomains(res.GetHosts(), agentHost)
+	})))
+}
+
+// domainInfo aggregates one candidate zone: its name, how many known hosts have a name under it, and
+// the closest agent-context relevance of any of those hosts.
+type domainInfo struct {
+	name  string
+	hosts int
+	rel   agentctx.Relevance
+}
+
+// domainsFromName returns the parent zones of a DNS name: every suffix of ≥2 labels, excluding the
+// full name itself (that is a host, not a zone) — except a bare 2-label name, which *is* its own
+// registered domain. A bare IP or single-label name yields nothing. So www.corp.example.com →
+// {corp.example.com, example.com} and example.com → {example.com}.
+func domainsFromName(name string) []string {
+	name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	if name == "" || net.ParseIP(name) != nil {
+		return nil
+	}
+	labels := strings.Split(name, ".")
+	n := len(labels)
+	if n < 2 {
+		return nil
+	}
+
+	max := n - 1 // deeper names: drop at least the leftmost (host) label
+	if n == 2 {
+		max = 2 // a bare apex is its own registered domain
+	}
+	out := make([]string, 0, max-1)
+	for size := max; size >= 2; size-- { // most-specific zone first, down to the apex
+		out = append(out, strings.Join(labels[n-size:], "."))
+	}
+	return out
+}
+
+// collectDomains aggregates the parent zones of every host's hostnames, counting each host once per
+// zone and keeping the highest agent-context relevance of any host under it. Sorted by host density
+// (desc) then name.
+func collectDomains(all []*pb.Host, agentHost *pb.Host) []*domainInfo {
+	byName := make(map[string]*domainInfo)
+	for _, h := range all {
+		rel := agentctx.RelevanceOfHost(h, agentHost)
+		counted := make(map[string]bool) // a host counts once per zone, however many names it has there
+		for _, hn := range h.GetHostnames() {
+			for _, d := range domainsFromName(hn.GetName()) {
+				di := byName[d]
+				if di == nil {
+					di = &domainInfo{name: d}
+					byName[d] = di
+				}
+				if rel > di.rel {
+					di.rel = rel
+				}
+				if !counted[d] {
+					counted[d] = true
+					di.hosts++
+				}
+			}
+		}
+	}
+
+	out := make([]*domainInfo, 0, len(byName))
+	for _, di := range byName {
+		out = append(out, di)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].hosts != out[j].hosts {
+			return out[i].hosts > out[j].hosts
+		}
+		return out[i].name < out[j].name
+	})
+	return out
+}
+
+// groupedDomains renders the aggregated zones as promoted, described carapace groups: zones under the
+// agent's host (then its subnet) lead via the relevance layer, then apex/registered domains, then
+// deeper subdomains.
+func groupedDomains(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+	buckets := make(map[string][]string)
+	for _, di := range collectDomains(all, agentHost) {
+		buckets[domainTag(di)] = append(buckets[domainTag(di)], di.name, domainDesc(di))
+	}
+
+	actions := make([]carapace.Action, 0, len(domainGroupOrder))
+	for _, tag := range domainGroupOrder {
+		if pairs := buckets[tag]; len(pairs) > 0 {
+			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
+		}
+	}
+	if len(actions) == 0 {
+		return carapace.ActionMessage("no domains in database")
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// domainTag groups a zone: the agent-context relevance group if any, else registered (one dot, an
+// apex like example.com) vs a deeper subdomain (a heuristic split — no public-suffix list, so a
+// multi-label public suffix like co.uk reads as registered, which is harmless here).
+func domainTag(di *domainInfo) string {
+	if tag := di.rel.Tag(); tag != "" {
+		return tag
+	}
+	if strings.Count(di.name, ".") == 1 {
+		return tagDomainRegistered
+	}
+	return tagDomainSub
+}
+
+// domainDesc describes a zone by how many known hosts fall under it.
+func domainDesc(di *domainInfo) string {
+	unit := "hosts"
+	if di.hosts == 1 {
+		unit = "host"
+	}
+	return strconv.Itoa(di.hosts) + " known " + unit
 }
 
 // nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment
