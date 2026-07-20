@@ -230,3 +230,73 @@ func TestCuratedNmapFlags(t *testing.T) {
 		t.Errorf("curatedFlagNames returned %d names, want %d", got, len(pairs)/2)
 	}
 }
+
+// A faithful slice of an NSE header: a name-only arg, and a description that wraps across comment
+// lines and is terminated by the next @tag.
+const nseArgsSample = `local shortport = require "shortport"
+
+---
+-- Does a thing to a host.
+--
+-- @usage nmap --script foo --script-args foo.timeout=5
+-- @args foo.timeout  Timeout in seconds. Defaults
+--       to 10 seconds.
+-- @args foo.retries Number of retries
+-- @args foo.host
+-- @output
+-- | foo: bar
+--
+author = "someone"
+`
+
+// TestParseNSEArgs pins the @args extraction: multi-line descriptions are folded, a name-only arg
+// keeps an empty description, and neither the code lines nor the other @tags leak in.
+func TestParseNSEArgs(t *testing.T) {
+	args := parseNSEArgs(strings.NewReader(nseArgsSample))
+
+	want := map[string]string{
+		"foo.timeout": "Timeout in seconds. Defaults to 10 seconds.",
+		"foo.retries": "Number of retries",
+		"foo.host":    "",
+	}
+	if len(args) != len(want) {
+		t.Fatalf("want %d args, got %d (%v)", len(want), len(args), args)
+	}
+	for _, a := range args {
+		w, ok := want[a[0]]
+		if !ok {
+			t.Errorf("unexpected arg %q", a[0])
+			continue
+		}
+		if a[1] != w {
+			t.Errorf("arg %q: want description %q, got %q", a[0], w, a[1])
+		}
+	}
+}
+
+// TestNSEArgValueKind guards the value-side dispatch: which NSE args borrow an existing AIMS
+// completer. The subtle cases are the ones that share a substring with another kind — userdb/passdb
+// are wordlist files, not usernames; passvar/passlimit/useragent are free-form, not files or creds.
+func TestNSEArgValueKind(t *testing.T) {
+	cases := map[string]string{
+		"http-enum.host":          "host",
+		"ssl.host":                "host",
+		"target":                  "host",
+		"mssql.username":          "username",
+		"smbusername":             "username",
+		"userdb":                  "file",
+		"passdb":                  "file",
+		"brute.outputfile":        "file",
+		"smtp.domain":             "",
+		"http-enum.basepath":      "",
+		"http-form-brute.passvar": "",
+		"unpwdb.passlimit":        "",
+		"http.useragent":          "",
+		"creds.global":            "",
+	}
+	for k, want := range cases {
+		if got := nseArgValueKind(k); got != want {
+			t.Errorf("nseArgValueKind(%q) = %q, want %q", k, got, want)
+		}
+	}
+}

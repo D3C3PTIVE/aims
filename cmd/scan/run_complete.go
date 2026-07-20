@@ -34,6 +34,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/host"
 	pb "github.com/d3c3ptive/aims/host/pb"
@@ -59,8 +60,13 @@ import (
 // long-tail for whatever extra the local `_nmap` knows.
 func completeRunNmap(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if n := len(c.Args); n > 0 && c.Args[n-1] == "--script" {
-			return completeNSEScripts(con)
+		if n := len(c.Args); n > 0 {
+			switch c.Args[n-1] {
+			case "--script":
+				return completeNSEScripts(con)
+			case "--script-args":
+				return completeNSEScriptArgs(con)
+			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
 			return nmapFlagCompletions()
@@ -409,6 +415,199 @@ func groupedNSE(scripts []nseScript, categories []string) carapace.Action {
 	}
 
 	return carapace.Batch(actions...).ToA()
+}
+
+//
+// [ NSE script args — parsed from every .nse @args tag ] ----------------------------------------
+//
+
+// completeNSEScriptArgs completes nmap's `--script-args`, whose value is a comma-separated list of
+// `key=value` pairs. Completion is two-level: the key side offers every NSE argument declared by an
+// installed script (parsed from `@args` header tags, cached), and the value side dispatches to an
+// existing AIMS completer when the key's shape says what the value is — a target host, a known
+// credential username, or a wordlist/data file. Anything else is left free-form.
+func completeNSEScriptArgs(con *client.Client) carapace.Action {
+	return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
+		return carapace.ActionMultiParts("=", func(c carapace.Context) carapace.Action {
+			if len(c.Parts) > 0 { // past the '=', completing the value of Parts[0]
+				return completeNSEArgValue(con, c.Parts[0])
+			}
+			return nseArgNames(con)
+		})
+	})
+}
+
+// nseArgNames offers the deduplicated set of NSE argument names, described from their `@args` text.
+// Parsing every installed `.nse` is the expensive part, so it is wrapped in the shared on-disk
+// completion cache (same rationale as the script list): in exec-once CLI mode every Tab is a fresh
+// process, so only the on-disk cache spares the whole-scripts-dir re-parse per keystroke.
+func nseArgNames(con *client.Client) carapace.Action {
+	return aims.CacheCompletion(con, "scan:nmap:nse-args", carapace.ActionCallback(func(carapace.Context) carapace.Action {
+		args := loadNSEScriptArgs()
+		if len(args) == 0 {
+			return carapace.ActionMessage("no NSE script args found (is nmap installed locally?)")
+		}
+		described := make([]string, 0, len(args)*2)
+		for _, a := range args {
+			described = append(described, a[0], a[1])
+		}
+		return carapace.ActionValuesDescribed(described...).Tag("script args")
+	}))
+}
+
+// completeNSEArgValue dispatches the value side of an NSE `key=value` arg to an existing AIMS
+// completer, chosen from the key's shape (see nseArgValueKind). Reusing completeTargets and the
+// credentials completer means these values flow through the same cached teamclient RPC path as the
+// rest of AIMS completion — never the DB directly.
+func completeNSEArgValue(con *client.Client, key string) carapace.Action {
+	switch nseArgValueKind(key) {
+	case "host":
+		return completeTargets(con)
+	case "username":
+		return credentials.CompleteByUsername(con)
+	case "file":
+		return carapace.ActionFiles()
+	default:
+		return carapace.ActionValues() // free-form value, nothing to offer
+	}
+}
+
+// nseArgValueKind classifies what an NSE argument's value is, from the argument name, so its value
+// can borrow an existing completer. It keys off the last dotted/dashed segment (NSE args are
+// namespaced, e.g. http-enum.host, mssql.username) with a few whole-key signals. Heuristic by
+// nature: an unrecognised arg returns "" (free-form). Order matters — the file signals are checked
+// before "username" so that userdb/passdb (wordlist files) don't read as usernames.
+func nseArgValueKind(key string) string {
+	k := strings.ToLower(key)
+	base := k
+	if i := strings.LastIndexAny(k, ".-"); i >= 0 {
+		base = k[i+1:]
+	}
+
+	switch {
+	case strings.Contains(k, "userdb"), strings.Contains(k, "passdb"),
+		strings.Contains(k, "wordlist"), strings.Contains(k, "dict"),
+		strings.HasSuffix(base, "file"):
+		return "file"
+	case base == "host" || base == "target" || base == "targets" ||
+		base == "rhost" || strings.HasSuffix(base, "host"):
+		return "host"
+	case strings.Contains(base, "username") || base == "user" || strings.HasSuffix(base, "user"):
+		return "username"
+	default:
+		return ""
+	}
+}
+
+// nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment
+// dashes are already stripped by parseNSEArgs). The description may continue on following comment
+// lines; parseNSEArgs folds those in.
+var nseArgsRE = regexp.MustCompile(`^@args\s+(\S+)\s*(.*)$`)
+
+// findNSEScriptsDir returns the directory holding the installed `.nse` files. They sit alongside
+// script.db, so the script.db locator already found the right place; fall back to a `scripts`
+// subdirectory for the rare layout where script.db is one level up.
+func findNSEScriptsDir() string {
+	db := findScriptDB()
+	if db == "" {
+		return ""
+	}
+	dir := filepath.Dir(db)
+	if matches, _ := filepath.Glob(filepath.Join(dir, "*.nse")); len(matches) > 0 {
+		return dir
+	}
+	if sub := filepath.Join(dir, "scripts"); dirHasNSE(sub) {
+		return sub
+	}
+	return ""
+}
+
+func dirHasNSE(dir string) bool {
+	matches, _ := filepath.Glob(filepath.Join(dir, "*.nse"))
+	return len(matches) > 0
+}
+
+// loadNSEScriptArgs parses the `@args` tags of every installed `.nse` into a name-sorted, deduped
+// (name, description) set. The same argument is declared by many scripts (library args like
+// http.useragent, smbdomain), so it is deduplicated by name, keeping the first non-empty
+// description seen.
+func loadNSEScriptArgs() [][2]string {
+	dir := findNSEScriptsDir()
+	if dir == "" {
+		return nil
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "*.nse"))
+
+	byName := make(map[string]string)
+	for _, path := range files {
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		for _, a := range parseNSEArgs(f) {
+			if cur, ok := byName[a[0]]; !ok || cur == "" {
+				byName[a[0]] = a[1]
+			}
+		}
+		f.Close()
+	}
+
+	names := make([]string, 0, len(byName))
+	for n := range byName {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	out := make([][2]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, [2]string{n, byName[n]})
+	}
+	return out
+}
+
+// parseNSEArgs extracts the `@args name description` declarations from a single `.nse` file. NSE
+// headers are Lua block comments (`-- …`); a description often wraps onto following comment lines,
+// which are folded into it until the next `@tag`, a blank comment line, or the end of the header.
+func parseNSEArgs(r io.Reader) [][2]string {
+	var out [][2]string
+	var name, desc string
+
+	flush := func() {
+		if name != "" {
+			out = append(out, [2]string{name, strings.TrimSpace(desc)})
+		}
+		name, desc = "", ""
+	}
+
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024) // some .nse lines are long
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if !strings.HasPrefix(line, "--") { // left the comment header / hit code
+			flush()
+			continue
+		}
+		content := strings.TrimSpace(strings.TrimLeft(line, "-"))
+
+		switch {
+		case strings.HasPrefix(content, "@args ") || content == "@args":
+			flush()
+			if m := nseArgsRE.FindStringSubmatch(content); m != nil {
+				name, desc = m[1], m[2]
+			}
+		case strings.HasPrefix(content, "@"): // a different header tag ends this arg
+			flush()
+		case content == "": // blank comment line ends this arg
+			flush()
+		default:
+			if name != "" { // a wrapped description line
+				desc += " " + content
+			}
+		}
+	}
+	flush()
+
+	return out
 }
 
 var nseEntryRE = regexp.MustCompile(`filename\s*=\s*"([^"]+)\.nse".*categories\s*=\s*\{([^}]*)\}`)
