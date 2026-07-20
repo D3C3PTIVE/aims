@@ -185,3 +185,64 @@ func jobListed(t *testing.T, s *server, jobID string) bool {
 	}
 	return false
 }
+
+// TestRunSnapshotVisibleMidScan proves incremental persistence: the run is stored (visible via
+// Read, keyed by the job id) WHILE the scan is still running — so `watch scan show <id>` has
+// something to render before completion. A detached scan of an unreachable host stays running
+// long enough to observe; Stop cleans up. Guarded (needs nmap).
+func TestRunSnapshotVisibleMidScan(t *testing.T) {
+	if os.Getenv("AIMS_NMAP_IT") == "" {
+		t.Skip("set AIMS_NMAP_IT=1 to run (requires the nmap binary)")
+	}
+
+	s, _, ctx := newTestServer(t)
+
+	fg := &fakeRunStream{ctx: context.Background()}
+	err := s.Run(&scanrpcpb.RunScanRequest{
+		Scanner:    "nmap",
+		Args:       []string{"-sT", "-p", "1-100", "--host-timeout", "30s"},
+		Targets:    []*scanpb.Target{{Address: "192.0.2.1"}}, // unreachable → scan lingers
+		Background: true,
+	}, fg)
+	if err != nil {
+		t.Fatalf("Run (background): %v", err)
+	}
+	fg.mu.Lock()
+	jobID := fg.updates[0].GetJobId()
+	fg.mu.Unlock()
+
+	seenWhileRunning := false
+	for i := 0; i < 100 && !s.getJob(jobID).isDone(); i++ {
+		if runInDB(ctx, s, jobID) {
+			seenWhileRunning = true
+			break
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+
+	// Clean up: cancel the scan and let it settle.
+	_, _ = s.Stop(context.Background(), &scanrpcpb.StopRequest{JobId: jobID})
+	for i := 0; i < 200 && !s.getJob(jobID).isDone(); i++ {
+		time.Sleep(30 * time.Millisecond)
+	}
+
+	if !seenWhileRunning {
+		t.Error("run should be persisted (visible via Read) while the scan is still running")
+	}
+}
+
+func runInDB(ctx context.Context, s *server, id string) bool {
+	res, err := s.Read(ctx, &scanrpcpb.ReadScanRequest{
+		Scan:    &scanpb.Run{},
+		Filters: &scanrpcpb.RunFilters{},
+	})
+	if err != nil {
+		return false
+	}
+	for _, r := range res.GetScans() {
+		if r.GetId() == id {
+			return true
+		}
+	}
+	return false
+}
