@@ -215,9 +215,16 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		_, _ = s.persistRun(context.Background(), pbRun)
 	}
 
-	// Persist an initial (empty) snapshot immediately so the run is visible as soon as it starts.
+	// Persist an initial snapshot immediately so the run is visible as soon as it starts.
 	snapshot()
-	lastSnap := time.Now()
+
+	// Heartbeat: re-snapshot on a fixed interval regardless of frame arrival. Each snapshot upserts
+	// the run (bumping UpdatedAt), which is the liveness signal stateOf reads — so a live scan stays
+	// "running" even through quiet phases (a single-host scan emits its host only at the end), and a
+	// scan whose owning process is killed stops heartbeating and is judged "interrupted" once the
+	// timestamp goes stale (see scan.runStaleAfter). Kept well below that staleness bound.
+	beat := time.NewTicker(5 * time.Second)
+	defer beat.Stop()
 
 	for results != nil || progress != nil {
 		select {
@@ -229,10 +236,7 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 			_ = run.AddResult((*scan.Result)(r))
 			if r.GetHost() != nil {
 				job.broadcast(hostUpdate(r.GetHost()))
-			}
-			if time.Since(lastSnap) > 1500*time.Millisecond {
-				snapshot()
-				lastSnap = time.Now()
+				snapshot() // a new host is worth persisting immediately (live `scan show`)
 			}
 		case p, ok := <-progress:
 			if !ok {
@@ -242,6 +246,8 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 			if p != nil {
 				job.broadcast(progressUpdate(p))
 			}
+		case <-beat.C:
+			snapshot()
 		}
 	}
 

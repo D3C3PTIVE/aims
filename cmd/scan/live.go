@@ -214,8 +214,7 @@ func (d *dashboard) lines() []string {
 	// Hosts table (only once at least one host has landed).
 	if len(d.hosts) > 0 {
 		out = append(out, "")
-		header := "  " + padRight("HOST", 22) + " " + padRight("STATE", 5) + " " + padRight("OPEN", 4) + " SERVICES"
-		out = append(out, display.Dim+header+display.Reset)
+		out = append(out, display.Dim+hostTableHeader()+display.Reset)
 		for _, h := range d.hosts {
 			out = append(out, hostRowLine(h))
 		}
@@ -245,19 +244,25 @@ func (d *dashboard) lines() []string {
 // hostRow is one line of the live hosts table.
 type hostRow struct {
 	label    string
+	name     string
 	state    string
+	os       string
 	open     int
 	services string
 }
 
-// hostSummary condenses a streamed host into a table row: its address (or first hostname), up/down
-// state, open-port count, and the first handful of open service names.
+// hostSummary condenses a streamed host into a table row: its address, first hostname, up/down
+// state, OS guess, open-port count, and the first handful of open service names.
 func hostSummary(h *hostpb.Host) hostRow {
 	label := "?"
 	if len(h.GetAddresses()) > 0 && h.GetAddresses()[0].GetAddr() != "" {
 		label = h.GetAddresses()[0].GetAddr()
 	} else if len(h.GetHostnames()) > 0 {
 		label = h.GetHostnames()[0].GetName()
+	}
+	name := ""
+	if len(h.GetHostnames()) > 0 && h.GetHostnames()[0].GetName() != label {
+		name = h.GetHostnames()[0].GetName()
 	}
 	state := h.GetStatus().GetState()
 	if state == "" {
@@ -281,11 +286,36 @@ func hostSummary(h *hostpb.Host) hostRow {
 			svcs = append(svcs, name)
 		}
 	}
-	return hostRow{label: label, state: state, open: open, services: strings.Join(svcs, " · ")}
+	return hostRow{label: label, name: name, state: state, os: osLabel(h), open: open, services: strings.Join(svcs, " · ")}
+}
+
+// osLabel is a short OS guess for the host table: the derived OS family, else the top OS match name.
+func osLabel(h *hostpb.Host) string {
+	if fam := h.GetOSFamily(); fam != "" {
+		return fam
+	}
+	if os := h.GetOS(); os != nil && len(os.GetMatches()) > 0 {
+		return os.GetMatches()[0].GetName()
+	}
+	return ""
+}
+
+// hostTableCols are the fixed column widths of the live hosts table (services take the remainder).
+const (
+	colHost  = 18
+	colName  = 16
+	colState = 5
+	colOS    = 14
+	colOpen  = 4
+)
+
+func hostTableHeader() string {
+	return "  " + padRight("HOST", colHost) + " " + padRight("NAME", colName) + " " +
+		padRight("STATE", colState) + " " + padRight("OS", colOS) + " " + padRight("OPEN", colOpen) + " SERVICES"
 }
 
 func hostRowLine(h hostRow) string {
-	st := padRight(h.state, 5)
+	st := padRight(h.state, colState)
 	switch h.state {
 	case "up":
 		st = color.GreenString(st)
@@ -294,7 +324,8 @@ func hostRowLine(h hostRow) string {
 	default:
 		st = color.YellowString(st)
 	}
-	return "  " + padRight(h.label, 22) + " " + st + " " + padRight(fmt.Sprintf("%d", h.open), 4) + " " + h.services
+	return "  " + padRight(h.label, colHost) + " " + padRight(h.name, colName) + " " + st + " " +
+		padRight(h.os, colOS) + " " + padRight(fmt.Sprintf("%d", h.open), colOpen) + " " + h.services
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -406,7 +437,14 @@ func lineStream(stream updateReceiver) error {
 			fmt.Printf("Scan job %s started.\n", display.FormatSmallID(u.JobId))
 		case *scans.RunUpdate_Host:
 			h := hostSummary(u.Host)
-			line := fmt.Sprintf("[+] %s  %d open", h.label, h.open)
+			line := "[+] " + h.label
+			if h.name != "" {
+				line += " (" + h.name + ")"
+			}
+			if h.os != "" {
+				line += "  " + h.os
+			}
+			line += fmt.Sprintf("  %d open", h.open)
 			if h.services != "" {
 				line += ": " + h.services
 			}

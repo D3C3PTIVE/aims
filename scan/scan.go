@@ -163,14 +163,24 @@ func hasPort(h *host.Host, p *host.Port) bool {
 type runState int
 
 const (
-	stateCreated runState = iota // no begin/progress and not finished yet
-	stateRunning                 // has progress/begin, no finished stats
-	stateDone                    // finished, clean exit
-	stateFailed                  // finished with a non-success exit or error
+	stateCreated     runState = iota // persisted stub, no heartbeat yet (rare/transient)
+	stateRunning                     // non-final, heartbeat fresh — a live scan is driving it
+	stateDone                        // finished, clean exit
+	stateFailed                      // finished with a non-success exit or error
+	stateInterrupted                 // non-final, heartbeat stale — the owning process died
 )
 
-// stateOf classifies a run. Finished stats are authoritative for done/failed; a run with task
-// activity but no finished stats is still running; anything else is freshly created/queued.
+// runStaleAfter bounds how long a non-final run may go without a fresh snapshot before it is judged
+// orphaned. A live scan re-persists a snapshot every few seconds (server/scan/run.go heartbeats
+// consume), which bumps UpdatedAt; well above that interval, a still-non-final run whose UpdatedAt
+// has frozen is one whose owning process died (operator killed the command, teamserver crashed).
+const runStaleAfter = 30 * time.Second
+
+// stateOf classifies a run. Finished stats are authoritative for done/failed. For a non-final run,
+// UpdatedAt doubles as a liveness heartbeat: fresh means some process is still driving the scan
+// (running), stale means it was orphaned (interrupted). Deriving liveness from the heartbeat is
+// correct across processes — a `scan list` in another terminal reads the live run's fresh
+// UpdatedAt — and self-heals a killed scan with no background sweeper.
 func stateOf(r *scan.Run) runState {
 	if fin := r.GetStats().GetFinished(); fin != nil && (fin.Time != 0 || fin.TimeStr != "" || fin.Elapsed != 0) {
 		if fin.ErrorMsg != "" || (fin.Exit != "" && fin.Exit != "success") {
@@ -178,17 +188,26 @@ func stateOf(r *scan.Run) runState {
 		}
 		return stateDone
 	}
-	if len(r.GetProgress()) > 0 || len(r.GetBegin()) > 0 {
+	// Non-final. A persisted run whose heartbeat (UpdatedAt) has frozen is an orphan — its owning
+	// process died mid-scan — regardless of whatever partial progress it had captured; that check
+	// comes first so a stale run never reads as running.
+	persisted := false
+	if ts := r.GetUpdatedAt(); ts != nil && !ts.AsTime().IsZero() {
+		persisted = true
+		if time.Since(ts.AsTime()) > runStaleAfter {
+			return stateInterrupted
+		}
+	}
+	// Task activity (Begin/Progress), or a live persisted run (fresh heartbeat), is running.
+	if len(r.GetProgress()) > 0 || len(r.GetBegin()) > 0 || persisted {
 		return stateRunning
 	}
-	return stateCreated
+	return stateCreated // built in memory, never persisted, no task activity
 }
 
-// IsRunning reports whether the run appears to be mid-flight — task activity (Begin/Progress) with
-// no terminal Finished stats. Today no running run is ever persisted (`scan run` blocks to
-// completion before storing), so this is always false for stored runs; it exists so destructive
-// operations can refuse an in-flight run once live/streaming scans land (SCAN.md Part C), rather
-// than silently dropping a partial record while the scanner keeps going.
+// IsRunning reports whether the run is mid-flight — a non-final run with a fresh heartbeat. A killed
+// scan goes stale and reads as interrupted (not running), so it no longer blocks destructive
+// operations (`scan rm`) the way a perpetually-"running" orphan would.
 func IsRunning(r *scan.Run) bool { return stateOf(r) == stateRunning }
 
 // runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
@@ -214,6 +233,8 @@ func stateToken(r *scan.Run) string {
 			return color.HiYellowString("● %.0f%%", p)
 		}
 		return color.HiYellowString("● running")
+	case stateInterrupted:
+		return color.RedString("⚠ interrupted")
 	default:
 		return color.HiBlackString("⋯ queued")
 	}
@@ -284,6 +305,8 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 			return color.HiRedString(id)
 		case stateRunning:
 			return color.HiYellowString(id)
+		case stateInterrupted:
+			return color.HiBlackString(id)
 		default:
 			return id
 		}
@@ -312,8 +335,9 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 	"Tasks":   func(r *scan.Run) string { return tasksSummary(r) },
 }
 
-// SortRuns orders runs for listing: running scans first (most actionable), then queued, then the
-// rest — each group by most-recent activity. Stable, so equal keys keep their read order.
+// SortRuns orders runs for listing: running scans first (most actionable), then interrupted
+// (orphaned, likely need attention), then freshly-created, then the rest — each group by
+// most-recent activity. Stable, so equal keys keep their read order.
 func SortRuns(runs []*scan.Run) {
 	slices.SortStableFunc(runs, func(a, b *scan.Run) int {
 		if c := cmp.Compare(sortRank(a), sortRank(b)); c != 0 {
@@ -327,10 +351,12 @@ func sortRank(r *scan.Run) int {
 	switch stateOf(r) {
 	case stateRunning:
 		return 0
-	case stateCreated:
+	case stateInterrupted:
 		return 1
-	default:
+	case stateCreated:
 		return 2
+	default:
+		return 3
 	}
 }
 

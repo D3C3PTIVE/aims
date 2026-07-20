@@ -62,13 +62,14 @@ func openTCP(num uint32, service string) *hostpb.Port {
 	}
 }
 
-// TestHostSummary condenses a host into a table row: address label, up/down, open-port count, and
-// the open service names (closed ports excluded).
+// TestHostSummary condenses a host into a table row: address label, hostname, up/down, OS guess,
+// open-port count, and the open service names (closed ports excluded).
 func TestHostSummary(t *testing.T) {
 	h := &hostpb.Host{
 		Addresses: []*network.Address{{Addr: "10.0.0.9"}},
 		Hostnames: []*hostpb.Hostname{{Name: "box.local"}},
 		Status:    &hostpb.Status{State: "up"},
+		OS:        &hostpb.OS{Matches: []*hostpb.OSMatch{{Name: "Linux 5.x", Accuracy: 95}}},
 		Ports: []*hostpb.Port{
 			openTCP(443, "https"),
 			openTCP(22, "ssh"),
@@ -80,8 +81,14 @@ func TestHostSummary(t *testing.T) {
 	if row.label != "10.0.0.9" {
 		t.Errorf("label = %q, want the address", row.label)
 	}
+	if row.name != "box.local" {
+		t.Errorf("name = %q, want the hostname", row.name)
+	}
 	if row.state != "up" {
 		t.Errorf("state = %q, want up", row.state)
+	}
+	if !strings.Contains(row.os, "Linux") {
+		t.Errorf("os = %q, want an OS guess containing Linux", row.os)
 	}
 	if row.open != 2 {
 		t.Errorf("open = %d, want 2 (closed port excluded)", row.open)
@@ -117,7 +124,7 @@ func TestDashboardRender(t *testing.T) {
 		task:  "Connect Scan",
 		pct:   61.3,
 		eta:   32 * time.Second,
-		hosts: []hostRow{{label: "127.0.0.1", state: "up", open: 3, services: "ssh · http · https"}},
+		hosts: []hostRow{{label: "127.0.0.1", name: "localhost", state: "up", os: "Linux", open: 3, services: "ssh · http · https"}},
 	}
 
 	d.render()
@@ -129,7 +136,12 @@ func TestDashboardRender(t *testing.T) {
 		"61.3%",              // live percent
 		"Connect Scan",       // current task
 		"ETA 0:32",           // eta from d.eta
+		"HOST",               // table header
+		"NAME",               // new column
+		"OS",                 // new column
 		"127.0.0.1",          // host row label
+		"localhost",          // host row name
+		"Linux",              // host row OS
 		"ssh · http · https", // host row services
 		"1 host(s) up",       // live footer
 	} {
