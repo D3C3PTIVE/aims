@@ -582,6 +582,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return completePortValue(con)
 	case "secret":
 		return completeSecret(con)
+	case "url":
+		return completeWebURL(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -615,6 +617,8 @@ func nseArgValueKind(key string) string {
 		return "port"
 	case strings.Contains(base, "password") || strings.Contains(base, "passphrase"):
 		return "secret"
+	case base == "url" || base == "uri":
+		return "url"
 	default:
 		return ""
 	}
@@ -1001,6 +1005,201 @@ func secretTypeLabel(t credential.PrivateType) string {
 	default:
 		return "password"
 	}
+}
+
+//
+// [ Web URLs — synthesized from DB web services, agent-promoted ] -------------------------------
+//
+
+const (
+	tagURLHTTPS   = "https endpoints"
+	tagURLHTTP    = "http endpoints"
+	tagURLGuessed = "web (guessed ports)"
+)
+
+// urlGroupOrder: agent-context relevance groups first, then https, http, and guessed-port endpoints.
+var urlGroupOrder = agentctx.PromotedOrder(tagURLHTTPS, tagURLHTTP, tagURLGuessed)
+
+// webPorts are ports treated as web endpoints even without a named http service (the "guessed" tier).
+var webPorts = map[uint32]bool{
+	80: true, 443: true, 3000: true, 5000: true, 8000: true, 8008: true,
+	8080: true, 8081: true, 8443: true, 8888: true, 4443: true, 9443: true,
+}
+
+// completeWebURL completes a URL value — an NSE `*.url`/`*.uri` arg, and any web scanner's
+// `-u`/`--url` later — by synthesizing `scheme://host[:port]/` from the DB's web services rather
+// than completing free text. Endpoints on the current agent's host, then its subnet, are promoted
+// via the relevance layer; the rest are grouped by scheme (with un-fingerprinted web ports flagged
+// as guesses). Cached; the cache key carries the agent id.
+func completeWebURL(con *client.Client) carapace.Action {
+	name := "scan:nmap:urls"
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
+			return msg
+		}
+
+		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{
+			Host:    &pb.Host{},
+			Filters: &hostrpc.HostFilters{Ports: true},
+		})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedURLs(res.GetHosts(), agentHost)
+	}))
+}
+
+// groupedURLs synthesizes a URL per open web port and renders them as promoted, described groups.
+// A named http/https service is authoritative; an open web-ish port without one is offered as a
+// guess. Duplicate URLs are dropped. Each group is NoSpace('/') so the operator can extend the path.
+func groupedURLs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+	buckets := make(map[string][]string)
+	seen := make(map[string]bool)
+
+	for _, h := range all {
+		rel := agentctx.RelevanceOfHost(h, agentHost)
+		for _, p := range h.GetPorts() {
+			if p.GetState().GetState() != "open" {
+				continue
+			}
+			named := isNamedWeb(p)
+			guessed := !named && webPorts[p.GetNumber()]
+			if !named && !guessed {
+				continue
+			}
+
+			host := urlHost(h, p)
+			if host == "" {
+				continue
+			}
+			scheme := schemeOf(p)
+			url := buildURL(scheme, host, p.GetNumber())
+			if seen[url] {
+				continue
+			}
+			seen[url] = true
+
+			tag := rel.Tag()
+			if tag == "" {
+				switch {
+				case guessed:
+					tag = tagURLGuessed
+				case scheme == "https":
+					tag = tagURLHTTPS
+				default:
+					tag = tagURLHTTP
+				}
+			}
+			buckets[tag] = append(buckets[tag], url, urlDesc(h, p))
+		}
+	}
+
+	actions := make([]carapace.Action, 0, len(urlGroupOrder))
+	for _, tag := range urlGroupOrder {
+		if pairs := buckets[tag]; len(pairs) > 0 {
+			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag).NoSpace('/'))
+		}
+	}
+	if len(actions) == 0 {
+		return carapace.ActionMessage("no web services in database")
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// isNamedWeb reports whether a port carries a named http/https service (any service name containing
+// "http", including nmap's "ssl/http").
+func isNamedWeb(p *pb.Port) bool {
+	return strings.Contains(strings.ToLower(p.GetService().GetName()), "http")
+}
+
+// schemeOf picks the URL scheme: nmap's ssl/tls tunnel or an https-ish service name wins, then the
+// well-known TLS ports, else http.
+func schemeOf(p *pb.Port) string {
+	svc := p.GetService()
+	tunnel := strings.ToLower(svc.GetTunnel())
+	name := strings.ToLower(svc.GetName())
+	if tunnel == "ssl" || tunnel == "tls" || strings.Contains(name, "https") || strings.Contains(name, "ssl") {
+		return "https"
+	}
+	switch p.GetNumber() {
+	case 443, 8443, 4443, 9443:
+		return "https"
+	}
+	return "http"
+}
+
+// urlHost picks the host part of the URL: the service's own hostname (a vhost from the cert/HTTP
+// host) first, then one of the host's hostnames, then an address.
+func urlHost(h *pb.Host, p *pb.Port) string {
+	if hn := p.GetService().GetHostname(); hn != "" {
+		return hn
+	}
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			return hn.GetName()
+		}
+	}
+	for _, a := range h.GetAddresses() {
+		if a.GetAddr() != "" {
+			return a.GetAddr()
+		}
+	}
+	return ""
+}
+
+// buildURL assembles scheme://host[:port]/ — the default port for the scheme is omitted, an IPv6
+// literal is bracketed.
+func buildURL(scheme, host string, port uint32) string {
+	if strings.Contains(host, ":") && net.ParseIP(host) != nil {
+		host = "[" + host + "]"
+	}
+
+	def := uint32(80)
+	if scheme == "https" {
+		def = 443
+	}
+	if port != 0 && port != def {
+		host += ":" + strconv.Itoa(int(port))
+	}
+	return scheme + "://" + host + "/"
+}
+
+// urlDesc describes a synthesized URL by the service product/version and the owning host.
+func urlDesc(h *pb.Host, p *pb.Port) string {
+	var parts []string
+	if prod := p.GetService().GetProduct(); prod != "" {
+		if ver := p.GetService().GetVersion(); ver != "" {
+			prod += " " + ver
+		}
+		parts = append(parts, prod)
+	}
+
+	label := ""
+	for _, hn := range h.GetHostnames() {
+		if hn.GetName() != "" {
+			label = hn.GetName()
+			break
+		}
+	}
+	if label == "" {
+		for _, a := range h.GetAddresses() {
+			if a.GetAddr() != "" {
+				label = a.GetAddr()
+				break
+			}
+		}
+	}
+	if label != "" {
+		parts = append(parts, label)
+	}
+
+	return strings.Join(parts, " · ")
 }
 
 // nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment

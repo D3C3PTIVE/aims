@@ -303,6 +303,8 @@ func TestNSEArgValueKind(t *testing.T) {
 		"smbpassword":             "secret",
 		"mssql.password":          "secret",
 		"ssh.passphrase":          "secret",
+		"http-enum.url":           "url",
+		"spider.uri":              "url",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
@@ -480,6 +482,81 @@ func TestSecretTypeGroup(t *testing.T) {
 		if got := secretTypeGroup(typ); got != want {
 			t.Errorf("secretTypeGroup(%v) = %q, want %q", typ, got, want)
 		}
+	}
+}
+
+// TestSchemeOf pins scheme detection: the ssl/tls tunnel or an https-ish service name wins, then
+// the well-known TLS ports, else http.
+func TestSchemeOf(t *testing.T) {
+	port := func(num uint32, name, tunnel string) *pb.Port {
+		return &pb.Port{Number: num, Service: &network.Service{Name: name, Tunnel: tunnel}}
+	}
+	cases := []struct {
+		name string
+		port *pb.Port
+		want string
+	}{
+		{"named-https-ssl", port(443, "https", "ssl"), "https"},
+		{"named-http", port(80, "http", ""), "http"},
+		{"http-proxy-8080", port(8080, "http-proxy", ""), "http"},
+		{"ssl-http-tunnel", port(8443, "ssl/http", "ssl"), "https"},
+		{"tunnel-overrides", port(8080, "http", "ssl"), "https"},
+		{"port-443-no-service", port(443, "", ""), "https"},
+		{"port-80-no-service", port(80, "", ""), "http"},
+	}
+	for _, c := range cases {
+		if got := schemeOf(c.port); got != c.want {
+			t.Errorf("%s: schemeOf = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestBuildURL pins URL assembly: the scheme's default port is omitted, a non-default kept, an IPv6
+// literal bracketed.
+func TestBuildURL(t *testing.T) {
+	cases := []struct {
+		scheme, host string
+		port         uint32
+		want         string
+	}{
+		{"http", "web01", 80, "http://web01/"},
+		{"https", "web01", 443, "https://web01/"},
+		{"http", "web01", 8080, "http://web01:8080/"},
+		{"https", "10.0.0.5", 8443, "https://10.0.0.5:8443/"},
+		{"http", "fe80::1", 80, "http://[fe80::1]/"},
+		{"https", "fe80::1", 8443, "https://[fe80::1]:8443/"},
+	}
+	for _, c := range cases {
+		if got := buildURL(c.scheme, c.host, c.port); got != c.want {
+			t.Errorf("buildURL(%q,%q,%d) = %q, want %q", c.scheme, c.host, c.port, got, c.want)
+		}
+	}
+}
+
+// TestUrlHost pins host selection: the service vhost wins, then a host hostname, then an address.
+func TestUrlHost(t *testing.T) {
+	mkHost := func(hostnames, addrs []string) *pb.Host {
+		h := &pb.Host{}
+		for _, n := range hostnames {
+			h.Hostnames = append(h.Hostnames, &pb.Hostname{Name: n})
+		}
+		for _, a := range addrs {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: a})
+		}
+		return h
+	}
+	svcPort := func(hostname string) *pb.Port {
+		return &pb.Port{Service: &network.Service{Hostname: hostname}}
+	}
+
+	if got := urlHost(mkHost([]string{"web01"}, []string{"10.0.0.5"}), svcPort("vhost.example.com")); got != "vhost.example.com" {
+		t.Errorf("service vhost should win, got %q", got)
+	}
+	if got := urlHost(mkHost([]string{"web01"}, []string{"10.0.0.5"}), svcPort("")); got != "web01" {
+		t.Errorf("host hostname fallback, got %q", got)
+	}
+	if got := urlHost(mkHost(nil, []string{"10.0.0.5"}), svcPort("")); got != "10.0.0.5" {
+		t.Errorf("address fallback, got %q", got)
 	}
 }
 

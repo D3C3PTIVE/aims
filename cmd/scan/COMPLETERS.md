@@ -65,10 +65,12 @@ Ordered by (reuse × completability × frequency), highest first.
    belongs to. First `RelevanceOfHostID` consumer: credentials with a login on the agent's host
    (via the Logins service) are promoted to the top. Cached, key carries the agent id.
 
-4. **Web URL / endpoint** — `completeWebURL(con)`. Highest frequency (~84) but hardest: synthesize
-   `scheme://host:port/` from the DB's known **web services** (http/https ports on known hosts)
-   rather than trying to complete free text. Reuse across web scanners (nikto, nuclei, ffuf,
-   gobuster, sqlmap). Build after 1–3; more moving parts.
+4. **Web URL / endpoint — ✅ BUILT** (`completeWebURL`, run_complete.go). Wired into NSE `*.url`/
+   `*.uri` (new "url" kind). Synthesizes `scheme://host[:port]/` from DB web services (scheme from
+   the nmap `ssl` Tunnel / service name / TLS port; host from the service vhost, else a hostname,
+   else an address; default port omitted, IPv6 bracketed). Named http/https services plus a guessed
+   tier (open web-ish ports without a fingerprint, flagged). Grouped by scheme, agent host + subnet
+   endpoints promoted; NoSpace('/') so the path can be extended. Cached, key carries the agent id.
 
 5. **Domain** — `completeDomain(con)`. Freq ~21; reuse across DNS/recon tools (dnsrecon, amass,
    fierce, NSE `dns-*`). Source: hostnames already in the DB, or a dedicated domain set. Lower
@@ -152,8 +154,8 @@ identically:
   prefix compare; no extra RPC on the hot path.
 
 Consumers wired: `completeTargets` (host id + subnet), `completePortValue` (port takes the closest
-host's relevance), and `completeSecret` (first `RelevanceOfHostID` user — creds with a login on the
-agent host). Still to wire (same pattern): web-URL, subnet.
+host's relevance), `completeSecret` (first `RelevanceOfHostID` user — creds with a login on the
+agent host), and `completeWebURL` (endpoint takes its host's relevance). Still to wire: subnet.
 
 # Interface completion — local (built) + agent-host (design)
 
@@ -176,14 +178,19 @@ gains an agent-host tag group (`local` vs `this agent's host`) and becomes a con
 the Relevance×Group layer; until then, "the current agent's addresses" is served by address-valued
 completers under context promotion.
 
-# Design: web-URL completer
+# Web-URL completer — ✅ BUILT
 
-- `completeWebURL(con)` — synthesize `scheme://host:port/` from the DB's **web services** (http/https
-  ports on known hosts; reuse `cmd/services` / `network`), rather than completing free text. Cap +
-  cache. Add a `url` kind to `nseArgValueKind` so `*.url`/`*.uri`/`*.path` args route here.
-- Context: promote the **current agent host's** web endpoints to the top, via the classification
-  layer above.
-- Highest frequency (~84 NSE args) but the most moving parts — build after interface + port.
+Shipped scope (T1 + T2, vhost-preferred, paths deferred):
+- **Sources** — T1 named http/https services (authoritative) + T2 guessed web-ish ports open without
+  a fingerprint (tagged `web (guessed ports)`).
+- **Scheme** — nmap `ssl` Tunnel / https-ish service name / well-known TLS port, else http.
+- **Host** — service vhost (`Service.Hostname`) › a host hostname › an address; IPv6 bracketed;
+  default port omitted.
+- **Only `url`/`uri` route here.** `path`/`basepath` stay free-form — they want a path component,
+  not a full URL. That is the deferred **T3 path enrichment**: extract discovered paths/titles from
+  `Port.Scripts`/`HostScripts` *output text* (http-enum, http-title) by regex — fragile, unstructured,
+  so a separate future completer.
+- Grouped by scheme, agent host/subnet endpoints promoted via the relevance layer; `NoSpace('/')`.
 
 # Design: smart subnet completer (context-aware)
 
