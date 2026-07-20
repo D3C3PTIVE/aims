@@ -19,15 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Scans_Create_FullMethodName = "/scans.Scans/Create"
-	Scans_Read_FullMethodName   = "/scans.Scans/Read"
-	Scans_List_FullMethodName   = "/scans.Scans/List"
-	Scans_Upsert_FullMethodName = "/scans.Scans/Upsert"
-	Scans_Delete_FullMethodName = "/scans.Scans/Delete"
-	Scans_Run_FullMethodName    = "/scans.Scans/Run"
-	Scans_Jobs_FullMethodName   = "/scans.Scans/Jobs"
-	Scans_Attach_FullMethodName = "/scans.Scans/Attach"
-	Scans_Stop_FullMethodName   = "/scans.Scans/Stop"
+	Scans_Create_FullMethodName  = "/scans.Scans/Create"
+	Scans_Read_FullMethodName    = "/scans.Scans/Read"
+	Scans_List_FullMethodName    = "/scans.Scans/List"
+	Scans_Upsert_FullMethodName  = "/scans.Scans/Upsert"
+	Scans_Delete_FullMethodName  = "/scans.Scans/Delete"
+	Scans_Cleanup_FullMethodName = "/scans.Scans/Cleanup"
+	Scans_Run_FullMethodName     = "/scans.Scans/Run"
+	Scans_Jobs_FullMethodName    = "/scans.Scans/Jobs"
+	Scans_Attach_FullMethodName  = "/scans.Scans/Attach"
+	Scans_Stop_FullMethodName    = "/scans.Scans/Stop"
 )
 
 // ScansClient is the client API for Scans service.
@@ -39,6 +40,11 @@ type ScansClient interface {
 	List(ctx context.Context, in *ReadScanRequest, opts ...grpc.CallOption) (*ReadScanResponse, error)
 	Upsert(ctx context.Context, in *UpsertScanRequest, opts ...grpc.CallOption) (*UpsertScanResponse, error)
 	Delete(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error)
+	// Cleanup collapses repeated runs of the same scan definition (same scanner + args + targets)
+	// into a single visible head per series, tombstoning the older siblings (SupersededBy) rather
+	// than deleting them so drift history (`scan diff`) and cross-run host sharing survive. DryRun
+	// returns the plan without writing; Prune additionally hard-deletes the byte-identical subset.
+	Cleanup(ctx context.Context, in *CleanupScanRequest, opts ...grpc.CallOption) (*CleanupScanResponse, error)
 	// Run executes a scanner server-side against the given targets and streams progress,
 	// hosts, and the final stored run back as RunUpdate frames. Foreground clients consume the
 	// stream to completion; background clients (Background=true) get the JobId frame and may
@@ -99,6 +105,15 @@ func (c *scansClient) Upsert(ctx context.Context, in *UpsertScanRequest, opts ..
 func (c *scansClient) Delete(ctx context.Context, in *DeleteScanRequest, opts ...grpc.CallOption) (*DeleteScanResponse, error) {
 	out := new(DeleteScanResponse)
 	err := c.cc.Invoke(ctx, Scans_Delete_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *scansClient) Cleanup(ctx context.Context, in *CleanupScanRequest, opts ...grpc.CallOption) (*CleanupScanResponse, error) {
+	out := new(CleanupScanResponse)
+	err := c.cc.Invoke(ctx, Scans_Cleanup_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +211,11 @@ type ScansServer interface {
 	List(context.Context, *ReadScanRequest) (*ReadScanResponse, error)
 	Upsert(context.Context, *UpsertScanRequest) (*UpsertScanResponse, error)
 	Delete(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error)
+	// Cleanup collapses repeated runs of the same scan definition (same scanner + args + targets)
+	// into a single visible head per series, tombstoning the older siblings (SupersededBy) rather
+	// than deleting them so drift history (`scan diff`) and cross-run host sharing survive. DryRun
+	// returns the plan without writing; Prune additionally hard-deletes the byte-identical subset.
+	Cleanup(context.Context, *CleanupScanRequest) (*CleanupScanResponse, error)
 	// Run executes a scanner server-side against the given targets and streams progress,
 	// hosts, and the final stored run back as RunUpdate frames. Foreground clients consume the
 	// stream to completion; background clients (Background=true) get the JobId frame and may
@@ -228,6 +248,9 @@ func (UnimplementedScansServer) Upsert(context.Context, *UpsertScanRequest) (*Up
 }
 func (UnimplementedScansServer) Delete(context.Context, *DeleteScanRequest) (*DeleteScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedScansServer) Cleanup(context.Context, *CleanupScanRequest) (*CleanupScanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Cleanup not implemented")
 }
 func (UnimplementedScansServer) Run(*RunScanRequest, Scans_RunServer) error {
 	return status.Errorf(codes.Unimplemented, "method Run not implemented")
@@ -344,6 +367,24 @@ func _Scans_Delete_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Scans_Cleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CleanupScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScansServer).Cleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Scans_Cleanup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScansServer).Cleanup(ctx, req.(*CleanupScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Scans_Run_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(RunScanRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -448,6 +489,10 @@ var Scans_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _Scans_Delete_Handler,
+		},
+		{
+			MethodName: "Cleanup",
+			Handler:    _Scans_Cleanup_Handler,
 		},
 		{
 			MethodName: "Jobs",

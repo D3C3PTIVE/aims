@@ -22,6 +22,7 @@ type RunORM struct {
 	Debugging        *DebuggingORM `gorm:"foreignKey:DebuggingId;references:Id"`
 	DebuggingId      *string
 	End              []*ScanTaskORM `gorm:"foreignKey:Id;references:Id;many2many:run_ends;joinForeignKey:RunId;joinReferences:ScanTaskId"`
+	FormerRuns       int32
 	HostId           string
 	Hosts            []*pb.HostORM `gorm:"foreignKey:Id;references:Id;many2many:run_hosts;joinForeignKey:RunId;joinReferences:HostId"`
 	Id               string        `gorm:"type:uuid;primaryKey"`
@@ -33,6 +34,7 @@ type RunORM struct {
 	Progress         []*TaskProgressORM `gorm:"foreignKey:Id;references:Id;many2many:run_task_progresses;joinForeignKey:RunId;joinReferences:TaskProgressId"`
 	RawXML           string
 	Results          []*ResultORM `gorm:"foreignKey:Id;references:Id;many2many:run_results;joinForeignKey:RunId;joinReferences:ResultId"`
+	ResumedFrom      string
 	Scanner          string
 	SessionId        string
 	Source           *pb1.SourceORM `gorm:"foreignKey:SourceId;references:Id"`
@@ -41,6 +43,7 @@ type RunORM struct {
 	StartStr         string
 	Stats            *StatsORM `gorm:"foreignKey:StatsId;references:Id"`
 	StatsId          *string
+	SupersededBy     string
 	Targets          []*TargetORM `gorm:"foreignKey:Id;references:Id;many2many:run_targets;joinForeignKey:RunId;joinReferences:TargetId"`
 	UpdatedAt        *time.Time
 	Verbose          *VerboseORM `gorm:"foreignKey:VerboseId;references:Id"`
@@ -189,6 +192,9 @@ func (m *Run) ToORM(ctx context.Context) (RunORM, error) {
 	}
 	// Repeated type string is not an ORMable message type
 	to.RawXML = m.RawXML
+	to.SupersededBy = m.SupersededBy
+	to.FormerRuns = m.FormerRuns
+	to.ResumedFrom = m.ResumedFrom
 	if m.Source != nil {
 		tempSource, err := m.Source.ToORM(ctx)
 		if err != nil {
@@ -346,6 +352,9 @@ func (m *RunORM) ToPB(ctx context.Context) (Run, error) {
 	}
 	// Repeated type string is not an ORMable message type
 	to.RawXML = m.RawXML
+	to.SupersededBy = m.SupersededBy
+	to.FormerRuns = m.FormerRuns
+	to.ResumedFrom = m.ResumedFrom
 	if m.Source != nil {
 		tempSource, err := m.Source.ToPB(ctx)
 		if err != nil {
@@ -1632,6 +1641,18 @@ func DefaultApplyFieldMaskRun(ctx context.Context, patchee *Run, patcher *Run, u
 		}
 		if f == prefix+"RawXML" {
 			patchee.RawXML = patcher.RawXML
+			continue
+		}
+		if f == prefix+"SupersededBy" {
+			patchee.SupersededBy = patcher.SupersededBy
+			continue
+		}
+		if f == prefix+"FormerRuns" {
+			patchee.FormerRuns = patcher.FormerRuns
+			continue
+		}
+		if f == prefix+"ResumedFrom" {
+			patchee.ResumedFrom = patcher.ResumedFrom
 			continue
 		}
 		if !updatedSource && strings.HasPrefix(f, prefix+"Source.") {

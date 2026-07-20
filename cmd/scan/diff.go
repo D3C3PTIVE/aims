@@ -51,8 +51,9 @@ func diffCommand(con *client.Client) *cobra.Command {
 			res, err := con.Scans.Read(command.Context(), &scans.ReadScanRequest{
 				Scan: &pb.Run{},
 				Filters: &scans.RunFilters{
-					Hosts: true,
-					Ports: true,
+					Hosts:             true,
+					Ports:             true,
+					IncludeSuperseded: true, // diffing drift often targets superseded runs of a series
 				},
 			})
 			if err = aims.CheckError(err); err != nil {

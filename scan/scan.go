@@ -255,6 +255,7 @@ func DisplayHeaders() []display.Options {
 		Add("Hosts", 1).
 		Add("When", 1).
 		Add("Name", 2).
+		Add("Series", 2).
 		Add("Targets", 2).
 		Add("Args", 2).
 		Add("Info", 3).
@@ -328,7 +329,14 @@ var DisplayFields = map[string]func(r *scan.Run) string{
 		}
 		return strings.Join(parts, "/")
 	},
-	"Args":    func(r *scan.Run) string { return r.GetArgs() },
+	"Args": func(r *scan.Run) string { return r.GetArgs() },
+	"Series": func(r *scan.Run) string {
+		// On a surviving head, advertise how many earlier runs of the same definition it absorbed.
+		if n := r.GetFormerRuns(); n > 0 {
+			return color.HiBlackString("+%d", n)
+		}
+		return ""
+	},
 	"When":    func(r *scan.Run) string { return whenLabel(r) },
 	"Hosts":   func(r *scan.Run) string { return hostsUpDown(r) },
 	"Targets": func(r *scan.Run) string { return targetsSummary(r) },

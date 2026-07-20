@@ -293,6 +293,15 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 	if tool := filters.GetSource(); tool != "" {
 		query = query.Where("scanner = ?", tool)
 	}
+	// Lifecycle scoping (see Run.SupersededBy). SupersededBy fetches exactly one head's tombstoned
+	// children (the `scan history` query). Otherwise the default view hides tombstones, returning
+	// only surviving heads; IncludeSuperseded lifts that so id-addressed reads reach any run.
+	// (An older row migrated in before the column existed has NULL, not "", so match both.)
+	if head := filters.GetSupersededBy(); head != "" {
+		query = query.Where("superseded_by = ?", head)
+	} else if !filters.GetIncludeSuperseded() {
+		query = query.Where("superseded_by = ? OR superseded_by IS NULL", "")
+	}
 	database := db.Preload(query, scanFilters)
 
 	// Query
@@ -408,6 +417,102 @@ func (s *server) Delete(ctx context.Context, req *scanrpcpb.DeleteScanRequest) (
 	}
 
 	return &scanrpcpb.DeleteScanResponse{Scans: deleted}, nil
+}
+
+// Cleanup collapses each scan *series* (runs of the same definition) onto a single surviving head,
+// tombstoning the older siblings so `scan list` shows one row per series while `scan history`/
+// `scan diff` still reach every instance. The grouping/head-picking/counting is the shared pure-Go
+// fold (scan.ComputeCleanup); this method only loads the runs, applies the plan with the DB, and
+// reports it.
+//
+// Application is deliberately column-scoped (superseded_by / former_runs) rather than a full-run
+// Upsert: a whole-run write would re-fold hosts and risk clobbering the run's belongs_to FKs
+// (Stats/Info) if they were not preloaded. Tombstoning also keeps the run_hosts join intact — only
+// the byte-identical --prune subset is hard-deleted, via the same association-unlink path as Delete
+// so shared hosts survive.
+func (s *server) Cleanup(ctx context.Context, req *scanrpcpb.CleanupScanRequest) (*scanrpcpb.CleanupScanResponse, error) {
+	// Load every run (tombstoned included) so the fold can group series, recount FormerRuns, and
+	// flatten chains. The state relations (Stats.Finished, Begin, Progress) MUST be preloaded:
+	// stateOf classifies a run from them, and a run whose Stats is not loaded would fall through to
+	// the fresh-UpdatedAt heartbeat and read as "running" — silently excluding just-imported runs
+	// from cleanup. Targets are half the series identity; the host tree is not needed.
+	clauses := WithPreloads(&scanrpcpb.RunFilters{})
+	clauses["Targets"] = true
+	var dbRuns []*scanpb.RunORM
+	if err := db.Preload(s.db, clauses).Find(&dbRuns).Error; err != nil {
+		return nil, err
+	}
+	all := make([]*scanpb.Run, 0, len(dbRuns))
+	for _, r := range dbRuns {
+		pb, err := r.ToPB(ctx)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, &pb)
+	}
+
+	plan := scan.ComputeCleanup(all)
+
+	resp := &scanrpcpb.CleanupScanResponse{
+		Tombstoned: int32(len(plan.Tombstoned)),
+		Heads:      plan.Heads,
+	}
+
+	prunable := map[string]bool{}
+	if req.GetPrune() {
+		for _, r := range plan.Prunable {
+			prunable[r.GetId()] = true
+		}
+		resp.Pruned = int32(len(plan.Prunable))
+		resp.Tombstoned = int32(len(plan.Tombstoned) - len(plan.Prunable))
+	}
+
+	if req.GetDryRun() {
+		return resp, nil
+	}
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Tombstone each non-prunable sibling by writing only its superseded_by column. UpdateColumn
+		// (not Update) so the write does NOT bump updated_at: that timestamp is the liveness heartbeat
+		// stateOf reads, and refreshing it would make a tombstoned interrupted/done run masquerade as
+		// running. A tombstone is bookkeeping, not scanner activity.
+		for _, r := range plan.Tombstoned {
+			if prunable[r.GetId()] {
+				continue // hard-deleted below instead
+			}
+			if err := tx.Model(&scanpb.RunORM{}).Where("id = ?", r.GetId()).
+				UpdateColumn("superseded_by", r.GetSupersededBy()).Error; err != nil {
+				return err
+			}
+		}
+		// Persist each head's recomputed (monotonic) FormerRuns trace — likewise without a heartbeat bump.
+		for _, h := range plan.Heads {
+			if err := tx.Model(&scanpb.RunORM{}).Where("id = ?", h.GetId()).
+				UpdateColumn("former_runs", h.GetFormerRuns()).Error; err != nil {
+				return err
+			}
+		}
+		// Prune the byte-identical subset: hard-delete, unlinking run_hosts so shared hosts survive
+		// (the run_hosts-shared-host invariant from Delete).
+		for _, r := range plan.Prunable {
+			var stored scanpb.RunORM
+			if err := tx.Where("id = ?", r.GetId()).First(&stored).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					continue
+				}
+				return err
+			}
+			if err := tx.Select(clause.Associations).Delete(&stored).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func WithPreloads(from *scanrpcpb.RunFilters) (clauses map[string]bool) {

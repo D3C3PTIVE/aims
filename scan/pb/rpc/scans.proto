@@ -13,6 +13,12 @@ service Scans {
    rpc Upsert(UpsertScanRequest) returns (UpsertScanResponse) {}
    rpc Delete(DeleteScanRequest) returns (DeleteScanResponse) {}
 
+   // Cleanup collapses repeated runs of the same scan definition (same scanner + args + targets)
+   // into a single visible head per series, tombstoning the older siblings (SupersededBy) rather
+   // than deleting them so drift history (`scan diff`) and cross-run host sharing survive. DryRun
+   // returns the plan without writing; Prune additionally hard-deletes the byte-identical subset.
+   rpc Cleanup(CleanupScanRequest) returns (CleanupScanResponse) {}
+
    // Run executes a scanner server-side against the given targets and streams progress,
    // hosts, and the final stored run back as RunUpdate frames. Foreground clients consume the
    // stream to completion; background clients (Background=true) get the JobId frame and may
@@ -37,6 +43,16 @@ message RunFilters {
     // Source: if set, scope the read to only the runs of this tool (matched against the
     // run's Scanner, which is the producing tool). Empty means all runs.
     string Source = 4;
+
+    // IncludeSuperseded: by default a read returns only surviving series heads (tombstoned runs are
+    // hidden — see Run.SupersededBy). Set true to return every run, superseded ones included (used
+    // by `scan list --all`, and by id-addressed reads like `show`/`rm`/`diff` that must reach a
+    // tombstoned run).
+    bool IncludeSuperseded = 5;
+
+    // SupersededBy: if set, return exactly the runs tombstoned under this head Id — the server-side
+    // query behind `scan history <head>`, so a series is fetched directly instead of read-all-and-filter.
+    string SupersededBy = 6;
 }
 message CreateScanRequest {
     RunFilters Filters = 1;
@@ -79,6 +95,25 @@ message DeleteScanRequest{
 
 message DeleteScanResponse{
     repeated scan.Run Scans = 1;
+}
+
+// CleanupScanRequest drives a lifecycle cleanup pass.
+message CleanupScanRequest {
+    // DryRun computes and returns the plan without writing anything.
+    bool DryRun = 1;
+    // Prune additionally hard-deletes the byte-identical (same RawXML) subset instead of
+    // tombstoning it — safe because those rows carry no unique information.
+    bool Prune = 2;
+}
+
+// CleanupScanResponse reports what a cleanup pass did (or would do, when DryRun).
+message CleanupScanResponse {
+    // Tombstoned is the number of runs marked SupersededBy a head.
+    int32 Tombstoned = 1;
+    // Pruned is the number of byte-identical runs hard-deleted (only when Prune).
+    int32 Pruned = 2;
+    // Heads are the surviving series heads, each with its recomputed FormerRuns.
+    repeated scan.Run Heads = 3;
 }
 
 // RunScanRequest asks the server to run a scanner against targets (and/or raw args).
