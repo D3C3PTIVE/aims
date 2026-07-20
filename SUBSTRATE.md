@@ -84,26 +84,30 @@ interface so a scanner can be run against them. `scan.Target{Address,Domain,Tag,
 - **New `scan/targets.go`:** `TargetsFromHosts(hosts []*host.Host, opts) []*scanpb.Target` — map each
   host's `Addresses` (`network.Address.Addr`) / `Hostnames` / `Ports` into `Target`s. Plus
   `TargetSpecs([]*Target) []string` (address/host tokens ready to hand a scanner as args).
-- **New `scan/scanner.go`:** the driver interface
+- **`scan/drive/scanner.go`** (NOT `scan/scanner.go`): the `Scanner` interface + nmap adapter.
+  **Design correction:** the AIMS-native nmap fork imports the `scan` domain package, so `scan`
+  cannot import the fork without a cycle. The interface + adapter therefore live in a new leaf
+  package `scan/drive` (imports fork + scan, nothing imports it — same shape as `scan/ingest`).
   ```go
   type Scanner interface {
-      Scan(ctx context.Context, targets []*scanpb.Target, opts any) (
+      Scan(ctx context.Context, targets []*scanpb.Target, args ...string) (
           <-chan *scanpb.Result, <-chan *scanpb.TaskProgress, error)
   }
   ```
-  and an nmap adapter wrapping the fork: `NewScanner(...WithCustomArguments(TargetSpecs...))` →
-  `RunAsync()` → fan `YieldHosts()`/`YieldProgress()` (nmap.go:244/287) into the `Result`/
-  `TaskProgress` channels. This is the pure-Go, in-process form; Phase 4 puts it behind the RPC.
-- **CLI:** give `aims scan run nmap` a DB-target source. The positional-tail completer already
-  serves DB targets (`cmd/scan/run_complete.go` `completeRunNmap`); add a `--from-db <query>` (or
-  reuse target completion) path that queries `con.Hosts.Read` via the teamclient, runs
-  `TargetsFromHosts`, and appends their specs to the nmap args. Keeps the "AIMS knows the targets"
-  demo honest.
-- **Tests** (`scan/targets_test.go`): stored-host fixtures → assert `TargetsFromHosts` yields the
-  expected address/port set; nmap-adapter channel wiring covered by a light unit test (skip if nmap
-  binary absent, mirroring the existing `run_integration_test.go` guard).
+  `Nmap` is the reference adapter. It drives the **synchronous** `Run()` and surfaces hosts
+  (as `Result{Host}`) + progress on the channels — because the fork's async `RunAsync`/
+  `YieldHosts`/`YieldProgress` path is broken (see Phase-4 prerequisite below). Real incremental
+  streaming is Phase 4's job.
+- **CLI `--from-db` deferred to Phase 4.** `aims scan run nmap` has `DisableFlagParsing` (raw
+  passthrough), so an aims-owned `--from-db` flag is awkward to add now, and the whole `run`
+  command is reworked for foreground/detached streaming in Phase 4 — the natural place to wire
+  `TargetsFromHosts` → target specs onto the (then non-passthrough) run path.
 
-**Verify:** build; `GOFLAGS=-vet=off go test ./scan/`.
+**Done:** `scan/targets.go` (`TargetsFromHosts`/`TargetSpecs`, tested in `scan/targets_test.go`)
+and `scan/drive/scanner.go` (`Scanner` + `Nmap`, `scan/drive/scanner_test.go` covers the
+no-targets guard; the live nmap path needs the binary, deferred like `run_integration_test.go`).
+
+**Verify:** `GOWORK=off go build ./scan/ ./scan/drive/`; `go test ./scan/` and `./scan/drive/`.
 
 ---
 
@@ -138,6 +142,15 @@ into the dev DB, `aims scan diff <a> <b>`.
 **Goal:** long scans run **server-side**, survive the operator's terminal, stream progress, and are
 visible to every operator — with **I/O parity** (identical path for in-process teamserver vs remote
 teamclient). Heaviest phase: the only one touching proto/codegen and the teamserver.
+
+> **PREREQUISITE (structural, discovered in Phase 2): the nmap fork's async path is broken.**
+> `RunAsync()` starts the process, but `YieldHosts()`/`YieldProgress()` spin goroutines that select
+> on an internal `s.done` channel **nothing ever closes** (`Wait()` only calls `cmd.Wait`), so they
+> never terminate and their channels never close — and `YieldHosts` even `close(s.done)`s a channel
+> it only reads. Genuine incremental streaming (progress/hosts as nmap runs) requires fixing the
+> fork at `~/code/github.com/maxlandon/nmap` (signal/close `done` on completion + ctx-cancel; drop
+> the erroneous close). Until then the server-side job can only stream *after* a sync `Run()`
+> completes, which defeats the point. Fix the fork first, then build the streaming RPC on it.
 
 - **Proto (`scan/pb/rpc/scans.proto`) + `make gen`:** add a server-streaming RPC,
   `rpc Run(RunScanRequest) returns (stream RunScanUpdate)`, where `RunScanUpdate` is a oneof
