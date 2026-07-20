@@ -58,6 +58,7 @@ type scanJob struct {
 	targets []*scanpb.Target
 	started int64
 
+	ctx    context.Context // the job's own context; ctx.Err() != nil means it was Stopped (cancelled)
 	cancel context.CancelFunc
 
 	mu    sync.Mutex
@@ -66,13 +67,14 @@ type scanJob struct {
 	final *scanrpcpb.RunUpdate // terminal frame (Final or Error), replayed to late subscribers
 }
 
-func newScanJob(req *scanrpcpb.RunScanRequest, id string, cancel context.CancelFunc, started int64) *scanJob {
+func newScanJob(req *scanrpcpb.RunScanRequest, id string, ctx context.Context, cancel context.CancelFunc, started int64) *scanJob {
 	return &scanJob{
 		id:      id,
 		scanner: req.GetScanner(),
 		args:    req.GetArgs(),
 		targets: req.GetTargets(),
 		started: started,
+		ctx:     ctx,
 		cancel:  cancel,
 		subs:    make(map[chan *scanrpcpb.RunUpdate]struct{}),
 	}
@@ -156,7 +158,7 @@ func (s *server) Run(req *scanrpcpb.RunScanRequest, stream scanrpcpb.Scans_RunSe
 
 	jobCtx, cancel := context.WithCancel(context.Background())
 	id := uuid.Must(uuid.NewV4()).String()
-	job := newScanJob(req, id, cancel, time.Now().Unix())
+	job := newScanJob(req, id, jobCtx, cancel, time.Now().Unix())
 	s.addJob(job)
 
 	results, progress, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
@@ -224,12 +226,35 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	// snapshot upserts the accumulating run under the JOB id, so `scan show <job-id>` and
 	// `watch scan show` reflect live state as hosts arrive (persistRun upserts by Id — see
 	// scan.go). Snapshots skip provenance stamping (done once at the final persist so the Source
-	// rows aren't re-minted each tick) and are throttled so a fast scan doesn't hammer the DB.
+	// rows aren't re-minted each tick). lastPersist gates the throttled progress path so a chatty
+	// scanner doesn't hammer the DB with a write per progress frame.
+	var lastPersist time.Time
 	snapshot := func() {
 		pbRun := run.ToPB()
 		pbRun.Id = job.id
 		pbRun.Scanner = job.scanner
 		_, _ = s.persistRun(context.Background(), pbRun)
+		lastPersist = time.Now()
+	}
+
+	// setProgress folds a live progress frame into the run's Progress relation, keyed by task name so
+	// a task's climbing percent updates one row rather than appending a row per tick. The row carries
+	// a stable Id (minted once) so persistRun's column-scoped upsert refreshes it in place — which is
+	// what lets a cross-process `scan attach`/`scan show` render a live progress bar from the DB.
+	progressByTask := map[string]*scanpb.TaskProgress{}
+	setProgress := func(p *scanpb.TaskProgress) {
+		if cur := progressByTask[p.GetTask()]; cur != nil {
+			cur.Percent, cur.Remaining, cur.Etc, cur.Time = p.GetPercent(), p.GetRemaining(), p.GetEtc(), p.GetTime()
+		} else {
+			if p.GetId() == "" {
+				p.Id = uuid.Must(uuid.NewV4()).String()
+			}
+			progressByTask[p.GetTask()] = p
+		}
+		run.Progress = make([]*scanpb.TaskProgress, 0, len(progressByTask))
+		for _, tp := range progressByTask {
+			run.Progress = append(run.Progress, tp)
+		}
 	}
 
 	// Persist an initial snapshot immediately so the run is visible as soon as it starts.
@@ -261,7 +286,13 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 				continue
 			}
 			if p != nil {
+				setProgress(p)
 				job.broadcast(progressUpdate(p))
+				// Persist the advancing progress so a cross-process attach/`scan show` sees it, but
+				// throttled — the 5s heartbeat backstops it, so at most ~1 progress write per second.
+				if time.Since(lastPersist) > time.Second {
+					snapshot()
+				}
 			}
 		case <-beat.C:
 			snapshot()
@@ -269,16 +300,27 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	}
 
 	// Final persist (fresh context so a cancelled/Stopped scan still saves its partial results):
-	// stamp provenance once, then upsert the authoritative stored run under the same job Id.
-	// Mark it finished so stateOf reads "done" (a streamed run carries no nmap runstats, so
-	// without this the completed run would linger as "queued"). Set once, on the final write.
+	// stamp provenance once, then upsert the authoritative stored run under the same job Id. Mark it
+	// finished so stateOf reads a terminal state (a streamed run carries no nmap runstats, so without
+	// this the completed run would linger as "queued"). Set once, on the final write.
+	//
+	// A Stop cancels the job's context; that partial run is stamped Exit=ExitInterrupted so it reads
+	// as "interrupted" (terminal and resumable) rather than a false "done" — the hosts it did gather
+	// are kept. The live progress rows persist for both outcomes (persistRun is additive), so an
+	// interrupted run's `scan show` shows how far each task got; a cleanly-finished run simply
+	// doesn't surface them as "running" tasks (see scan.getTasks, which drops them once terminal).
+	interrupted := job.ctx.Err() != nil
 	pbRun := run.ToPB()
 	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
 	now := time.Now().Unix()
+	exit := "success"
+	if interrupted {
+		exit = scan.ExitInterrupted
+	}
 	pbRun.Stats = &scanpb.Stats{Finished: &scanpb.Finished{
 		Time:    now,
-		Exit:    "success",
+		Exit:    exit,
 		Elapsed: float32(now - job.started), // measured duration, so the Info column can show it
 	}}
 	stampScanProvenance(pbRun)
@@ -288,8 +330,13 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		job.finish(errorUpdate(err.Error()))
 		return
 	}
-	// A completed scan supersedes older runs of the same definition, so `scan list` self-collapses.
-	s.autoSupersede(context.Background(), stored.GetId())
+	// A cleanly completed scan supersedes older runs of the same definition, so `scan list`
+	// self-collapses. An interrupted (partial) run is NOT collapsed: it must stay visible as its own
+	// row so an operator can find and `scan resume` it, and its partial surface must not tombstone a
+	// sibling's fuller history.
+	if !interrupted {
+		s.autoSupersede(context.Background(), stored.GetId())
+	}
 	job.finish(finalUpdate(stored))
 }
 
@@ -347,18 +394,20 @@ func (s *server) Attach(req *scanrpcpb.AttachRequest, stream scanrpcpb.Scans_Att
 	return s.attachFromDB(stream.Context(), req.GetJobId(), stream)
 }
 
-// attachFromDB streams a cross-process run's live state from the DB: it emits each newly-observed
-// host as the owning process persists it, then the terminal run once the run stops being running
-// (finished, or heartbeat-stale/interrupted). Progress frames are not available — the snapshot does
-// not persist the task stream — so this is a coarser view than an in-process attach (host-level, not
-// a live progress bar), but it works across processes with no shared server.
+// attachFromDB streams a cross-process run's live state from the DB: it emits the persisted progress
+// as it advances and each newly-observed host as the owning process persists it, then the terminal
+// run once the run stops being running (finished, or heartbeat-stale/interrupted). The owning process
+// snapshots its progress rows to the DB (see consume), so a DB-attach renders the same live progress
+// bar as an in-process attach — only coarser in cadence (poll-driven, ~1s) since the two processes
+// share no in-memory stream.
 func (s *server) attachFromDB(ctx context.Context, id string, stream updateStream) error {
 	sent := map[string]bool{}
+	sentPct := map[string]float32{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	// An initial job-id frame so the client's live view renders its header immediately (the poll
-	// loop below then feeds it hosts) rather than showing a blank screen until the first host lands.
+	// loop below then feeds it progress + hosts) rather than a blank screen until the first host.
 	if err := stream.Send(jobIDUpdate(id)); err != nil {
 		return err
 	}
@@ -370,6 +419,17 @@ func (s *server) attachFromDB(ctx context.Context, id string, stream updateStrea
 		}
 		if run == nil {
 			return fmt.Errorf("no scan job %q", id)
+		}
+		// Progress: emit a frame for each task whose percent advanced since we last sent it, so the
+		// client's progress bar tracks the DB-persisted state.
+		for _, p := range run.GetProgress() {
+			if last, ok := sentPct[p.GetTask()]; ok && p.GetPercent() <= last {
+				continue
+			}
+			sentPct[p.GetTask()] = p.GetPercent()
+			if err := stream.Send(progressUpdate(p)); err != nil {
+				return err
+			}
 		}
 		for _, h := range run.GetHosts() {
 			if hid := h.GetId(); hid != "" {

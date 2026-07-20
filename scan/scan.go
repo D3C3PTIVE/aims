@@ -178,13 +178,24 @@ const (
 // has frozen is one whose owning process died (operator killed the command, teamserver crashed).
 const runStaleAfter = 30 * time.Second
 
-// stateOf classifies a run. Finished stats are authoritative for done/failed. For a non-final run,
-// UpdatedAt doubles as a liveness heartbeat: fresh means some process is still driving the scan
-// (running), stale means it was orphaned (interrupted). Deriving liveness from the heartbeat is
-// correct across processes — a `scan list` in another terminal reads the live run's fresh
+// ExitInterrupted is the Finished.Exit value a deliberately-stopped scan carries (server-side `Stop`
+// cancels the job, and consume stamps this on the partial run). It marks a *terminal* interrupted
+// state — distinct from a scanner's own error exit ("failed") and from a heartbeat-stale orphan —
+// so a stopped scan reads as interrupted immediately and deterministically (not after the 30s stale
+// window), and stays resumable. A process killed outright cannot stamp it and still falls back to
+// the heartbeat-stale path below; both converge on stateInterrupted.
+const ExitInterrupted = "interrupted"
+
+// stateOf classifies a run. Finished stats are authoritative for done/failed/interrupted. For a
+// non-final run, UpdatedAt doubles as a liveness heartbeat: fresh means some process is still driving
+// the scan (running), stale means it was orphaned (interrupted). Deriving liveness from the heartbeat
+// is correct across processes — a `scan list` in another terminal reads the live run's fresh
 // UpdatedAt — and self-heals a killed scan with no background sweeper.
 func stateOf(r *scan.Run) runState {
 	if fin := r.GetStats().GetFinished(); fin != nil && (fin.Time != 0 || fin.TimeStr != "" || fin.Elapsed != 0) {
+		if fin.Exit == ExitInterrupted {
+			return stateInterrupted // deliberately stopped: terminal, resumable
+		}
 		if fin.ErrorMsg != "" || (fin.Exit != "" && fin.Exit != "success") {
 			return stateFailed
 		}
@@ -878,6 +889,16 @@ func getTasks(r *scan.Run) (running []*scan.TaskProgress, done []*scan.ScanTask)
 	slices.SortFunc(running, func(a, b *scan.TaskProgress) int {
 		return cmp.Compare(a.GetTime(), b.GetTime())
 	})
+
+	// A cleanly-terminal run has no running tasks: a streamed scan persists its live progress rows
+	// (so a cross-process view has a bar to render), and those rows outlive the scan since the ingest
+	// fold is additive. Once the run is done/failed they are history, not activity — drop them so a
+	// finished scan's task view isn't polluted by its last live progress frame. An interrupted run
+	// keeps them: they show how far each task got before it was stopped.
+	switch stateOf(r) {
+	case stateDone, stateFailed:
+		running = nil
+	}
 
 	return running, done
 }

@@ -54,6 +54,17 @@ func failedRun(id string) *scanpb.Run {
 	}
 }
 
+// interruptedRun is a run stamped as deliberately stopped (Exit=ExitInterrupted): a terminal state
+// that must classify as interrupted — not failed (a scanner error) and not done — so a partial run
+// reads correctly and stays resumable.
+func interruptedRun(id string) *scanpb.Run {
+	return &scanpb.Run{
+		Id:      id,
+		Scanner: "nmap",
+		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 1, Elapsed: 3, Exit: ExitInterrupted}},
+	}
+}
+
 // stateOf must classify each phase of the live axis correctly: finished-clean is done,
 // finished-with-error is failed, task activity without finished stats is running, and a bare run
 // is queued.
@@ -66,11 +77,39 @@ func TestStateOf(t *testing.T) {
 		{"done", doneRun("d"), stateDone},
 		{"running", runningRun("r"), stateRunning},
 		{"failed", failedRun("f"), stateFailed},
+		{"interrupted", interruptedRun("i"), stateInterrupted},
 		{"created", &scanpb.Run{Id: "c", Scanner: "nmap"}, stateCreated},
 	}
 	for _, c := range cases {
 		if got := stateOf(c.run); got != c.want {
 			t.Errorf("%s: stateOf = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// getTasks must treat a persisted progress row as a RUNNING task only while the run is live or was
+// interrupted mid-flight; once a run is cleanly terminal (done/failed) the same row is history and
+// must not surface as activity. A streamed scan persists its progress rows and the additive fold
+// keeps them past completion, so this gate is what stops a finished scan reading "3 running tasks".
+func TestGetTasksTerminalGate(t *testing.T) {
+	withProgress := func(r *scanpb.Run) *scanpb.Run {
+		r.Progress = []*scanpb.TaskProgress{{Task: "SYN Stealth Scan", Percent: 80, Time: 5}}
+		return r
+	}
+	cases := []struct {
+		name        string
+		run         *scanpb.Run
+		wantRunning int
+	}{
+		{"running keeps progress", withProgress(&scanpb.Run{Id: "r", Scanner: "nmap"}), 1},
+		{"interrupted keeps progress", withProgress(interruptedRun("i")), 1},
+		{"done drops progress", withProgress(doneRun("d")), 0},
+		{"failed drops progress", withProgress(failedRun("f")), 0},
+	}
+	for _, c := range cases {
+		running, _ := getTasks(c.run)
+		if len(running) != c.wantRunning {
+			t.Errorf("%s: running tasks = %d, want %d", c.name, len(running), c.wantRunning)
 		}
 	}
 }
@@ -83,6 +122,7 @@ func TestStateToken(t *testing.T) {
 	}{
 		{doneRun("d"), "done"},
 		{failedRun("f"), "failed"},
+		{interruptedRun("i"), "interrupted"},
 		{runningRun("r"), "42%"},
 		{&scanpb.Run{}, "queued"},
 	}

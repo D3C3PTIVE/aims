@@ -151,6 +151,26 @@ func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, 
 			return err
 		}
 
+		// Refresh the live progress rows. The run Create links Progress via the join but, being an
+		// association insert, only ever INSERTs a new TaskProgress row — it does not update an
+		// already-stored one's columns on conflict. A live scan re-snapshots the same progress row
+		// (stable Id, keyed by task name, climbing Percent) every heartbeat, so without this the
+		// persisted percent would freeze at the first snapshot and the cross-process progress bar
+		// would stall. Upsert each row's columns explicitly (column-scoped by Id), the same way
+		// applyCleanup writes are explicit rather than trusting association-save semantics.
+		for _, p := range run.GetProgress() {
+			pORM, err := p.ToORM(ctx)
+			if err != nil {
+				return err
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "id"}},
+				UpdateAll: true,
+			}).Create(&pORM).Error; err != nil {
+				return err
+			}
+		}
+
 		pb, err := runORM.ToPB(ctx)
 		if err != nil {
 			return err

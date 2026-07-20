@@ -38,9 +38,16 @@ import (
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
 	hostpb "github.com/d3c3ptive/aims/host/pb"
+	scandom "github.com/d3c3ptive/aims/scan"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
+
+// finalInterrupted reports whether a terminal run was deliberately stopped (interrupted) rather than
+// run to completion, so the live views can show the right terminal word instead of a false "done".
+func finalInterrupted(r *scanpb.Run) bool {
+	return r.GetStats().GetFinished().GetExit() == scandom.ExitInterrupted
+}
 
 // updateReceiver is the common receive side of the Run and Attach client streams, so one set of
 // renderers serves both `scan run` and `scan attach`.
@@ -93,13 +100,14 @@ type dashboard struct {
 	opts  streamOpts
 	start time.Time
 
-	jobID  string
-	task   string
-	pct    float64
-	eta    time.Duration
-	hosts  []hostRow
-	done   bool
-	stored int
+	jobID       string
+	task        string
+	pct         float64
+	eta         time.Duration
+	hosts       []hostRow
+	done        bool
+	interrupted bool
+	stored      int
 
 	prev int // lines emitted by the last render (how far to move the cursor up)
 }
@@ -135,7 +143,10 @@ func dashboardStream(stream updateReceiver, opts streamOpts) error {
 			d.hosts = append(d.hosts, hostSummary(u.Host))
 		case *scans.RunUpdate_Final:
 			d.done = true
-			d.pct = 100
+			d.interrupted = finalInterrupted(u.Final)
+			if !d.interrupted {
+				d.pct = 100 // a stopped scan keeps the percent it reached, not a false 100%
+			}
 			d.stored = len(u.Final.GetHosts())
 			d.jobID = u.Final.GetId()
 			d.render()
@@ -199,7 +210,11 @@ func (d *dashboard) lines() []string {
 	}
 	prog := bar(d.pct, barW) + fmt.Sprintf(" %5.1f%%", d.pct)
 	if d.done {
-		prog += "  " + color.GreenString("✓ done")
+		if d.interrupted {
+			prog += "  " + color.RedString("⚠ interrupted")
+		} else {
+			prog += "  " + color.GreenString("✓ done")
+		}
 	} else {
 		if d.task != "" {
 			prog += "  " + color.YellowString(d.task)
@@ -223,7 +238,11 @@ func (d *dashboard) lines() []string {
 	// Footer: live count of up hosts, or the stored count once done.
 	var foot string
 	if d.done {
-		foot = fmt.Sprintf("── %d host(s) stored · elapsed %s ──", d.stored, fmtDur(time.Since(d.start)))
+		verb := "stored"
+		if d.interrupted {
+			verb = "stored (interrupted)"
+		}
+		foot = fmt.Sprintf("── %d host(s) %s · elapsed %s ──", d.stored, verb, fmtDur(time.Since(d.start)))
 	} else {
 		up := 0
 		for _, h := range d.hosts {
@@ -384,13 +403,22 @@ func quietStream(stream updateReceiver, opts streamOpts) error {
 				return nil
 			}
 		case *scans.RunUpdate_Final:
-			fmt.Printf("Scan complete: %s — %d host(s) stored.\n",
-				display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
+			fmt.Printf("%s: %s — %d host(s) stored.\n",
+				finalVerb(u.Final), display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
 			return nil
 		case *scans.RunUpdate_Error:
 			return fmt.Errorf("scan error: %s", u.Error)
 		}
 	}
+}
+
+// finalVerb is the terminal-frame headline word: a stopped scan is "Scan interrupted", a clean one
+// "Scan complete".
+func finalVerb(r *scanpb.Run) string {
+	if finalInterrupted(r) {
+		return "Scan interrupted"
+	}
+	return "Scan complete"
 }
 
 // backgroundStream reads until the JobId frame, prints it, and returns (the job keeps running
@@ -450,8 +478,8 @@ func lineStream(stream updateReceiver) error {
 			}
 			fmt.Println(line)
 		case *scans.RunUpdate_Final:
-			fmt.Printf("Scan complete: %s — %d host(s) stored.\n",
-				display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
+			fmt.Printf("%s: %s — %d host(s) stored.\n",
+				finalVerb(u.Final), display.FormatSmallID(u.Final.GetId()), len(u.Final.GetHosts()))
 			return nil
 		case *scans.RunUpdate_Error:
 			return fmt.Errorf("scan error: %s", u.Error)
