@@ -84,3 +84,79 @@ Keep the classifier per-scanner (arg/flag names differ), the completers shared.
 
 See also: `SCAN.md` (completion contract), `run_complete.go` (nmap consumer),
 `cmd/aims/BENCH_COMPLETIONS.md` (latency budget for the DB-backed ones).
+
+---
+
+# Agent-context awareness — "filter-up"
+
+When a context is loaded (`aims bring <agent>`), the relevant candidates should **float to the top**
+of the completion lists — credentials for that host/user, hosts on the agent's subnet, that machine's
+local services — rather than being lost in the full set. This is *promotion*, not filtering-out.
+
+## Grounding (verified in the code — shapes the whole design)
+
+- **There is no in-process "current agent".** `client.Client` holds only service stubs; nothing
+  tracks a selected agent. The loaded context lives entirely in the **shell env** that the `bring()`
+  function exports: `AIMS_AGENT_ID`, `AIMS_AGENT_NAME/TOOL/CWD/ROUTE/PENDING`, `AIMS_CONTEXT_DEPTH`
+  (`cmd/bring/shell/templates/zsh.tmpl`). A completion runs as a subprocess of that shell, so it
+  inherits them. `bring` pushes/pops a stack; `leave` pops.
+- **Credentials are not a Host association.** They attach to a host through `login.HostId`
+  (`credential/pb/login.proto`). Get a host's creds via the Logins/Creds service filtered by HostId,
+  not by walking `Host.*`.
+- **There is no CIDR/subnet field anywhere** — addresses are bare IPs (`network.Address` = Addr,
+  Type, Vendor). "Same subnet" must be *derived* (assume a mask / compare prefixes). Route proximity
+  is available instead via `Host.Distance` (hop count) and `Host.Trace.Hops`.
+- The c2 read path (`server/c2/agent.go:Preloads`) loads `Agent.Host` but **not** `Host.Users/
+  Addresses/Ports`. To use those either extend that preload set or take `Host.Id` and do a follow-up
+  Hosts read (whose ingest preloads already reach Ports/Trace).
+
+## Shape
+
+1. **Cheap context reader** — `agentctx.Current() (Ctx, bool)`: pure `os.Getenv`, no RPC. Gives the
+   id + the display snapshot (name/tool/cwd/route) for free.
+2. **Cached host resolver** — `CurrentAgentHost(con)`: `Agents.Read(id)` → `Host.Id` → `Hosts.Read`,
+   cached keyed by agent id (context rarely changes within a typing burst). One fetch, not per Tab.
+3. **Promotion, applied per completer** via the classification layer below:
+   - **hosts / targets** → the agent's own host = a `this agent` group; same-subnet hosts (derived
+     from the agent host's addresses) = `nearby (agent subnet)`; then today's locality groups.
+   - **credentials / secret** → creds with `HostId == agentHost.Id` (or the agent's `User`) =
+     `for this host/user`, first.
+   - **services / port / URL** → the agent host's own ports / web endpoints promoted.
+   - **interface** → the exception: not agent-context-dependent (see its design).
+
+# The classification layer (the "powerful/efficient tag system")
+
+Every context-aware completer needs the same two-axis grouping, so factor it once instead of
+re-deriving tags in each:
+
+- **Relevance** (context axis): `Context` (this agent's host/user) › `Nearby` (same subnet / ≤N
+  hops) › `Normal`.
+- **Group** (intrinsic axis): the completer's own sub-type — locality, NSE category, service
+  scheme, …
+- The carapace **tag** composes the two (`relevance ▸ group`), and a single canonical order floats
+  `Context` then `Nearby` to the top across *all* completers, so the operator learns one spatial
+  convention everywhere.
+- Ship it as a decorator: `WithAgentContext(base, classify)` invokes the base (cached) action and
+  re-tags each candidate via a relevance classifier that closes over the resolved agent-host.
+  Efficiency: one cached host fetch per context; the subnet test is a prefix compare; no extra RPC
+  on the hot path (see BENCH_COMPLETIONS.md). Reused by the host / credential / service / URL
+  completers — exactly the "efficient tag/classification system depending on the current agent
+  context" the design calls for.
+
+# Design: network-interface completer (build first)
+
+- `completeInterface()` — local `net.Interfaces()` → addresses, plus `any` / `localhost`. Tag by
+  state (up/down) and/or address family (v4/v6). Zero RPC, ~zero latency, purely local.
+- **Deliberately not agent-context aware**: interfaces belong to the *operator's* box where the
+  completion process runs; the loaded agent may be a remote machine. Do not promote interfaces by
+  agent context — conflating "local machine" with "the current agent's machine" would be wrong.
+- Wires into nmap `-e` and NSE `*.interface`, plus masscan/tcpdump/arp-scan/bettercap.
+
+# Design: web-URL completer
+
+- `completeWebURL(con)` — synthesize `scheme://host:port/` from the DB's **web services** (http/https
+  ports on known hosts; reuse `cmd/services` / `network`), rather than completing free text. Cap +
+  cache. Add a `url` kind to `nseArgValueKind` so `*.url`/`*.uri`/`*.path` args route here.
+- Context: promote the **current agent host's** web endpoints to the top, via the classification
+  layer above.
+- Highest frequency (~84 NSE args) but the most moving parts — build after interface + port.
