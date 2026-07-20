@@ -19,19 +19,20 @@ package scan
 */
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"os"
-	"strings"
+	"io"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
-
-	nmapscan "github.com/d3c3ptive/nmap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
-	pb "github.com/d3c3ptive/aims/scan/pb"
+	hostpb "github.com/d3c3ptive/aims/host/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
@@ -48,20 +49,21 @@ func runCommand(con *client.Client) *cobra.Command {
 	return runCmd
 }
 
-// runNmapCommand wires `aims scan run nmap <nmap args...>` as a raw passthrough to the
-// system nmap binary via the AIMS-native nmap fork. DisableFlagParsing hands every token
-// after `nmap` to the scanner verbatim (no `--` needed): `aims scan run nmap -sT -p1-1000
-// scanme.nmap.org`. The fork forces `-oX -`, parses nmap's XML directly into a *scan.Run,
-// and Scans.Create folds it into the DB (dedup/merge). Typed flags + completions are the
-// documented follow-on (SCAN.md §D); this is the passthrough-first cut.
+// runNmapCommand wires `aims scan run nmap <nmap args...>`. The scan runs SERVER-SIDE (on the
+// teamserver, via the streaming Run RPC), so it outlives the operator's terminal and is visible
+// to every operator; the client just streams progress/hosts and prints the stored result.
+// DisableFlagParsing hands every token after `nmap` to the scanner verbatim (no `--` needed):
+// `aims scan run nmap -sT -p1-1000 scanme.nmap.org`. The one aims-owned token is `--background`
+// (a.k.a. `--detach`): it submits the job and returns immediately with the job id.
 func runNmapCommand(con *client.Client) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "nmap [nmap args...]",
-		Short: "Run an nmap scan (raw passthrough) and store the results",
-		Long: "Run an nmap scan by passing arguments straight through to the nmap binary.\n" +
-			"Everything after `nmap` is forwarded verbatim, so no `--` separator is needed:\n\n" +
+		Short: "Run an nmap scan server-side and stream the results",
+		Long: "Run an nmap scan by passing arguments straight through to nmap. The scan runs on the\n" +
+			"teamserver and streams back; everything after `nmap` is forwarded verbatim (no `--`):\n\n" +
 			"    aims scan run nmap -sT -sV -p1-1000 scanme.nmap.org\n\n" +
-			"XML output (-oX -) is added automatically; results are parsed and stored.",
+			"Foreground by default (Ctrl-C detaches; the scan keeps running). Add --background to\n" +
+			"submit and return immediately. XML output is added automatically; results are stored.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
 			return runNmap(command, con, args)
@@ -82,44 +84,91 @@ func runNmap(command *cobra.Command, con *client.Client, args []string) error {
 		return command.Help()
 	}
 
-	scanner, err := nmapscan.NewScanner(
-		nmapscan.WithContext(command.Context()),
-		nmapscan.WithCustomArguments(args...),
-	)
-	if err != nil {
+	// --background/--detach is aims-owned. With DisableFlagParsing on there is no cobra flag to
+	// bind, so strip it by hand (long form only — nmap's -d is its debug level, not ours) and
+	// forward everything else verbatim.
+	background := false
+	nmapArgs := make([]string, 0, len(args))
+	for _, a := range args {
+		switch a {
+		case "--background", "--detach":
+			background = true
+		default:
+			nmapArgs = append(nmapArgs, a)
+		}
+	}
+
+	stream, err := con.Scans.Run(command.Context(), &scans.RunScanRequest{
+		Scanner:    "nmap",
+		Args:       nmapArgs,
+		Background: background,
+	})
+	if err = aims.CheckError(err); err != nil {
 		return err
 	}
 
-	fmt.Printf("Running: nmap %s\n", strings.Join(args, " "))
+	return streamScan(stream, background)
+}
 
-	// Run blocks until nmap exits; the fork parses its XML into a *scan.Run.
-	run, warnings, err := scanner.Run()
-	for _, w := range warnings {
-		fmt.Fprintf(os.Stderr, "nmap warning: %s\n", w)
+// updateReceiver is the common receive side of the Run and Attach client streams, so one
+// renderer serves both `scan run` and `scan attach`.
+type updateReceiver interface {
+	Recv() (*scans.RunUpdate, error)
+}
+
+// streamScan renders a running scan's RunUpdate frames. Foreground: progress + hosts as they are
+// found, then the stored result. Background: print the job id and return (the server keeps
+// running). Ctrl-C cancels the client context, which the server treats as a detach — the scan
+// keeps running and can be re-followed with `scan attach`.
+func streamScan(stream updateReceiver, background bool) error {
+	for {
+		update, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
+				fmt.Println("\nDetached; the scan keeps running (see `scan jobs`).")
+				return nil
+			}
+			return aims.CheckError(err)
+		}
+
+		switch u := update.GetUpdate().(type) {
+		case *scans.RunUpdate_JobId:
+			if background {
+				fmt.Printf("Scan job %s started (running in background).\n", display.FormatSmallID(u.JobId))
+				return nil
+			}
+			fmt.Printf("Scan job %s — Ctrl-C detaches (the scan keeps running).\n", display.FormatSmallID(u.JobId))
+		case *scans.RunUpdate_Progress:
+			p := u.Progress
+			fmt.Printf("\r  %-28s %5.1f%%   ", p.GetTask(), p.GetPercent())
+		case *scans.RunUpdate_Host:
+			fmt.Printf("\r[+] %-60s\n", hostLine(u.Host))
+		case *scans.RunUpdate_Final:
+			saved := u.Final
+			fmt.Printf("\nScan complete: %s — %d host(s) stored.\n",
+				display.FormatSmallID(saved.GetId()), len(saved.GetHosts()))
+			return nil
+		case *scans.RunUpdate_Error:
+			return fmt.Errorf("scan error: %s", u.Error)
+		}
 	}
-	if err != nil {
-		return fmt.Errorf("nmap run: %w", err)
+}
+
+func hostLine(h *hostpb.Host) string {
+	label := "?"
+	if len(h.GetAddresses()) > 0 && h.GetAddresses()[0].GetAddr() != "" {
+		label = h.GetAddresses()[0].GetAddr()
+	} else if len(h.GetHostnames()) > 0 {
+		label = h.GetHostnames()[0].GetName()
 	}
-
-	// The fork's Run is `type Run scan.Run` over the same scan/pb package, so this is a
-	// direct type conversion, not a copy of a foreign type.
-	pbRun := (*pb.Run)(run)
-
-	res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
-		Scans: []*pb.Run{pbRun},
-	})
-	if err = aims.CheckError(err); err != nil {
-		return fmt.Errorf("store scan: %w", err)
+	open := 0
+	for _, p := range h.GetPorts() {
+		if p.GetState().GetState() == "open" {
+			open++
+		}
 	}
-
-	if len(res.Scans) == 0 {
-		fmt.Println("Scan complete; already present in database (skipped)")
-		return nil
-	}
-
-	saved := res.Scans[0]
-	fmt.Printf("Saved %s scan (%s) — %d host(s)\n",
-		saved.Scanner, display.FormatSmallID(saved.Id), len(saved.Hosts))
-
-	return nil
+	return fmt.Sprintf("%s (%d open port(s))", label, open)
 }

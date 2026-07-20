@@ -67,8 +67,11 @@ func (n Nmap) Scan(ctx context.Context, targets []*scanpb.Target, args ...string
 	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, error,
 ) {
 	specs := scandomain.TargetSpecs(targets)
-	if len(specs) == 0 {
-		return nil, nil, errors.New("drive: no scan targets")
+	// Reject only when there is nothing at all to scan. In raw-passthrough mode the target is
+	// just another token in args (e.g. `scan run nmap -sT 127.0.0.1`), so a non-empty args set
+	// is a valid invocation even with no structured Targets.
+	if len(specs) == 0 && len(args) == 0 && len(n.Args) == 0 {
+		return nil, nil, errors.New("drive: no scan targets or arguments")
 	}
 
 	nmapArgs := make([]string, 0, len(n.Args)+len(args)+len(specs))
