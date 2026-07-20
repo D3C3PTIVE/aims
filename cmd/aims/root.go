@@ -19,7 +19,7 @@ package main
 */
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"strings"
 
@@ -50,7 +50,11 @@ func main() {
 		Server:      runServer,
 	})
 	if err != nil {
-		log.Fatal(err)
+		// Render the error exactly once, cleanly. The root command sets SilenceErrors so cobra
+		// does not also print it, and boot/connection errors (which never reach cobra) get the
+		// same single line here. std log's timestamped Fatal is deliberately avoided.
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
 	}
 }
 
@@ -118,9 +122,13 @@ func runClient(cfg *teamclient.Config) error {
 }
 
 var aimsCmd = &cobra.Command{
-	Use:          "aims",
-	Short:        "Manage and consume a database for objects for offensive security",
-	SilenceUsage: true,
+	Use:   "aims",
+	Short: "Manage and consume a database for objects for offensive security",
+	// SilenceUsage keeps a runtime error from dumping the full usage text; SilenceErrors keeps
+	// cobra from printing "Error: ..." itself, so main() is the single place a command error is
+	// rendered (once, without a std-log timestamp). See main().
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // isTeamserverCommand reports whether the program was invoked as a teamserver
