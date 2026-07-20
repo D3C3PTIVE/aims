@@ -297,6 +297,8 @@ func TestNSEArgValueKind(t *testing.T) {
 		"creds.global":            "",
 		"broadcast-*.interface":   "interface",
 		"snmp.interface":          "interface",
+		"smtp.port":               "port",
+		"port":                    "port",
 	}
 	for k, want := range cases {
 		if got := nseArgValueKind(k); got != want {
@@ -364,6 +366,76 @@ func TestInterfaceLabel(t *testing.T) {
 	for _, c := range cases {
 		if got := interfaceLabel(c.loopback, c.addrs); got != c.want {
 			t.Errorf("%s: interfaceLabel = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestCollectOpenPorts pins the port aggregation and its agent-context ranking: only open ports
+// count, each number is deduped across hosts with a host count, and a port takes the highest
+// relevance of any host exposing it (agent host › subnet neighbour › distant).
+func TestCollectOpenPorts(t *testing.T) {
+	port := func(num uint32, state, svc string) *pb.Port {
+		return &pb.Port{Number: num, Protocol: "tcp", State: &pb.State{State: state}, Service: &network.Service{Name: svc}}
+	}
+	host := func(id, addr string, ports ...*pb.Port) *pb.Host {
+		h := &pb.Host{Id: id}
+		if addr != "" {
+			h.Addresses = append(h.Addresses, &network.Address{Addr: addr})
+		}
+		h.Ports = ports
+		return h
+	}
+
+	agent := host("agent", "10.0.0.10", port(22, "open", "ssh"), port(80, "open", "http"))
+	all := []*pb.Host{
+		agent,
+		host("b", "10.0.0.50", port(22, "open", "ssh"), port(443, "open", "https")), // same /24
+		host("c", "8.8.8.8", port(22, "open", "ssh"), port(3389, "open", "rdp"),
+			port(9, "closed", "")), // distant, plus a closed port that must be dropped
+	}
+
+	byNum := map[uint32]*portInfo{}
+	got := collectOpenPorts(all, agent)
+	for _, pi := range got {
+		byNum[pi.number] = pi
+	}
+
+	if _, ok := byNum[9]; ok {
+		t.Error("closed port 9 must be excluded")
+	}
+	if pi := byNum[22]; pi == nil || pi.rel != agentctx.AgentHost || pi.hosts != 3 || pi.service != "ssh" {
+		t.Errorf("port 22: got %+v, want rel=AgentHost hosts=3 service=ssh", pi)
+	}
+	if pi := byNum[80]; pi == nil || pi.rel != agentctx.AgentHost || pi.hosts != 1 {
+		t.Errorf("port 80: got %+v, want rel=AgentHost hosts=1", pi)
+	}
+	if pi := byNum[443]; pi == nil || pi.rel != agentctx.Nearby || pi.hosts != 1 {
+		t.Errorf("port 443: got %+v, want rel=Nearby hosts=1", pi)
+	}
+	if pi := byNum[3389]; pi == nil || pi.rel != agentctx.Normal {
+		t.Errorf("port 3389: got %+v, want rel=Normal", pi)
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i-1].number > got[i].number {
+			t.Errorf("collectOpenPorts not sorted by number: %v", got)
+			break
+		}
+	}
+}
+
+// TestPortDesc: service (or protocol, or "open") plus a correctly pluralised host count.
+func TestPortDesc(t *testing.T) {
+	cases := []struct {
+		pi   *portInfo
+		want string
+	}{
+		{&portInfo{service: "ssh", proto: "tcp", hosts: 3}, "ssh · 3 hosts"},
+		{&portInfo{proto: "tcp", hosts: 1}, "tcp · 1 host"},
+		{&portInfo{hosts: 2}, "open · 2 hosts"},
+	}
+	for _, c := range cases {
+		if got := portDesc(c.pi); got != c.want {
+			t.Errorf("portDesc(%+v) = %q, want %q", c.pi, got, c.want)
 		}
 	}
 }

@@ -51,10 +51,12 @@ Ordered by (reuse × completability × frequency), highest first.
    `-e`/`-i`, tcpdump `-i`, arp-scan `-I`, bettercap `-iface`, responder `-I`). Finite local set,
    ~zero latency, no RPC. **Cheapest high-reuse win — do first.**
 
-2. **Port / service** — `completePortValue(con)`. Universal (`-p` on every port scanner, plus NSE
-   `*.port`). Two sources to merge: named services (a static well-known list) and the **DB's known
-   open ports** per host (`cmd/services` already models these) — the latter is genuine AIMS value.
-   Must be capped/cached on the hot path.
+2. **Port / service — ✅ BUILT** (`completePortValue`, run_complete.go). Wired into `-p` and NSE
+   `*.port`. Merges the **DB's known open ports** (aggregated by number, described by service +
+   host-count) with a curated well-known set so it's useful against an empty DB. First real consumer
+   of the relevance layer beyond targets: a port takes the highest relevance of any host exposing it,
+   so ports open on the agent's host, then its subnet, float to the top ("what's open around here").
+   Cached, cache key carries the agent id.
 
 3. **Credential secret** — `completeSecret(con)`. Freq ~23; reuse across every auth/brute tool
    (hydra, medusa, NSE `*-brute`). AIMS's whole point is credential reuse, so offering known
@@ -147,8 +149,8 @@ identically:
 - **Efficiency** — one cached agent-host fetch per context (not per keystroke); the subnet test is a
   prefix compare; no extra RPC on the hot path.
 
-Consumers still to wire (same one-line pattern as `targetTag`): credential-secret, service/port,
-web-URL, subnet completers.
+Consumers wired: `completeTargets` (host id + subnet) and `completePortValue` (port takes the
+closest host's relevance). Still to wire (same pattern): credential-secret, web-URL, subnet.
 
 # Interface completion — local (built) + agent-host (design)
 

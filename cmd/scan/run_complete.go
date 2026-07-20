@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/carapace-sh/carapace"
@@ -69,6 +70,8 @@ func completeRunNmap(con *client.Client) carapace.Action {
 				return completeNSEScriptArgs(con)
 			case "-e":
 				return completeInterface()
+			case "-p":
+				return completePortValue(con)
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
@@ -573,6 +576,8 @@ func completeNSEArgValue(con *client.Client, key string) carapace.Action {
 		return carapace.ActionFiles()
 	case "interface":
 		return completeInterface()
+	case "port":
+		return completePortValue(con)
 	default:
 		return carapace.ActionValues() // free-form value, nothing to offer
 	}
@@ -602,6 +607,8 @@ func nseArgValueKind(key string) string {
 		return "username"
 	case strings.Contains(base, "interface"):
 		return "interface"
+	case base == "port":
+		return "port"
 	default:
 		return ""
 	}
@@ -667,6 +674,168 @@ func interfaceLabel(loopback bool, addrs []net.Addr) string {
 		label = "no address"
 	}
 	return label
+}
+
+//
+// [ Port values — DB open ports + common services, agent-promoted ] -----------------------------
+//
+
+const (
+	tagPortsDB     = "open ports (database)"
+	tagPortsCommon = "common ports"
+)
+
+// portGroupOrder: agent-context relevance groups first (agentctx.PromotedOrder), then the other DB
+// ports, then the curated well-known ports.
+var portGroupOrder = agentctx.PromotedOrder(tagPortsDB, tagPortsCommon)
+
+// completePortValue completes a port value — nmap's `-p` (comma-separated) and NSE `*.port` — from
+// the DB's known open ports plus a curated set of well-known ports. Ports open on the current
+// agent's host, then on its subnet neighbours, are promoted via the shared relevance layer, so the
+// operator sees "what's open around here" first. Cached; the cache key carries the agent id.
+func completePortValue(con *client.Client) carapace.Action {
+	return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
+		return cachedPorts(con)
+	})
+}
+
+func cachedPorts(con *client.Client) carapace.Action {
+	name := "scan:nmap:ports"
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+
+	return aims.CacheCompletion(con, name, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
+		if msg, err := con.ConnectComplete(); err != nil {
+			return msg
+		}
+
+		res, err := con.Hosts.Read(context.Background(), &hostrpc.ReadHostRequest{
+			Host:    &pb.Host{},
+			Filters: &hostrpc.HostFilters{Ports: true},
+		})
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+
+		agentHost, _ := agentctx.CurrentHost(con)
+		return groupedPorts(res.GetHosts(), agentHost)
+	}))
+}
+
+// portInfo aggregates one open port number across the host set: its service name and protocol
+// (first seen), how many hosts have it open, and the closest agent-context relevance of any host
+// that exposes it.
+type portInfo struct {
+	number  uint32
+	proto   string
+	service string
+	rel     agentctx.Relevance
+	hosts   int
+}
+
+// collectOpenPorts aggregates every host's open ports by number, keeping the highest agent-context
+// relevance of any host exposing each port — so a port open on the agent host outranks the same port
+// number seen only on a distant host. Sorted by number.
+func collectOpenPorts(all []*pb.Host, agentHost *pb.Host) []*portInfo {
+	byNum := make(map[uint32]*portInfo)
+	for _, h := range all {
+		rel := agentctx.RelevanceOfHost(h, agentHost)
+		for _, p := range h.GetPorts() {
+			if p.GetState().GetState() != "open" {
+				continue
+			}
+			pi := byNum[p.GetNumber()]
+			if pi == nil {
+				pi = &portInfo{number: p.GetNumber(), proto: p.GetProtocol()}
+				byNum[p.GetNumber()] = pi
+			}
+			if pi.service == "" {
+				pi.service = p.GetService().GetName()
+			}
+			if rel > pi.rel {
+				pi.rel = rel
+			}
+			pi.hosts++
+		}
+	}
+
+	out := make([]*portInfo, 0, len(byNum))
+	for _, pi := range byNum {
+		out = append(out, pi)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].number < out[j].number })
+	return out
+}
+
+// groupedPorts renders the aggregated open ports as promoted, described carapace groups, then adds
+// the curated well-known ports not already present under a "common ports" group — so completion is
+// useful even against an empty database.
+func groupedPorts(all []*pb.Host, agentHost *pb.Host) carapace.Action {
+	buckets := make(map[string][]string)
+	seen := make(map[uint32]bool)
+
+	for _, pi := range collectOpenPorts(all, agentHost) {
+		tag := pi.rel.Tag()
+		if tag == "" {
+			tag = tagPortsDB
+		}
+		buckets[tag] = append(buckets[tag], strconv.Itoa(int(pi.number)), portDesc(pi))
+		seen[pi.number] = true
+	}
+
+	for _, cp := range commonPorts() {
+		if seen[cp.number] {
+			continue
+		}
+		buckets[tagPortsCommon] = append(buckets[tagPortsCommon], strconv.Itoa(int(cp.number)), cp.name+" (well-known)")
+	}
+
+	actions := make([]carapace.Action, 0, len(portGroupOrder))
+	for _, tag := range portGroupOrder {
+		if pairs := buckets[tag]; len(pairs) > 0 {
+			actions = append(actions, carapace.ActionValuesDescribed(pairs...).Tag(tag))
+		}
+	}
+	if len(actions) == 0 {
+		return carapace.ActionMessage("no ports known")
+	}
+	return carapace.Batch(actions...).ToA()
+}
+
+// portDesc describes a DB port: its service (or protocol), and how many hosts have it open.
+func portDesc(pi *portInfo) string {
+	label := pi.service
+	if label == "" {
+		label = pi.proto
+	}
+	if label == "" {
+		label = "open"
+	}
+	unit := " hosts"
+	if pi.hosts == 1 {
+		unit = " host"
+	}
+	return label + " · " + strconv.Itoa(pi.hosts) + unit
+}
+
+// namedPort is a well-known (port, service) pair for the curated fallback set.
+type namedPort struct {
+	number uint32
+	name   string
+}
+
+// commonPorts is a small curated set of well-known ports, offered so port completion is useful even
+// with an empty database. Deduplicated against the DB ports at render time.
+func commonPorts() []namedPort {
+	return []namedPort{
+		{21, "ftp"}, {22, "ssh"}, {23, "telnet"}, {25, "smtp"}, {53, "dns"},
+		{80, "http"}, {110, "pop3"}, {135, "msrpc"}, {139, "netbios-ssn"},
+		{143, "imap"}, {443, "https"}, {445, "microsoft-ds"}, {993, "imaps"},
+		{995, "pop3s"}, {1433, "mssql"}, {1521, "oracle"}, {3306, "mysql"},
+		{3389, "rdp"}, {5432, "postgresql"}, {5900, "vnc"}, {6379, "redis"},
+		{8080, "http-proxy"}, {8443, "https-alt"}, {27017, "mongodb"},
+	}
 }
 
 // nseArgsRE captures `@args <name> <description…>` from an NSE header comment (the leading comment
