@@ -26,24 +26,6 @@ quoted, timestamped path so re-runs don't clobber each other.
 
 ---
 
-## Privileges (one-time)
-
-The meaty scans below lean on **raw-packet** modes — UDP (`-sU`), SYN (`-sS`), IP-protocol
-(`-sO`), OS detection (`-O`). These need `CAP_NET_RAW`; without it nmap quits with *"You
-requested a scan type which requires root privileges. QUITTING!"* and AIMS records a **failed**
-run (no longer a silent "done"). Grant it once — no root teamserver, no per-scan sudo:
-
-```bash
-aims init caps        # setcap nmap/masscan via sudo (one prompt); idempotent, re-run after upgrades
-aims init caps --print # or just print the setcap command(s) to apply yourself
-```
-
-After that, `aims scan run nmap -sU …` (and the external `nmap -sU …`) just work — AIMS passes
-`NMAP_PRIVILEGED=1` automatically when it detects the capability. Skip this and you can still run
-connect scans (`-sT`, the default fallback); only the raw modes are gated.
-
----
-
 ## 1. Your own fleet (best signal, unambiguously legal)
 
 Rent 10–20 cheap VPSs across providers/regions (Hetzner, DigitalOcean, Vultr, Linode, OVH,
@@ -192,3 +174,5 @@ aims scan diff "$run_a" "$run_b"
 
 Rebuild a fleet box with a newer service image between runs and watch the version deltas
 appear — that's the timestamped-Run + host-dedup model doing its job.
+
+
