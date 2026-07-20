@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/d3c3ptive/aims/cmd/agentctx"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
 )
@@ -304,32 +305,9 @@ func TestNSEArgValueKind(t *testing.T) {
 	}
 }
 
-// TestSameSubnet pins the netmask-free heuristic: shared /24 for IPv4, shared /64 for IPv6, and
-// mixed families never in the same subnet.
-func TestSameSubnet(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want bool
-	}{
-		{"10.0.0.5", "10.0.0.9", true},
-		{"10.0.0.5", "10.0.1.9", false},
-		{"192.168.1.1", "192.168.1.254", true},
-		{"192.168.1.1", "192.168.2.1", false},
-		{"fe80::1", "fe80::abcd", true},               // same /64
-		{"2001:db8:0:1::1", "2001:db8:0:1::2", true},  // same /64
-		{"2001:db8:0:1::1", "2001:db8:0:2::1", false}, // differ in the 8th byte
-		{"10.0.0.1", "::1", false},                    // mixed families
-	}
-	for _, c := range cases {
-		if got := sameSubnet(net.ParseIP(c.a), net.ParseIP(c.b)); got != c.want {
-			t.Errorf("sameSubnet(%s, %s) = %v, want %v", c.a, c.b, got, c.want)
-		}
-	}
-}
-
 // TestTargetTag pins the agent-context promotion: the agent's own host (by id) and its subnet
-// neighbours are promoted; every other host — and every host when no context is loaded — falls into
-// its locality group.
+// neighbours are promoted (via the shared agentctx classifier); every other host — and every host
+// when no context is loaded — falls into its locality group.
 func TestTargetTag(t *testing.T) {
 	host := func(id string, addrs ...string) *pb.Host {
 		h := &pb.Host{Id: id}
@@ -346,8 +324,8 @@ func TestTargetTag(t *testing.T) {
 		agent *pb.Host
 		want  string
 	}{
-		{"agent-host-by-id", host("agent-1", "10.0.0.10"), agent, tagAgentHost},
-		{"same-subnet", host("h2", "10.0.0.55"), agent, tagAgentSubnet},
+		{"agent-host-by-id", host("agent-1", "10.0.0.10"), agent, agentctx.TagContext},
+		{"same-subnet", host("h2", "10.0.0.55"), agent, agentctx.TagNearby},
 		{"other-private-subnet", host("h3", "192.168.5.5"), agent, tagPrivate},
 		{"routable", host("h4", "8.8.8.8"), agent, tagRoutable},
 		{"no-context-falls-to-locality", host("h5", "10.0.0.55"), nil, tagPrivate},

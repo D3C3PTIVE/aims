@@ -114,8 +114,9 @@ local services — rather than being lost in the full set. This is *promotion*, 
 
 1. **Cheap context reader** — `agentctx.Current() (Ctx, bool)`: pure `os.Getenv`, no RPC. Gives the
    id + the display snapshot (name/tool/cwd/route) for free.
-2. **Cached host resolver** — `CurrentAgentHost(con)`: `Agents.Read(id)` → `Host.Id` → `Hosts.Read`,
-   cached keyed by agent id (context rarely changes within a typing burst). One fetch, not per Tab.
+2. **Host resolver** — `agentctx.CurrentHost(con)` (BUILT): `Agents.Read(id)` → `Host.Id` →
+   `Hosts.Read`. The agent is the base — "the agent lies on a host". Callers cache by keying their
+   completion cache on the agent id (as `completeTargets` does), so it's one fetch per context.
 3. **Promotion, applied per completer** via the classification layer below:
    - **hosts / targets** → the agent's own host = a `this agent` group; same-subnet hosts (derived
      from the agent host's addresses) = `nearby (agent subnet)`; then today's locality groups.
@@ -124,24 +125,30 @@ local services — rather than being lost in the full set. This is *promotion*, 
    - **services / port / URL** → the agent host's own ports / web endpoints promoted.
    - **interface** → the exception: not agent-context-dependent (see its design).
 
-# The classification layer (the "powerful/efficient tag system")
+# The classification layer — BUILT (`cmd/agentctx/relevance.go`)
 
-Every context-aware completer needs the same two-axis grouping, so factor it once instead of
-re-deriving tags in each:
+The shared relevance grouping is factored into agentctx so every context-aware completer promotes
+identically:
 
-- **Relevance** (context axis): `Context` (this agent's host/user) › `Nearby` (same subnet / ≤N
-  hops) › `Normal`.
-- **Group** (intrinsic axis): the completer's own sub-type — locality, NSE category, service
-  scheme, …
-- The carapace **tag** composes the two (`relevance ▸ group`), and a single canonical order floats
-  `Context` then `Nearby` to the top across *all* completers, so the operator learns one spatial
-  convention everywhere.
-- Ship it as a decorator: `WithAgentContext(base, classify)` invokes the base (cached) action and
-  re-tags each candidate via a relevance classifier that closes over the resolved agent-host.
-  Efficiency: one cached host fetch per context; the subnet test is a prefix compare; no extra RPC
-  on the hot path (see BENCH_COMPLETIONS.md). Reused by the host / credential / service / URL
-  completers — exactly the "efficient tag/classification system depending on the current agent
-  context" the design calls for.
+- **Relevance** — `AgentHost` (the agent's host, or an entity attached to it) › `Nearby` (its
+  subnet) › `Normal`. `RelevanceOfHost(h, agentHost)` classifies a host (id match, then the
+  netmask-free subnet heuristic); `RelevanceOfHostID(id, agentHost)` classifies an entity that only
+  references a host by id (a credential's HostId, a service's host) — AgentHost-or-Normal, since an
+  id carries no address.
+- **Tags & order** — `Relevance.Tag()` gives the shared group label (`this agent's host`,
+  `agent subnet (nearby)`, or "" for Normal); `PromotedOrder(intrinsic…)` prepends the relevance
+  groups to a completer's own group order, so they render first everywhere.
+- **Chosen shape: dedicated relevance groups — not a `relevance ▸ group` composite, and not a
+  post-hoc `TagF` decorator.** A relevant candidate goes into its relevance group; everything else
+  keeps its intrinsic group. carapace `TagF` only sees the candidate *string* and overrides the tag,
+  so it would clobber the intrinsic grouping and can't reach the domain object; instead the completer
+  calls the classifier while *building* its groups (relevance tag if any, else its own). Simpler and
+  correct. `completeTargets.targetTag` is the reference consumer.
+- **Efficiency** — one cached agent-host fetch per context (not per keystroke); the subnet test is a
+  prefix compare; no extra RPC on the hot path.
+
+Consumers still to wire (same one-line pattern as `targetTag`): credential-secret, service/port,
+web-URL, subnet completers.
 
 # Interface completion — local (built) + agent-host (design)
 
