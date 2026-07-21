@@ -33,6 +33,12 @@ service Scans {
 
    // Stop cancels a running job, killing its scanner process.
    rpc Stop(StopRequest) returns (StopResponse) {}
+
+   // Resume continues an interrupted run: it re-invokes the scanner over only the targets that
+   // run never completed (its per-target completion record), folding the results into a new run
+   // that links back to the interrupted one (ResumedFrom) and tombstones it. Streams the same
+   // RunUpdate frames as Run.
+   rpc Resume(ResumeScanRequest) returns (stream RunUpdate) {}
 }
 
 message RunFilters {
@@ -161,6 +167,14 @@ message JobsResponse {
 
 message AttachRequest {
     string JobId = 1;
+}
+
+// ResumeScanRequest asks the server to continue an interrupted run by its Id.
+message ResumeScanRequest {
+    // Id is the interrupted run to resume. The server re-scans only its uncompleted targets.
+    string Id = 1;
+    // Background detaches the resumed job, like RunScanRequest.Background.
+    bool Background = 2;
 }
 
 message StopRequest {

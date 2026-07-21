@@ -223,6 +223,22 @@ func stateOf(r *scan.Run) runState {
 // operations (`scan rm`) the way a perpetually-"running" orphan would.
 func IsRunning(r *scan.Run) bool { return stateOf(r) == stateRunning }
 
+// IsResumable reports whether a run can be resumed: it reached a terminal state that left work
+// undone — interrupted (stopped or orphaned) or failed. A clean done run has nothing to resume, and
+// a still-running one must be stopped first. `scan resume` guards on this.
+func IsResumable(r *scan.Run) bool {
+	switch stateOf(r) {
+	case stateInterrupted, stateFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsInterrupted reports whether a run is in the interrupted state (deliberately stopped, or an
+// orphan whose heartbeat went stale) as opposed to failed — used to sub-categorize resumable runs.
+func IsInterrupted(r *scan.Run) bool { return stateOf(r) == stateInterrupted }
+
 // runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
 func runPercent(r *scan.Run) float32 {
 	var max float32

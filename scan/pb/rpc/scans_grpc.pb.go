@@ -29,6 +29,7 @@ const (
 	Scans_Jobs_FullMethodName    = "/scans.Scans/Jobs"
 	Scans_Attach_FullMethodName  = "/scans.Scans/Attach"
 	Scans_Stop_FullMethodName    = "/scans.Scans/Stop"
+	Scans_Resume_FullMethodName  = "/scans.Scans/Resume"
 )
 
 // ScansClient is the client API for Scans service.
@@ -56,6 +57,11 @@ type ScansClient interface {
 	Attach(ctx context.Context, in *AttachRequest, opts ...grpc.CallOption) (Scans_AttachClient, error)
 	// Stop cancels a running job, killing its scanner process.
 	Stop(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
+	// Resume continues an interrupted run: it re-invokes the scanner over only the targets that
+	// run never completed (its per-target completion record), folding the results into a new run
+	// that links back to the interrupted one (ResumedFrom) and tombstones it. Streams the same
+	// RunUpdate frames as Run.
+	Resume(ctx context.Context, in *ResumeScanRequest, opts ...grpc.CallOption) (Scans_ResumeClient, error)
 }
 
 type scansClient struct {
@@ -202,6 +208,38 @@ func (c *scansClient) Stop(ctx context.Context, in *StopRequest, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *scansClient) Resume(ctx context.Context, in *ResumeScanRequest, opts ...grpc.CallOption) (Scans_ResumeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Scans_ServiceDesc.Streams[2], Scans_Resume_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &scansResumeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Scans_ResumeClient interface {
+	Recv() (*RunUpdate, error)
+	grpc.ClientStream
+}
+
+type scansResumeClient struct {
+	grpc.ClientStream
+}
+
+func (x *scansResumeClient) Recv() (*RunUpdate, error) {
+	m := new(RunUpdate)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ScansServer is the server API for Scans service.
 // All implementations must embed UnimplementedScansServer
 // for forward compatibility
@@ -227,6 +265,11 @@ type ScansServer interface {
 	Attach(*AttachRequest, Scans_AttachServer) error
 	// Stop cancels a running job, killing its scanner process.
 	Stop(context.Context, *StopRequest) (*StopResponse, error)
+	// Resume continues an interrupted run: it re-invokes the scanner over only the targets that
+	// run never completed (its per-target completion record), folding the results into a new run
+	// that links back to the interrupted one (ResumedFrom) and tombstones it. Streams the same
+	// RunUpdate frames as Run.
+	Resume(*ResumeScanRequest, Scans_ResumeServer) error
 	mustEmbedUnimplementedScansServer()
 }
 
@@ -263,6 +306,9 @@ func (UnimplementedScansServer) Attach(*AttachRequest, Scans_AttachServer) error
 }
 func (UnimplementedScansServer) Stop(context.Context, *StopRequest) (*StopResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Stop not implemented")
+}
+func (UnimplementedScansServer) Resume(*ResumeScanRequest, Scans_ResumeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Resume not implemented")
 }
 func (UnimplementedScansServer) mustEmbedUnimplementedScansServer() {}
 
@@ -463,6 +509,27 @@ func _Scans_Stop_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Scans_Resume_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ResumeScanRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ScansServer).Resume(m, &scansResumeServer{stream})
+}
+
+type Scans_ResumeServer interface {
+	Send(*RunUpdate) error
+	grpc.ServerStream
+}
+
+type scansResumeServer struct {
+	grpc.ServerStream
+}
+
+func (x *scansResumeServer) Send(m *RunUpdate) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Scans_ServiceDesc is the grpc.ServiceDesc for Scans service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -512,6 +579,11 @@ var Scans_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Attach",
 			Handler:       _Scans_Attach_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Resume",
+			Handler:       _Scans_Resume_Handler,
 			ServerStreams: true,
 		},
 	},

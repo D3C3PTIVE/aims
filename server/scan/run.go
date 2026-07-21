@@ -58,6 +58,11 @@ type scanJob struct {
 	targets []*scanpb.Target
 	started int64
 
+	// resumedFrom is the Id of the interrupted run this job continues, or "" for a fresh scan. When
+	// set, consume stamps it onto the persisted run (Run.ResumedFrom) and tombstones the parent under
+	// this run — a resume chain is a series (SCAN.md Phase 6).
+	resumedFrom string
+
 	ctx    context.Context // the job's own context; ctx.Err() != nil means it was Stopped (cancelled)
 	cancel context.CancelFunc
 
@@ -151,35 +156,109 @@ func (s *server) getJob(id string) *scanJob {
 // The job runs under its own context so it survives the client detaching (Ctrl-C on a foreground
 // scan just stops forwarding — the scan keeps running); Stop cancels it explicitly.
 func (s *server) Run(req *scanrpcpb.RunScanRequest, stream scanrpcpb.Scans_RunServer) error {
-	scanner, err := scannerFor(req.GetScanner())
+	job, err := s.startJob(req, "")
 	if err != nil {
 		return err
+	}
+	return s.streamJob(stream, job, req.GetBackground())
+}
+
+// startJob resolves the scanner, launches it server-side under its own cancellable context, and
+// starts the consume goroutine — the shared launch path for a fresh Run and a Resume. resumedFrom is
+// the interrupted run a resume continues ("" for a fresh scan), carried onto the job so consume can
+// stamp Run.ResumedFrom and tombstone the parent.
+func (s *server) startJob(req *scanrpcpb.RunScanRequest, resumedFrom string) (*scanJob, error) {
+	scanner, err := scannerFor(req.GetScanner())
+	if err != nil {
+		return nil, err
 	}
 
 	jobCtx, cancel := context.WithCancel(context.Background())
 	id := uuid.Must(uuid.NewV4()).String()
 	job := newScanJob(req, id, jobCtx, cancel, time.Now().Unix())
+	job.resumedFrom = resumedFrom
 	s.addJob(job)
 
 	results, progress, errc, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
 	if err != nil {
 		cancel()
 		s.removeJob(id)
-		return err
+		return nil, err
 	}
 
 	// Consume the scan independently of any client: fold + broadcast + persist on completion.
 	go s.consume(job, results, progress, errc)
+	return job, nil
+}
 
+// streamJob sends the initial JobId frame and then, unless the client detached (background), relays
+// the job's frames to completion. Shared by Run and Resume so both have identical foreground/
+// background behaviour (Ctrl-C detaches; --background returns after the id).
+func (s *server) streamJob(stream updateStream, job *scanJob, background bool) error {
 	// First frame is the job id, so a foreground client can print it (and Ctrl-C to detach).
-	if err := stream.Send(jobIDUpdate(id)); err != nil {
+	if err := stream.Send(jobIDUpdate(job.id)); err != nil {
 		return err
 	}
-	if req.GetBackground() {
+	if background {
 		return nil // detached: the job keeps running server-side
 	}
-
 	return s.forward(stream, job)
+}
+
+// Resume continues an interrupted (or failed) run: it re-invokes the scanner over only the targets
+// that run never completed, folding the results into a new run that links back to the parent
+// (ResumedFrom) and tombstones it. When the parent carried structured Targets (a --from-db scan),
+// resume reforges the command over just the uncompleted ones — AIMS's own, scanner-uniform
+// target-diff. When targets rode inside Args (a raw `scan run nmap … 10.0.0.0/24`), there is no
+// per-target record to diff, so resume re-runs the whole command, which the ingest fold makes
+// idempotent (no duplicate rows, just repeated work). See SCAN.md Phase 6.
+func (s *server) Resume(req *scanrpcpb.ResumeScanRequest, stream scanrpcpb.Scans_ResumeServer) error {
+	run, err := s.readRun(stream.Context(), req.GetId())
+	if err != nil {
+		return err
+	}
+	if run == nil {
+		return fmt.Errorf("no scan %q", req.GetId())
+	}
+
+	runReq, err := reforgeResume(run)
+	if err != nil {
+		return err
+	}
+	runReq.Background = req.GetBackground()
+
+	job, err := s.startJob(runReq, run.GetId())
+	if err != nil {
+		return err
+	}
+	return s.streamJob(stream, job, req.GetBackground())
+}
+
+// reforgeResume is the pure decision behind Resume: it guards the run's state and rebuilds the
+// scanner invocation over the work left undone. Args carries the flags (and, for a raw scan, the
+// target specs too); the driver appends TargetSpecs of the remaining structured targets. Separated
+// from the live scanner drive so the guard and the target-diff are unit-testable without a scanner.
+func reforgeResume(run *scanpb.Run) (*scanrpcpb.RunScanRequest, error) {
+	if scan.IsRunning(run) {
+		return nil, fmt.Errorf("scan %s is still running; stop it before resuming", run.GetId())
+	}
+	if !scan.IsResumable(run) {
+		return nil, fmt.Errorf("scan %s is not resumable — only an interrupted or failed run can be resumed", run.GetId())
+	}
+
+	req := &scanrpcpb.RunScanRequest{
+		Scanner: run.GetScanner(),
+		Args:    strings.Fields(run.GetArgs()),
+	}
+	if len(run.GetTargets()) > 0 {
+		remaining := scan.RemainingTargets(run.GetTargets())
+		if len(remaining) == 0 {
+			return nil, fmt.Errorf("nothing to resume: every target of scan %s already completed", run.GetId())
+		}
+		req.Targets = remaining
+	}
+	// else: raw-args scan (targets live in Args) — re-run the whole command, fold-idempotent.
+	return req, nil
 }
 
 // forward subscribes to a job and relays its frames to the client until the job finishes or the
@@ -351,6 +430,9 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	pbRun := run.ToPB()
 	pbRun.Id = job.id
 	pbRun.Scanner = job.scanner
+	// A resumed run links back to the interrupted run it continues, so `scan history` shows the
+	// parent→child chain and the parent can be tombstoned under this run below.
+	pbRun.ResumedFrom = job.resumedFrom
 	// Persist a host count into the run stats. A streamed run carries no nmap runstats, so without this
 	// Stats.Hosts is nil and nothing downstream can tell a failure that found nothing from one that
 	// found hosts — exactly the signal failure-coalescing keys on (scan.runFoundHosts, which reads the
@@ -382,6 +464,18 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	if !interrupted {
 		s.autoSupersede(context.Background(), stored.GetId())
 	}
+
+	// A resume tombstones its interrupted parent under this run: the resume chain is a series and
+	// this run is its surviving head (it carries the parent forward via ResumedFrom, so history stays
+	// reachable). The write is column-scoped (UpdateColumn, like applyCleanup) so it never bumps the
+	// parent's heartbeat. Best-effort: the resumed run is already stored, so a tombstone failure is a
+	// stale-list nuisance a later `scan cleanup` fixes, not a reason to fail the scan. The child's own
+	// series (its remaining-target definition) still self-collapses via autoSupersede above.
+	if job.resumedFrom != "" {
+		_ = s.db.Model(&scanpb.RunORM{}).Where("id = ?", job.resumedFrom).
+			UpdateColumn("superseded_by", stored.GetId()).Error
+	}
+
 	job.finish(finalUpdate(stored))
 }
 
