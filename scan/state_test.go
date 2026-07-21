@@ -54,6 +54,19 @@ func TestRunPercent(t *testing.T) {
 	}
 }
 
+// TestFmtTimeLocal guards the detail-view timezone consistency fix: fmtTime must render in the
+// operator's local zone (like finishedStr/StartStr), not the UTC that protobuf's AsTime() returns —
+// a UTC "Updated" next to a local "Finished" read as a phantom timezone gap.
+func TestFmtTimeLocal(t *testing.T) {
+	ts := timestamppb.New(time.Date(2026, 7, 21, 19, 9, 0, 0, time.UTC))
+	if got, want := fmtTime(ts), ts.AsTime().Local().Format("2006-01-02 15:04"); got != want {
+		t.Errorf("fmtTime = %q, want the local-zone rendering %q (not UTC)", got, want)
+	}
+	if fmtTime(nil) != "" {
+		t.Error("fmtTime(nil) must be empty")
+	}
+}
+
 // TestStateOfHeartbeat covers the run-state axis, including the heartbeat-derived distinction a
 // killed scan needs: a non-final run with a FRESH UpdatedAt is running; the same run once its
 // UpdatedAt has gone stale (the owning process died) is interrupted, not "queued forever".

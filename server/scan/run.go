@@ -298,6 +298,11 @@ func (s *server) forward(stream updateStream, job *scanJob) error {
 func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <-chan *scanpb.TaskProgress, errc <-chan error) {
 	run := &scan.Run{}
 	run.Scanner = job.scanner
+	// Anchor the run to the job's real start epoch so a live run's "When" (scan.whenLabel's running
+	// branch keys on Start) reports true elapsed-since-start, matching the client dashboard's elapsed
+	// and `scan show`'s Elapsed. Without this a streamed run has Start=0 and the list falls back to
+	// CreatedAt, drifting from the dashboard by the job spin-up + first-persist gap.
+	run.Start = job.started
 	// Carry the invocation onto the persisted run so `scan list`/`show` (and a cross-process
 	// `scan jobs`) reflect what is running, not a bare scanner name. Args is the joined command; the
 	// structured Targets (present on a --from-db scan; empty when targets ride inside Args) get stable

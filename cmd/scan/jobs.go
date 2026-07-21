@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/spf13/cobra"
@@ -72,15 +73,22 @@ func attachCommand(con *client.Client) *cobra.Command {
 		Short: "Re-attach to a running scan job's live stream",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			id, err := resolveJobID(con, command.Context(), args[0])
+			job, err := resolveJob(con, command.Context(), args[0])
 			if err != nil {
 				return err
 			}
+			id := job.GetId()
 			stream, err := con.Scans.Attach(command.Context(), &scans.AttachRequest{JobId: id})
 			if err = aims.CheckError(err); err != nil {
 				return err
 			}
-			return renderScan(stream, streamOpts{scanner: "attach " + display.FormatSmallID(id)})
+			// Anchor the dashboard's elapsed to the job's real start so a re-attach shows the true
+			// elapsed (not a 0:00 reset). StartedAt is epoch seconds; 0 leaves start zero → "now".
+			opts := streamOpts{scanner: "attach " + display.FormatSmallID(id)}
+			if job.GetStartedAt() > 0 {
+				opts.start = time.Unix(job.GetStartedAt(), 0)
+			}
+			return renderScan(stream, opts)
 		},
 	}
 	carapace.Gen(cmd).PositionalCompletion(completeJobs(con))
@@ -118,17 +126,28 @@ func stopCommand(con *client.Client) *cobra.Command {
 // resolveJobID turns an id prefix (as shown by `scan jobs`) into the full job id the server keys
 // on. Only running jobs are resolvable this way; a full id passed verbatim also matches.
 func resolveJobID(con *client.Client, ctx context.Context, arg string) (string, error) {
+	job, err := resolveJob(con, ctx, arg)
+	if err != nil {
+		return "", err
+	}
+	return job.GetId(), nil
+}
+
+// resolveJob prefix-matches an id (as shown by `scan jobs`) to its full running-job descriptor, so
+// callers get the job's StartedAt/scanner/targets alongside the id (attach uses StartedAt to anchor
+// the elapsed clock). Only running jobs are resolvable; a full id passed verbatim also matches.
+func resolveJob(con *client.Client, ctx context.Context, arg string) (*scans.ScanJob, error) {
 	res, err := con.Scans.Jobs(ctx, &scans.JobsRequest{})
 	if err = aims.CheckError(err); err != nil {
-		return "", err
+		return nil, err
 	}
 	id := aims.StripANSI(arg)
 	for _, j := range res.GetJobs() {
 		if strings.HasPrefix(j.GetId(), id) {
-			return j.GetId(), nil
+			return j, nil
 		}
 	}
-	return "", fmt.Errorf("no running scan job matching %q", arg)
+	return nil, fmt.Errorf("no running scan job matching %q", arg)
 }
 
 // completeJobs feeds running job ids (with a scanner+args description) to attach/stop completion.

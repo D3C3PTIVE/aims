@@ -831,7 +831,11 @@ func fmtTime(t *timestamppb.Timestamp) string {
 	if tt.IsZero() {
 		return ""
 	}
-	return tt.Format("2006-01-02 15:04")
+	// Render in the operator's local zone. protobuf's AsTime() returns UTC, but every other timing
+	// field in the detail view is local (finishedStr goes through time.Unix; StartStr is the scanner's
+	// own local string), so a UTC "Updated" printed next to a local "Finished" read as a phantom
+	// timezone gap (e.g. Finished 21:09 / Updated 19:09). Local() makes the panel self-consistent.
+	return tt.Local().Format("2006-01-02 15:04")
 }
 
 //

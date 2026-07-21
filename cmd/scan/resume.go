@@ -48,8 +48,8 @@ func resumeCommand(con *client.Client) *cobra.Command {
 			"its raw arguments (a plain `scan run nmap … 10.0.0.0/24`) has no per-target record, so it\n" +
 			"is re-run whole — harmless, as the fold is idempotent.\n\n" +
 			"    aims scan resume <id>\n\n" +
-			"Streams like `scan run`: a live dashboard by default, Ctrl-C detaches, --background submits\n" +
-			"and returns a job id.",
+			"Streams like `scan run` and blocks to completion: a live dashboard by default; Ctrl-C\n" +
+			"detaches (the resumed job keeps running server-side), a shell `&` backgrounds the client.",
 		Args:               cobra.ExactArgs(1),
 		DisableFlagParsing: false,
 		RunE: func(command *cobra.Command, args []string) error {
@@ -58,21 +58,13 @@ func resumeCommand(con *client.Client) *cobra.Command {
 				return err
 			}
 
-			background, _ := command.Flags().GetBool("background")
-			stream, err := con.Scans.Resume(command.Context(), &scans.ResumeScanRequest{
-				Id:         id,
-				Background: background,
-			})
+			stream, err := con.Scans.Resume(command.Context(), &scans.ResumeScanRequest{Id: id})
 			if err = aims.CheckError(err); err != nil {
 				return err
 			}
-			return renderScan(stream, streamOpts{
-				scanner:    "resume " + display.FormatSmallID(id),
-				background: background,
-			})
+			return renderScan(stream, streamOpts{scanner: "resume " + display.FormatSmallID(id)})
 		},
 	}
-	cmd.Flags().BoolP("background", "d", false, "Submit and return a job id instead of streaming to completion")
 	carapace.Gen(cmd).PositionalCompletion(completeResumable(con))
 	return cmd
 }

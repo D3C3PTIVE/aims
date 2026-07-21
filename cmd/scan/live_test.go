@@ -171,6 +171,40 @@ func TestDashboardRender(t *testing.T) {
 	}
 }
 
+// TestDashboardElapsed pins the elapsed reconciliation: while live the clock runs from the anchored
+// start (so an attach seeded with the real scan start shows true elapsed, not a 0:00 reset), and once
+// the Final frame lands the scanner-authoritative elapsed wins over wall-clock — which is what makes
+// the dashboard's terminal line agree with `scan list`'s "When" and `scan show`'s Elapsed.
+func TestDashboardElapsed(t *testing.T) {
+	// Anchored 42s ago: the live footer counts from the anchor, not from "now".
+	d := &dashboard{width: 100, opts: streamOpts{scanner: "nmap"}, start: time.Now().Add(-42 * time.Second)}
+	if got := stripANSI(strings.Join(d.lines(), "\n")); !strings.Contains(got, "elapsed 0:42") {
+		t.Errorf("live elapsed should count from the anchored start (~0:42)\n---\n%s", got)
+	}
+
+	// Final frame reports the scanner's own 8:19 duration; it must override the ~42s wall-clock so the
+	// terminal line reflects how long the scan actually ran, not how long this client watched it.
+	d.done = true
+	d.pct = 100
+	d.stored = 1
+	d.doneElapsed = 8*time.Minute + 19*time.Second
+	got := stripANSI(strings.Join(d.lines(), "\n"))
+	if !strings.Contains(got, "elapsed 8:19") {
+		t.Errorf("done elapsed should use the scanner-authoritative duration (8:19)\n---\n%s", got)
+	}
+	if strings.Contains(got, "0:42") {
+		t.Errorf("done elapsed must not fall back to wall-clock once the run reports its own\n---\n%s", got)
+	}
+
+	// elapsedFromRun reads Finished.Elapsed (seconds) as a Duration; 0 when the run never finished.
+	if e := elapsedFromRun(&scanpb.Run{Stats: &scanpb.Stats{Finished: &scanpb.Finished{Elapsed: 499}}}); e != 499*time.Second {
+		t.Errorf("elapsedFromRun = %v, want 8m19s", e)
+	}
+	if e := elapsedFromRun(&scanpb.Run{}); e != 0 {
+		t.Errorf("elapsedFromRun(no finished) = %v, want 0", e)
+	}
+}
+
 // TestFinalOutcomeClassifiers pins the three-way terminal classification the live views branch on:
 // a clean run is neither failed nor interrupted, a stopped run is interrupted (not failed), and a
 // scanner error is failed and carries its reason.
@@ -262,11 +296,11 @@ func TestBarFill(t *testing.T) {
 // TestFmtDur formats durations as M:SS.
 func TestFmtDur(t *testing.T) {
 	cases := map[time.Duration]string{
-		0:                              "0:00",
-		32 * time.Second:               "0:32",
-		90 * time.Second:               "1:30",
+		0:                               "0:00",
+		32 * time.Second:                "0:32",
+		90 * time.Second:                "1:30",
 		(3*time.Minute + 5*time.Second): "3:05",
-		-5 * time.Second:               "0:00", // negatives clamp to zero
+		-5 * time.Second:                "0:00", // negatives clamp to zero
 	}
 	for d, want := range cases {
 		if got := fmtDur(d); got != want {

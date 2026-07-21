@@ -52,9 +52,10 @@ func runNucleiCommand(con *client.Client) *cobra.Command {
 			"forwarded verbatim (no `--` needed), with rich completion for templates, tags, severities,\n" +
 			"ids, authors and protocol types:\n\n" +
 			"    aims scan run nuclei -u https://example.com -t http/technologies/ -severity critical,high\n\n" +
-			"aims-owned flags: --background (submit and return a job id), --quiet (final summary only),\n" +
-			"--json (ndjson stream). Findings are stored; -jsonl and reliability flags are added\n" +
-			"automatically by the driver.",
+			"Blocks until the scan finishes; Ctrl-C detaches (the job keeps running server-side — reattach\n" +
+			"with `scan attach`), a shell `&` backgrounds the client. aims-owned flag: --json (ndjson\n" +
+			"stream). Findings are stored; -jsonl and reliability flags are added automatically by the\n" +
+			"driver.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
 			return runScanner(command, con, scandomain.ScannerNuclei, args)

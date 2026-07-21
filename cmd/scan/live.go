@@ -85,24 +85,24 @@ type updateReceiver interface {
 // streamOpts selects how a live scan stream is rendered. scanner/args are known client-side (they
 // are not on the wire) and only decorate the dashboard header; the three booleans pick the mode.
 type streamOpts struct {
-	scanner    string
-	args       []string
-	background bool
-	quiet      bool
-	json       bool
+	scanner string
+	args    []string
+	json    bool
+	// start anchors the dashboard's elapsed clock to the scan's real start time. Zero means "started
+	// now" (the foreground `scan run` case, where connect ≈ scan start). `scan attach` seeds it from
+	// the job's StartedAt so re-attaching to a long-running scan shows its true elapsed instead of
+	// resetting to 0:00 — the drift that made the dashboard disagree with `scan list`'s "running Xm".
+	start time.Time
 }
 
-// renderScan consumes a Run/Attach stream and renders it per opts. Mode precedence: machine formats
-// first (--json, then --quiet), then --background (submit-and-return), then the interactive
-// dashboard when stdout is a TTY, else a plain line log (pipes, CI, `| tee`).
+// renderScan consumes a Run/Attach stream and renders it per opts. Mode precedence: the machine
+// format (--json ndjson) first, then the interactive dashboard when stdout is a TTY, else a plain
+// line log (pipes, CI, `| tee`). Every mode blocks to the terminal frame — a scan is detached by
+// Ctrl-C (the server-side job keeps running) or by backgrounding the client with a shell `&`.
 func renderScan(stream updateReceiver, opts streamOpts) error {
 	switch {
 	case opts.json:
-		return jsonStream(stream, opts)
-	case opts.quiet:
-		return quietStream(stream, opts)
-	case opts.background:
-		return backgroundStream(stream)
+		return jsonStream(stream)
 	case isTTY(os.Stdout):
 		return dashboardStream(stream, opts)
 	default:
@@ -139,6 +139,7 @@ type dashboard struct {
 	failed      bool
 	reason      string
 	stored      int
+	doneElapsed time.Duration // scanner-authoritative run duration, set on the Final frame (0 = unknown)
 
 	prev int // lines emitted by the last render (how far to move the cursor up)
 }
@@ -149,7 +150,11 @@ type dashboard struct {
 const maxWarnings = 8
 
 func dashboardStream(stream updateReceiver, opts streamOpts) error {
-	d := &dashboard{w: os.Stdout, opts: opts, start: time.Now()}
+	start := opts.start
+	if start.IsZero() {
+		start = time.Now()
+	}
+	d := &dashboard{w: os.Stdout, opts: opts, start: start}
 	d.resize()
 
 	// Receive frames in a goroutine so the render loop can ALSO repaint on a 1s timer. Without this
@@ -224,6 +229,7 @@ func dashboardStream(stream updateReceiver, opts streamOpts) error {
 			}
 			d.stored = len(u.Final.GetHosts())
 			d.jobID = u.Final.GetId()
+			d.doneElapsed = elapsedFromRun(u.Final)
 			d.render()
 			return nil
 		case *scans.RunUpdate_Error:
@@ -301,7 +307,7 @@ func (d *dashboard) lines() []string {
 			prog += "  ETA " + fmtDur(d.eta)
 		}
 	}
-	prog += "  elapsed " + fmtDur(time.Since(d.start))
+	prog += "  elapsed " + fmtDur(d.elapsed())
 	out = append(out, prog)
 
 	// Hosts table (only once at least one host has landed).
@@ -339,7 +345,7 @@ func (d *dashboard) lines() []string {
 			if d.interrupted {
 				verb = "stored (interrupted)"
 			}
-			foot = fmt.Sprintf("── %d host(s) %s · elapsed %s ──", d.stored, verb, fmtDur(time.Since(d.start)))
+			foot = fmt.Sprintf("── %d host(s) %s · elapsed %s ──", d.stored, verb, fmtDur(d.elapsed()))
 		} else {
 			up := 0
 			for _, h := range d.hosts {
@@ -449,9 +455,10 @@ func hostRowLine(h hostRow) string {
 // Non-interactive renderers
 // -------------------------------------------------------------------------------------------------
 
-// jsonStream emits every frame as one line of JSON (ndjson) for piping into jq/files. Ends after the
-// JobId frame in --background mode, else after the Final/Error frame.
-func jsonStream(stream updateReceiver, opts streamOpts) error {
+// jsonStream emits every frame as one line of JSON (ndjson) for piping into jq/files, ending after
+// the Final/Error frame. A consumer that only wants the result takes the last line (or filters for
+// the `final` frame); the interleaved progress/host frames let it also follow the scan live.
+func jsonStream(stream updateReceiver) error {
 	m := protojson.MarshalOptions{}
 	for {
 		update, err := stream.Recv()
@@ -470,41 +477,8 @@ func jsonStream(stream updateReceiver, opts streamOpts) error {
 		}
 		fmt.Println(string(b))
 		switch update.GetUpdate().(type) {
-		case *scans.RunUpdate_JobId:
-			if opts.background {
-				return nil
-			}
 		case *scans.RunUpdate_Final, *scans.RunUpdate_Error:
 			return nil
-		}
-	}
-}
-
-// quietStream suppresses progress/hosts and prints only the final one-liner (or the background job
-// id, or a fatal error).
-func quietStream(stream updateReceiver, opts streamOpts) error {
-	for {
-		update, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
-				return nil
-			}
-			return aims.CheckError(err)
-		}
-		switch u := update.GetUpdate().(type) {
-		case *scans.RunUpdate_JobId:
-			if opts.background {
-				fmt.Printf("Scan job %s started (running in background).\n", display.FormatSmallID(u.JobId))
-				return nil
-			}
-		case *scans.RunUpdate_Final:
-			printFinal(u.Final)
-			return nil
-		case *scans.RunUpdate_Error:
-			return fmt.Errorf("scan error: %s", u.Error)
 		}
 	}
 }
@@ -522,38 +496,14 @@ func finalVerb(r *scanpb.Run) string {
 	}
 }
 
-// printFinal writes the one-line terminal summary shared by the quiet and line renderers: a failed
-// run reports its reason (not a misleading "0 host(s) stored"), every other outcome its stored count.
+// printFinal writes the one-line terminal summary used by the line renderer: a failed run reports its
+// reason (not a misleading "0 host(s) stored"), every other outcome its stored count.
 func printFinal(r *scanpb.Run) {
 	if reason := failureReason(r); reason != "" {
 		fmt.Printf("%s: %s — %s\n", finalVerb(r), display.FormatSmallID(r.GetId()), reason)
 		return
 	}
 	fmt.Printf("%s: %s — %d host(s) stored.\n", finalVerb(r), display.FormatSmallID(r.GetId()), len(r.GetHosts()))
-}
-
-// backgroundStream reads until the JobId frame, prints it, and returns (the job keeps running
-// server-side).
-func backgroundStream(stream updateReceiver) error {
-	for {
-		update, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
-				return nil
-			}
-			return aims.CheckError(err)
-		}
-		switch u := update.GetUpdate().(type) {
-		case *scans.RunUpdate_JobId:
-			fmt.Printf("Scan job %s started (running in background).\n", display.FormatSmallID(u.JobId))
-			return nil
-		case *scans.RunUpdate_Error:
-			return fmt.Errorf("scan error: %s", u.Error)
-		}
-	}
 }
 
 // lineStream is the plain fallback for non-TTY stdout (pipes, CI): no cursor tricks, one line per
@@ -602,6 +552,26 @@ func lineStream(stream updateReceiver) error {
 // -------------------------------------------------------------------------------------------------
 // Small rendering helpers
 // -------------------------------------------------------------------------------------------------
+
+// elapsed is the dashboard's run duration: while live, wall-clock since the anchored start (real scan
+// start for an attach, connect time for a foreground run); once the Final frame lands, the scanner's
+// own authoritative elapsed, so the terminal line agrees exactly with `scan show`'s Elapsed rather
+// than carrying the client's connect/spin-up offset.
+func (d *dashboard) elapsed() time.Duration {
+	if d.done && d.doneElapsed > 0 {
+		return d.doneElapsed
+	}
+	return time.Since(d.start)
+}
+
+// elapsedFromRun reads a finished run's scanner-reported elapsed (seconds) as a Duration; 0 when the
+// run carries no elapsed (a killed scan with no Finished stats), so the caller falls back to wall-clock.
+func elapsedFromRun(r *scanpb.Run) time.Duration {
+	if fin := r.GetStats().GetFinished(); fin != nil && fin.GetElapsed() > 0 {
+		return time.Duration(float64(fin.GetElapsed()) * float64(time.Second))
+	}
+	return 0
+}
 
 // etaOf derives a remaining duration from a progress frame: nmap's `remaining` seconds if present,
 // else the gap to its estimated-completion timestamp (`etc`).
