@@ -75,7 +75,7 @@ func TestCleanupCollapsesSeries(t *testing.T) {
 		seriesRun("<xml>C</xml>", "-sT -p1-100", 300, "10.0.0.1"), // newest -> head
 	}
 	for _, r := range runs {
-		if _, err := s.persistRun(ctx, r); err != nil {
+		if _, err := s.persistRun(ctx, r, nil); err != nil {
 			t.Fatalf("persist run: %v", err)
 		}
 	}
@@ -200,7 +200,7 @@ func TestCleanupPruneHardDeletesByteIdentical(t *testing.T) {
 	if _, err := s.Create(ctx, &scanrpcpb.CreateScanRequest{Scans: []*scanpb.Run{seriesRun("<xml>DUP</xml>", "-sT", 100, "10.0.0.1")}}); err != nil {
 		t.Fatalf("create run: %v", err)
 	}
-	if _, err := s.persistRun(ctx, seriesRun("<xml>DUP</xml>", "-sT", 200, "10.0.0.1")); err != nil {
+	if _, err := s.persistRun(ctx, seriesRun("<xml>DUP</xml>", "-sT", 200, "10.0.0.1"), nil); err != nil {
 		t.Fatalf("persist twin: %v", err)
 	}
 	if n := countRows(t, gdb, "runs"); n != 2 {

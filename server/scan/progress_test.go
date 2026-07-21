@@ -39,13 +39,13 @@ func TestPersistRunUpdatesProgress(t *testing.T) {
 		Args:     "-sT -p1-1000",
 		Progress: []*scanpb.TaskProgress{{Id: "p-1", Task: "SYN Stealth Scan", Percent: 10}},
 	}
-	if _, err := s.persistRun(ctx, run); err != nil {
+	if _, err := s.persistRun(ctx, run, nil); err != nil {
 		t.Fatalf("persist snapshot 1: %v", err)
 	}
 
 	// A later heartbeat re-persists the same run with the same progress row advanced to 60%.
 	run.Progress[0].Percent = 60
-	if _, err := s.persistRun(ctx, run); err != nil {
+	if _, err := s.persistRun(ctx, run, nil); err != nil {
 		t.Fatalf("persist snapshot 2: %v", err)
 	}
 

@@ -72,6 +72,16 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 		return nil, err
 	}
 
+	// Seed one shared host-candidate set for the whole batch: the merge candidates for the union of
+	// every run's hosts, loaded ONCE against the DB. persistRun folds each run against this set and
+	// appends the rows it persisted back into it, so cross-run host-row unification happens in memory
+	// instead of reloading the growing host tree once per run (the O(runs) ingest amplifier). Loaded
+	// via s.db (a read) before the per-run transactions; each run still commits in its own.
+	candidates, err := hosts.LoadHostCandidates(ctx, s.db, batchHosts(req.GetScans()))
+	if err != nil {
+		return nil, err
+	}
+
 	var created []*scanpb.Run
 	for _, run := range req.GetScans() {
 		if run == nil {
@@ -99,7 +109,7 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 			continue
 		}
 
-		saved, err := s.persistRun(ctx, run)
+		saved, err := s.persistRun(ctx, run, &candidates)
 		if err != nil {
 			return nil, err
 		}
@@ -122,12 +132,35 @@ func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (
 // existing rows, inserting new ones), the run and its non-host associations are written, and the
 // run is linked to the shared host rows via the run_hosts join. If any step fails, the host
 // enrichment rolls back with the run.
-func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, error) {
+//
+// candidates is the shared, growing host-candidate set the batch loop (Create/Upsert) threads
+// through every run so folding K runs no longer reloads the growing host tree K times — the
+// cross-run ingest amplifier. Each run folds against it and appends the rows it persisted back into
+// it, so a later run unifies (in memory) with an earlier run's hosts — the same cross-run host-row
+// unification as before, minus the per-run reload. A lone caller with no batch to share (a live
+// scan re-snapshotting itself, run.go) passes nil, and the run loads its own candidate set inside
+// its transaction — the same one-run cost as the previous IngestHosts path.
+//
+// Transaction boundary is UNCHANGED: each persistRun remains its own transaction, so a later run's
+// failure still does not roll back earlier committed runs. The shared candidate set is only an
+// in-memory read cache seeded from committed state and grown with each run's committed rows; it
+// crosses transactions but the durable writes do not.
+func (s *server) persistRun(ctx context.Context, run *scanpb.Run, candidates *[]*hostpb.Host) (*scanpb.Run, error) {
 	var out *scanpb.Run
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// Fold this run's hosts into the shared host table; the returned rows carry their DB IDs.
-		sharedHosts, err := hosts.IngestHosts(ctx, tx, run.GetHosts())
+		// With a batch-shared candidate set, fold against it (no per-run reload); without one, load a
+		// fresh set inside this transaction, matching the old IngestHosts behaviour exactly.
+		cand := candidates
+		if cand == nil {
+			loaded, err := hosts.LoadHostCandidates(ctx, tx, run.GetHosts())
+			if err != nil {
+				return err
+			}
+			cand = &loaded
+		}
+		sharedHosts, err := hosts.FoldHosts(ctx, tx, cand, run.GetHosts())
 		if err != nil {
 			return err
 		}
@@ -288,6 +321,18 @@ func findDuplicateRun(run *scanpb.RunORM, existing []*scanpb.RunORM) *scanpb.Run
 	return nil
 }
 
+// batchHosts flattens every run's observed hosts into one slice, so the shared host-candidate set
+// for a Create/Upsert batch can be loaded once for the union of all runs' natural keys.
+func batchHosts(runs []*scanpb.Run) []*hostpb.Host {
+	var all []*hostpb.Host
+	for _, run := range runs {
+		if run != nil {
+			all = append(all, run.GetHosts()...)
+		}
+	}
+	return all
+}
+
 // sharedStubs reduces persisted host rows to bare {Id} stubs — enough to write the run_hosts join
 // entries that link a run to the shared host records without touching the host rows themselves.
 func sharedStubs(in []*hostpb.Host) []*hostpb.HostORM {
@@ -394,6 +439,13 @@ func (s *server) Upsert(ctx context.Context, req *scanrpcpb.UpsertScanRequest) (
 		return nil, err
 	}
 
+	// One shared host-candidate set for the whole batch, as in Create: fold all runs against it
+	// rather than reloading the growing host tree per run (the cross-run ingest amplifier).
+	candidates, err := hosts.LoadHostCandidates(ctx, s.db, batchHosts(req.GetScans()))
+	if err != nil {
+		return nil, err
+	}
+
 	var out []*scanpb.Run
 	for _, run := range req.GetScans() {
 		if run == nil {
@@ -420,7 +472,7 @@ func (s *server) Upsert(ctx context.Context, req *scanrpcpb.UpsertScanRequest) (
 			continue
 		}
 
-		saved, err := s.persistRun(ctx, run)
+		saved, err := s.persistRun(ctx, run, &candidates)
 		if err != nil {
 			return nil, err
 		}

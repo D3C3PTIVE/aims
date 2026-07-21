@@ -73,7 +73,7 @@ func TestConsumeInterruptedStampsInterrupted(t *testing.T) {
 		Targets: []*scanpb.Target{{Id: "st", Address: "10.0.0.9"}},
 		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 1000, Exit: "success"}},
 	}
-	if _, err := s.persistRun(ctx, sib); err != nil {
+	if _, err := s.persistRun(ctx, sib, nil); err != nil {
 		t.Fatalf("persist sibling: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestConsumeCleanRunCompletesAndSupersedes(t *testing.T) {
 		Targets: []*scanpb.Target{{Id: "st", Address: "10.0.0.9"}},
 		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 1000, Exit: "success"}},
 	}
-	if _, err := s.persistRun(ctx, sib); err != nil {
+	if _, err := s.persistRun(ctx, sib, nil); err != nil {
 		t.Fatalf("persist sibling: %v", err)
 	}
 
@@ -307,7 +307,7 @@ func TestAttachFromDBStreamsProgress(t *testing.T) {
 		Hosts:    []*hostpb.Host{upHost("10.0.0.9")},
 		Stats:    &scanpb.Stats{Finished: &scanpb.Finished{Time: 1, Elapsed: 2, Exit: scan.ExitInterrupted}},
 	}
-	if _, err := s.persistRun(ctx, run); err != nil {
+	if _, err := s.persistRun(ctx, run, nil); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
 
@@ -358,7 +358,7 @@ func TestConsumeFailedRunStampsError(t *testing.T) {
 		Targets: []*scanpb.Target{{Id: "st", Address: "10.0.0.9"}},
 		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 1000, Exit: "success"}},
 	}
-	if _, err := s.persistRun(ctx, sib); err != nil {
+	if _, err := s.persistRun(ctx, sib, nil); err != nil {
 		t.Fatalf("persist sibling: %v", err)
 	}
 

@@ -166,6 +166,34 @@ func IngestHosts(ctx context.Context, gdb *gorm.DB, in []*pb.Host) ([]*pb.Host, 
 	return New(gdb).ingest(ctx, in)
 }
 
+// LoadHostCandidates loads the stored hosts that could match any host in `in` (the merge
+// candidates), as PB values with the full tree the merge reads — the same narrowed candidate set
+// IngestHosts loads internally (loadCandidateHostsPB). It exists so a caller folding SEVERAL
+// batches against ONE shared candidate set (scan Create/Upsert folding many runs' hosts) can load
+// the union of all batches ONCE up front, then thread the set through FoldHosts per batch — instead
+// of paying loadCandidateHostsPB's DB reload once per batch (the cross-run ingest amplifier). The
+// passed *gorm.DB may be a transaction. Over-loading is safe: FoldHosts still runs the exact
+// SameHost matcher against the set.
+func LoadHostCandidates(ctx context.Context, gdb *gorm.DB, in []*pb.Host) ([]*pb.Host, error) {
+	return New(gdb).loadCandidateHostsPB(ctx, in)
+}
+
+// FoldHosts folds `in` into the shared host table against the caller-maintained candidate set
+// *candidates, persisting via gdb (which may be a transaction). It matches/merges/inserts exactly
+// as IngestHosts does — identical host.SameHost / host.MergeHost semantics — but reuses the passed
+// candidate set instead of reloading it, and appends every row it persists (a brand-new host, or an
+// already-present one it enriched) back into *candidates, so a later FoldHosts against the same set
+// unifies with it in memory. This is what lets a batch of runs unify their shared hosts across the
+// batch (cross-run host-row unification) without reloading the growing host tree per run. Returns
+// the persisted rows for THIS batch (with DB-assigned IDs), for the caller to link via its own join.
+//
+// FoldHosts does NOT open a transaction of its own (unlike IngestHosts): it runs inside the caller's
+// gdb so the caller controls the transaction boundary — e.g. scan.persistRun folds within the run's
+// transaction, keeping each run atomic and independent.
+func FoldHosts(ctx context.Context, gdb *gorm.DB, candidates *[]*pb.Host, in []*pb.Host) ([]*pb.Host, error) {
+	return New(gdb).foldHosts(ctx, candidates, in)
+}
+
 // ingest is the shared body of Upsert and IngestHosts: match each incoming host against the DB by
 // natural key, merge-in-place when found (persisting only the new evidence), insert when not, and
 // return the persisted rows with their DB-assigned IDs. Hosts later in the batch dedup against the
@@ -185,38 +213,56 @@ func (s *server) ingest(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) 
 		if err != nil {
 			return err
 		}
-
-		for _, h := range in {
-			if h == nil {
-				continue
-			}
-
-			if i := indexSameHost(h, existing); i >= 0 {
-				if host.MergeHost(existing[i], h) {
-					saved, err := txs.saveMergedHost(ctx, existing[i])
-					if err != nil {
-						return err
-					}
-					existing[i] = saved // adopt DB-assigned IDs for any newly-merged children
-				}
-				out = append(out, existing[i])
-				continue
-			}
-
-			saved, err := txs.insertHost(ctx, h)
-			if err != nil {
-				return err
-			}
-			existing = append(existing, saved)
-			out = append(out, saved)
-		}
-
-		return nil
+		out, err = txs.foldHosts(ctx, &existing, in)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	return out, nil
+}
+
+// foldHosts is the match-merge-insert core of the ingest fold, factored out so it can run either
+// against a per-call candidate set (ingest, which loads one inside its transaction) or against a
+// caller-maintained set shared across several batches (FoldHosts, for scan Create's cross-run
+// unification). It performs NO DB read of its own — the caller supplies (and reuses) *candidates —
+// and NO transaction of its own — it writes through s.db, which the caller has bound to the
+// transaction it wants. Each incoming host is matched against *candidates by natural key
+// (host.SameHost): a match is merged in place (host.MergeHost) and only its new evidence persisted
+// (saveMergedHost), a miss is inserted whole (insertHost). Every persisted row — the enriched match
+// or the fresh insert — is written back into *candidates so a later host (this batch or a later
+// batch sharing the set) unifies against it. Returns the persisted rows for THIS call.
+func (s *server) foldHosts(ctx context.Context, candidates *[]*pb.Host, in []*pb.Host) ([]*pb.Host, error) {
+	existing := *candidates
+	var out []*pb.Host
+
+	for _, h := range in {
+		if h == nil {
+			continue
+		}
+
+		if i := indexSameHost(h, existing); i >= 0 {
+			if host.MergeHost(existing[i], h) {
+				saved, err := s.saveMergedHost(ctx, existing[i])
+				if err != nil {
+					return nil, err
+				}
+				existing[i] = saved // adopt DB-assigned IDs for any newly-merged children
+			}
+			out = append(out, existing[i])
+			continue
+		}
+
+		saved, err := s.insertHost(ctx, h)
+		if err != nil {
+			return nil, err
+		}
+		existing = append(existing, saved)
+		out = append(out, saved)
+	}
+
+	*candidates = existing // publish this call's inserts back to the shared set
 	return out, nil
 }
 

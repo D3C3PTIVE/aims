@@ -41,10 +41,10 @@ func TestJobsSeesCrossProcessRun(t *testing.T) {
 		Args:    "-sT -p1-100",
 		Targets: []*scanpb.Target{{Id: "t-1", Address: "10.0.0.5"}},
 	}
-	if _, err := s.persistRun(ctx, run); err != nil {
+	if _, err := s.persistRun(ctx, run, nil); err != nil {
 		t.Fatalf("persist snapshot 1: %v", err)
 	}
-	if _, err := s.persistRun(ctx, run); err != nil { // a second heartbeat
+	if _, err := s.persistRun(ctx, run, nil); err != nil { // a second heartbeat
 		t.Fatalf("persist snapshot 2: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestJobsExcludesFinishedRun(t *testing.T) {
 		Scanner: "nmap",
 		Stats:   &scanpb.Stats{Finished: &scanpb.Finished{Time: 100, Exit: "success"}},
 	}
-	if _, err := s.persistRun(ctx, done); err != nil {
+	if _, err := s.persistRun(ctx, done, nil); err != nil {
 		t.Fatalf("persist: %v", err)
 	}
 

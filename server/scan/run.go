@@ -321,7 +321,7 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 		pbRun := run.ToPB()
 		pbRun.Id = job.id
 		pbRun.Scanner = job.scanner
-		_, _ = s.persistRun(context.Background(), pbRun)
+		_, _ = s.persistRun(context.Background(), pbRun, nil)
 		lastPersist = time.Now()
 	}
 
@@ -458,7 +458,7 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	}
 	stampScanProvenance(pbRun)
 
-	stored, err := s.persistRun(context.Background(), pbRun)
+	stored, err := s.persistRun(context.Background(), pbRun, nil)
 	if err != nil {
 		job.finish(errorUpdate(err.Error()))
 		return

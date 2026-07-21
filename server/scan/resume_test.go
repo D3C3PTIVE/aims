@@ -117,7 +117,7 @@ func TestConsumeResumeStampsChainAndTombstonesParent(t *testing.T) {
 	// A stored, interrupted parent run.
 	parent := interruptedRun("-sT -p1-1000", &scanpb.Target{Id: "pt", Address: "10.0.0.2"})
 	parent.Id = "parent"
-	if _, err := s.persistRun(ctx, parent); err != nil {
+	if _, err := s.persistRun(ctx, parent, nil); err != nil {
 		t.Fatalf("persist parent: %v", err)
 	}
 
