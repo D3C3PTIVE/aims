@@ -30,6 +30,8 @@ import (
 	"github.com/d3c3ptive/aims/credential"
 	credpb "github.com/d3c3ptive/aims/credential/pb"
 	credentials "github.com/d3c3ptive/aims/credential/pb/rpc"
+	"github.com/d3c3ptive/aims/host"
+	hostpb "github.com/d3c3ptive/aims/host/pb"
 	"github.com/d3c3ptive/aims/internal/db"
 )
 
@@ -56,6 +58,9 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 	// Server-side completion filter: when a prefix is set, push a prefix LIKE down to the DB so a
 	// username Tab returns only the candidate credentials. Empty prefix is a no-op.
 	query = scopeCredByPrefix(query, req.GetPrefix())
+	// Host scoping: restrict to credentials gathered from a service running on the requested host.
+	// Nil/unresolvable Host is a no-op (every host).
+	query = scopeCredByHost(query, req.GetHost())
 
 	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
 	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
@@ -77,6 +82,8 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 	// The completion path (Creds.List) pushes the typed username down as a prefix filter; empty is
 	// a no-op. Applied here as well as in Read so a List-backed completer gets the same pushdown.
 	query := scopeCredByPrefix(db.PreloadAll(s.db).Where(&cred), req.GetPrefix())
+	// Host scoping, as in Read: "credentials for this host", composing with the prefix filter.
+	query = scopeCredByHost(query, req.GetHost())
 	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, query, false)
 	if err != nil {
 		return nil, db.WrapDBError(err)
@@ -101,6 +108,46 @@ func scopeCredByPrefix(query *gorm.DB, prefix string) *gorm.DB {
 		Select("publics.core_id").
 		Where(`publics.username LIKE ? ESCAPE '\'`, like)
 	return query.Where(`id IN (?) OR id LIKE ? ESCAPE '\'`, usernameIDs, like)
+}
+
+// scopeCredByHost restricts the query to credentials gathered from a service running on host h —
+// the credential end of the host/subnet scoping axis (ReadCredentialRequest.Host), orthogonal to and
+// composable with both Source and Prefix.
+//
+// It reuses credential.WhereLoggedInHost rather than db.ScopeByHost: a credential does not reach a
+// host through a two-FK join table, but through its provenance (sources.service_id -> ports.host_id),
+// which is exactly the path the Metasploit-style scope helpers in credential/core.go already model.
+// That helper needs a resolved host id, so an id-less filter (address/hostname only) is resolved
+// through host.IDsMatching first. A nil host, or one that denotes nothing, is a no-op.
+func scopeCredByHost(query *gorm.DB, h *hostpb.Host) *gorm.DB {
+	if h == nil {
+		return query
+	}
+	if h.GetId() != "" {
+		return query.Scopes(credential.WhereLoggedInHost((*host.Host)(h)))
+	}
+
+	// No id on the filter: resolve its address/hostname identity to the stored host ids, then scope
+	// to the union of those hosts. WhereLoggedInHost takes one host, so the legwork is inlined here
+	// rather than looping it (an address may legitimately resolve to more than one stored host).
+	hostIDs := host.IDsMatching(query, h)
+	if hostIDs == nil {
+		return query
+	}
+
+	newDB := func() *gorm.DB { return query.Session(&gorm.Session{NewDB: true}) }
+	services := newDB().
+		Table("ports").
+		Select("ports.service_id").
+		Where("ports.service_id IS NOT NULL").
+		Where("ports.host_id IN (?)", hostIDs)
+	cores := newDB().
+		Table("core_sources").
+		Select("core_sources.core_id").
+		Joins("JOIN sources ON sources.id = core_sources.source_id").
+		Where("sources.service_id IN (?)", services)
+
+	return query.Where("id IN (?)", cores)
 }
 
 // escapeLike neutralises the SQL LIKE wildcards in a user-typed prefix so it is matched literally
