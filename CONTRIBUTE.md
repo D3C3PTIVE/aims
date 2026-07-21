@@ -1,0 +1,99 @@
+# AIMS — Client-Side Contribution & the Bridge
+
+> Written 2026-07-21. Companion to [`CLAUDE.md`](./CLAUDE.md) (architecture) and
+> [`SCAN.md`](./SCAN.md) (the scanner substrate, the first realized contributor).
+>
+> **The goal:** let *any* offensive-security tool — a Go program, a shell script, a client-side
+> shell wrapping the `aims` CLI — contribute hosts / services / credentials / scans to the shared
+> AIMS database with **one line**, and trust AIMS to own identity, dedup, merge, and provenance.
+> No managing your own DB, no filling out request structs, no learning the object model.
+
+## The principle: the server already owns correctness
+
+AIMS's *server* is where reliable write logic lives — the host ingest fold (`host.IngestHosts`,
+additive + idempotent, deep child enrichment), the credential merge, the scan host-unification. A
+contributor must be able to hand an object over and **trust** that:
+
+- re-adding the same recon output enriches rather than duplicates (`SameHost`/`SamePort` dedup),
+- a service nmap already saw merges with the one zgrab just found (cross-tool fold),
+- provenance is recorded, so a later `--source <tool>` read returns exactly what the tool put in.
+
+So every contribution path here is **deliberately thin**: build a request, call one existing RPC,
+plus a single provenance stamp. No new logic, no parallel comparators.
+
+## The unifying insight: contribution is the completion bridge, run backwards
+
+AIMS's completion layer is already a bridge in one direction. A foreign shell invokes the hidden
+`_carapace` command; the exec-once `aims` process auto-detects its teamserver (system user config),
+queries the DB, and emits candidates as shell code (`cmd/completers/plumbing.go`, `ConnectComplete`).
+
+**Contribution is the same machine run backwards:** a tool invokes a hidden `aims _contribute <domain>`
+command, pipes an object in on stdin (the JSON `cmd/export` already speaks), and that exec-once
+process connects to the same teamserver and folds the object in. Same exec-once, same auto-detected
+*local aims client*, same "the binary already knows how to reach the DB" — data flowing **in** instead
+of candidates flowing **out**. This is the carapace-bridge analogue: a hidden command other tools
+shell into, in both directions.
+
+```
+                 ┌──────────────── one handle: contrib.Session ─────────────────┐
+ Go tool ───────►│  .As("tool")   .Hosts.Add / .Creds.Add / .Scans.Add / .List  │
+                 └──────────────┬────────────────────────────┬──────────────────┘
+                   transport A: │ linked (gRPC teamclient)    │ transport B: bridge (exec)
+                                ▼                             ▼
+ any non-Go tool ──JSON on stdin──►  aims _contribute <domain> --as tool  ──┐
+                                                                            ▼
+                        server-side fold (host.IngestHosts / Create / Upsert)
+                        — owns identity, dedup, merge, provenance. Client trusts it.
+                                ▲
+ any shell ◄──shell code/JSON────  aims _carapace  /  aims <domain> export   (bridge OUT, exists)
+```
+
+## Build units
+
+| Unit | What | State |
+|---|---|---|
+| **2. Linked Go facade** (`client/contrib`) | `Session.As(tool)` + per-domain `Add`/`Upsert`/`List`, thin wrappers over the existing RPCs. Provenance stamped client-side (host/cred) or via `Run.Scanner` (scan). | ✅ **done** — host/credential/scan; integration-tested through the full transport (`cmd/aims/contrib_test.go`). |
+| **1. Bridge ingest endpoint** | Hidden `aims _contribute <domain> --as tool` (machine contract) **and** `--as` on the visible per-domain `import` verbs (human path). Both reuse one fold: parse JSON (`export.ImportJSON`) → stamp → `Create`/`Upsert`. | ▶ **next** |
+| **3. Bridge transport backend** | The `contrib` `transport` seam backed by exec: no linked server → detect a local `aims` (system config, then `$PATH`) → route each contribution through unit 1. Makes the one handle work "via any detected local aims client". | ⏳ planned |
+| **Event broker** (Phase 2) | An `aims`-provided broker: `Publish`/`Subscribe`, an `Events` stream RPC, and CRUD servers emitting `HostAdded`/… — so tools *react* to contributions (Sliver's `EventBroker` + `StartEventAutomation` auto-register pattern). Same bidirectional bridge treatment (`aims _events` emitting shell-consumable frames). | ⏳ planned |
+
+## The facade today (unit 2)
+
+```go
+con, _ := /* connected *client.Client */
+db := contrib.New(con).As("recon-x")     // provenance name, stamped on everything below
+
+db.Hosts.Add(&host.Host{ Addresses: addr("10.0.0.1"), Ports: ports(443) })  // additive + dedup
+db.Hosts.Upsert(host)                                                        // merge in place
+db.Creds.Add(&credential.Core{ /* ... */ })
+db.Scans.Add(run)                                                            // whole run, host tree folds
+hosts, _ := db.Hosts.List(nil)                                               // reads all contributors
+```
+
+- **`Add`** → the domain's `Create` (additive, skip-if-identical). **`Upsert`** → `Upsert` (merge).
+  **`List(nil)`** → `Read`/`List` (host has no `List` RPC; `Read` lists by default).
+- **Provenance.** `As(tool)` stamps a `provenance.Source{Tool: tool, Type: Import}` on each contributed
+  host (fanned onto its addresses/ports/services, mirroring the server-side scan stamp, since host
+  `Create` does *not* auto-stamp) and on each credential. For scans it fills an unset `Run.Scanner`
+  — the scan server derives provenance from `Scanner`, so that is the scan-domain equivalent.
+- **Trust, verified.** `TestContribHostsAddThroughFacade` adds a host, re-adds an identical one and
+  asserts **zero** new rows (server dedup), then reads `--source recon-x` back and asserts the stamp
+  landed. `TestContribCredsAddThroughFacade` does the same for credentials.
+
+## Design calls made
+
+- **Thin over clever.** No client-side dedup/merge — that would be a second, drifting source of truth.
+  The facade's only non-plumbing act is the provenance stamp.
+- **`Agent`/`Channel` carry no `Sources` field**, so c2 has no provenance axis yet; the facade omits
+  c2 rather than fake it. Add it if/when c2 gains provenance.
+- **Services are contributed *through hosts*** (a service hangs off a port), not as a standalone verb —
+  matching the data model and the fact that the service `Create` RPC is a server-side stub.
+- **Wire format = the existing JSON import path** (`cmd/export`, protobuf-reflection JSON). Don't
+  invent an interchange format; AIMS already has one.
+
+## For the parallel agent
+
+If you own the **stubbed server CRUD** (`network` Create/Upsert, `c2` Upsert, credential `Logins`):
+this facade is your first consumer — finishing those unlocks `db.Services.*` / c2 upsert here. If you
+own **provenance/event plumbing**: the `As(tool)` stamp and any future broker must be *one* mechanism,
+not two. The bridge (unit 3) is the *client* that feeds whatever server-side reactivity you build.
