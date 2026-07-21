@@ -20,7 +20,6 @@ package credential
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,18 +48,14 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 		return nil, err
 	}
 
-	creds := []*credpb.CoreORM{}
 	query := db.PreloadAll(s.db).Where(&cred)
 	// Per-tool scoping: restrict to credentials contributed by a given tool via the
 	// core_sources provenance join. Empty Source is a no-op (all credentials).
 	query = db.ScopeBySource(query, "core_sources", "core_id", req.GetSource())
-	// An empty result set is not an error: a filtered Read matching no rows returns an empty
-	// list, so the caller's len==0 branch fires rather than a bare gorm "record not found".
-	if err = query.First(&creds).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
 
-	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, creds)
+	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
+	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
+	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, query, true)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +69,7 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 		return nil, err
 	}
 
-	creds := []*credpb.CoreORM{}
-	if err = db.PreloadAll(s.db).Where(&cred).Find(&creds).Error; err != nil {
-		return nil, err
-	}
-
-	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, creds)
+	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, db.PreloadAll(s.db).Where(&cred), false)
 	if err != nil {
 		return nil, err
 	}

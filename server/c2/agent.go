@@ -2,7 +2,6 @@ package c2
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -55,22 +54,14 @@ func (s *agentServer) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.R
 		return nil, err
 	}
 
-	// Query
-	agents := []*pb.AgentORM{}
-	database := Preloads(s.db)
-	err = database.Where(cred).First(&agents).Error
-	// An empty result set is not an error: a filtered Read that matches no rows is a valid
-	// "nothing here" answer, so the CLI's len(res)==0 branch (e.g. "No agents in database.")
-	// fires instead of surfacing a bare gorm "record not found".
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = nil
+	// Query. QueryToPBs swallows gorm.ErrRecordNotFound as an empty result: a filtered Read that
+	// matches no rows is a valid "nothing here" answer, so the CLI's len(res)==0 branch (e.g.
+	// "No agents in database.") fires instead of surfacing a bare gorm "record not found".
+	agentspb, err := db.QueryToPBs[*pb.AgentORM, pb.Agent](ctx, Preloads(s.db).Where(cred), true)
+	if err != nil {
+		return nil, err
 	}
-
-	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
-	if convErr != nil {
-		return nil, convErr
-	}
-	return &c2.ReadAgentResponse{Agents: agentspb}, err
+	return &c2.ReadAgentResponse{Agents: agentspb}, nil
 }
 
 func (s *agentServer) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
@@ -80,16 +71,14 @@ func (s *agentServer) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.R
 		return nil, err
 	}
 
-	// Query
-	agents := []*pb.AgentORM{}
-	database := Preloads(s.db)
-	err = database.Where(cred).Find(&agents).Error
-
-	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
-	if convErr != nil {
-		return nil, convErr
+	// Query. A list renders one row per agent and never the full host route, so it loads only the
+	// agent's immediate associations (shallow) — not the nested Host.Trace.Hops/Host.Distance
+	// subtree the detail Read pulls, which would otherwise be fetched for every row (P5).
+	agentspb, err := db.QueryToPBs[*pb.AgentORM, pb.Agent](ctx, listPreloads(s.db).Where(cred), false)
+	if err != nil {
+		return nil, err
 	}
-	return &c2.ReadAgentResponse{Agents: agentspb}, err
+	return &c2.ReadAgentResponse{Agents: agentspb}, nil
 }
 
 func (s *agentServer) Upsert(context.Context, *c2.UpsertAgentRequest) (*c2.UpsertAgentResponse, error) {
@@ -100,14 +89,22 @@ func (s *agentServer) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.Delet
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteAgent not implemented")
 }
 
-// Preloads loads the agent associations the c2 read paths need. Beyond the agent's top-level
-// relations (clause.Associations, via db.PreloadAll) it names the nested Host.* chain bring's
-// prompt route summary reads — the agent's host, its traceroute hops and its hop distance — which
-// clause.Associations does not reach on its own.
+// Preloads loads the agent associations the c2 detail read path needs. Beyond the agent's
+// top-level relations (clause.Associations, via db.PreloadAll) it names the nested Host.* chain
+// bring's prompt route summary reads — the agent's host, its traceroute hops and its hop distance —
+// which clause.Associations does not reach on its own.
 func Preloads(database *gorm.DB) *gorm.DB {
 	return db.PreloadAll(database,
 		"Channels",
 		"Host.Trace.Hops",
 		"Host.Distance",
 	)
+}
+
+// listPreloads is the shallow counterpart of Preloads for the List path: it loads only the agent's
+// immediate associations (its Host and Channels, via clause.Associations) and deliberately omits
+// the nested Host route subtree (Trace.Hops, Distance). A list shows one row per agent and never
+// the full traceroute, so pulling that subtree for every row is pure waste (P5).
+func listPreloads(database *gorm.DB) *gorm.DB {
+	return db.PreloadAll(database)
 }

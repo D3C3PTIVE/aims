@@ -20,6 +20,7 @@ package db
 
 import (
 	"context"
+	"errors"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -95,4 +96,27 @@ func ToPBs[O pbConvertible[P], P any](ctx context.Context, in []O) ([]*P, error)
 		out = append(out, &p)
 	}
 	return out, nil
+}
+
+// QueryToPBs runs a built query and returns the matching rows as their protobuf twins. It captures
+// the tail every domain server's Read/List repeats verbatim: run First (single==true) or Find
+// (single==false), treat gorm.ErrRecordNotFound as an empty result rather than an error (an
+// unmatched filter is a valid "nothing here" answer the caller's len==0 branch renders, not a
+// failure), then convert the ORM rows via ToPBs. The caller still owns everything type-specific —
+// building/scoping/preloading the query and marshalling the typed request/response — so only the
+// identical middle is shared. O is the ORM row type (e.g. *host.HostORM), P its protobuf twin.
+func QueryToPBs[O pbConvertible[P], P any](ctx context.Context, query *gorm.DB, single bool) ([]*P, error) {
+	rows := []O{}
+
+	var err error
+	if single {
+		err = query.First(&rows).Error
+	} else {
+		err = query.Find(&rows).Error
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	return ToPBs[O, P](ctx, rows)
 }

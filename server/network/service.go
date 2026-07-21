@@ -20,7 +20,6 @@ package network
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -51,19 +50,17 @@ func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*ne
 		return nil, err
 	}
 
-	// Query
-	services := []*pb.ServiceORM{}
-	query := s.db.Where(service)
+	// Query. Preload the service's provenance Sources so a read service carries the tools that
+	// contributed it, consistent with the other domains (host/credential) rather than coming back
+	// bare (P5). Sources is a service's only association, so PreloadAll is exactly this set.
+	query := db.PreloadAll(s.db).Where(service)
 	// Per-tool scoping: restrict to services contributed by a given tool via the
 	// service_sources provenance join. Empty Source is a no-op (all services).
 	query = db.ScopeBySource(query, "service_sources", "service_id", req.GetSource())
-	// An empty result set is not an error: a filtered Read matching no rows returns an empty
-	// list, so the caller's len==0 branch fires rather than a bare gorm "record not found".
-	if err = query.First(&services).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
 
-	servicespb, err := db.ToPBs[*pb.ServiceORM, pb.Service](ctx, services)
+	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
+	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
+	servicespb, err := db.QueryToPBs[*pb.ServiceORM, pb.Service](ctx, query, true)
 	if err != nil {
 		return nil, err
 	}
@@ -77,13 +74,8 @@ func (s *server) List(ctx context.Context, req *network.ReadServiceRequest) (*ne
 		return nil, err
 	}
 
-	// Query
-	services := []*pb.ServiceORM{}
-	if err = s.db.Where(service).Find(&services).Error; err != nil {
-		return nil, err
-	}
-
-	servicespb, err := db.ToPBs[*pb.ServiceORM, pb.Service](ctx, services)
+	// Query. Preload provenance Sources for a consistent, non-bare list (P5) — matching Read.
+	servicespb, err := db.QueryToPBs[*pb.ServiceORM, pb.Service](ctx, db.PreloadAll(s.db).Where(service), false)
 	if err != nil {
 		return nil, err
 	}

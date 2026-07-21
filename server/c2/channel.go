@@ -2,7 +2,6 @@ package c2
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,20 +55,13 @@ func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*
 		return nil, err
 	}
 
-	// Query
-	chans := []*pb.ChannelORM{}
-	err = s.db.Where(cred).First(&chans).Error
-	// An empty result set is not an error (see Agents.Read): map "record not found" to an
-	// empty successful response so the CLI renders "no channels" rather than an error.
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = nil
+	// Query. QueryToPBs swallows gorm.ErrRecordNotFound as an empty result (see Agents.Read), so
+	// the CLI renders "no channels" rather than surfacing a bare "record not found".
+	chanspb, err := db.QueryToPBs[*pb.ChannelORM, pb.Channel](ctx, s.db.Where(cred), true)
+	if err != nil {
+		return nil, err
 	}
-
-	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, chans)
-	if convErr != nil {
-		return nil, convErr
-	}
-	return &c2.ReadChannelResponse{Channels: chanspb}, err
+	return &c2.ReadChannelResponse{Channels: chanspb}, nil
 }
 
 func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*c2.ReadChannelResponse, error) {
@@ -80,14 +72,11 @@ func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*
 	}
 
 	// Query
-	chans := []*pb.ChannelORM{}
-	err = s.db.Where(cred).Find(&chans).Error
-
-	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, chans)
-	if convErr != nil {
-		return nil, convErr
+	chanspb, err := db.QueryToPBs[*pb.ChannelORM, pb.Channel](ctx, s.db.Where(cred), false)
+	if err != nil {
+		return nil, err
 	}
-	return &c2.ReadChannelResponse{Channels: chanspb}, err
+	return &c2.ReadChannelResponse{Channels: chanspb}, nil
 }
 
 func (s *channelServer) Upsert(context.Context, *c2.UpsertChannelRequest) (*c2.UpsertChannelResponse, error) {
