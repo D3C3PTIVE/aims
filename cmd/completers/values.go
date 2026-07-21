@@ -44,6 +44,7 @@ import (
 	"github.com/d3c3ptive/aims/host"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hostrpc "github.com/d3c3ptive/aims/host/pb/rpc"
+	"github.com/d3c3ptive/aims/network"
 )
 
 // [ Targets — DB hosts, sub-grouped by locality ] -----------------------------------------------
@@ -498,7 +499,7 @@ func credsWithAgentPromotion(con *client.Client) (creds []*credential.Core, agen
 
 	go func() {
 		defer wg.Done()
-		agentHost, _ := agentctx.CurrentHost(con)
+		agentHost, _ := currentHost(con)
 		agentCreds = agentHostCredIDs(con, agentHost)
 	}()
 
@@ -791,7 +792,7 @@ func collectMACs(all []*pb.Host, agentHost *pb.Host) []*macInfo {
 		label := hostShortLabel(h)
 		add(h.GetMAC(), "", rel, label)
 		for _, a := range h.GetAddresses() {
-			if strings.EqualFold(a.GetType(), "mac") {
+			if strings.EqualFold(a.GetType(), network.AddrTypeMAC) {
 				add(a.GetAddr(), a.GetVendor(), rel, label)
 			}
 		}

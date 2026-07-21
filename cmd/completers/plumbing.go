@@ -25,6 +25,7 @@ package completers
 
 import (
 	"context"
+	"sync"
 
 	"github.com/carapace-sh/carapace"
 
@@ -115,9 +116,42 @@ func cachedHostCompleter(con *client.Client, name, label string, filters *hostrp
 		if emptyHostsMsg != "" && len(res.GetHosts()) == 0 {
 			return carapace.ActionMessage(emptyHostsMsg)
 		}
-		agentHost, _ := agentctx.CurrentHost(con)
+		agentHost, _ := currentHost(con)
 		return render(res.GetHosts(), agentHost)
 	})
+}
+
+// currentHost memoizes agentctx.CurrentHost for the lifetime of this process. The loaded agent
+// context comes from the environment (see agentctx.Current) and never changes within a single
+// `_carapace` invocation, so the 2-RPC Agents.Read→Hosts.Read resolve it performs only needs to run
+// once — every completer body in this package (cachedHostCompleter, credsWithAgentPromotion, and any
+// future agent-context completer) can share the result instead of re-paying it.
+//
+// Only a successful resolution is cached: an error (server unreachable yet, agent race, ...) is
+// transient and must not wedge the rest of the session behind a permanently-failed memo, so a failed
+// attempt is retried on the next call. currentHostMu also serializes concurrent callers (e.g. the
+// Secret/Username completers resolve the agent host from a goroutine run alongside Creds.List) so at
+// most one Agents.Read→Hosts.Read chain is ever in flight.
+var (
+	currentHostMu    sync.Mutex
+	currentHostVal   *pb.Host
+	currentHostReady bool
+)
+
+func currentHost(con *client.Client) (*pb.Host, bool) {
+	currentHostMu.Lock()
+	defer currentHostMu.Unlock()
+
+	if currentHostReady {
+		return currentHostVal, true
+	}
+
+	host, ok := agentctx.CurrentHost(con)
+	if ok {
+		currentHostVal = host
+		currentHostReady = true
+	}
+	return host, ok
 }
 
 // renderGroups turns tag→(value, description…) buckets into a batched action — one tagged carapace
