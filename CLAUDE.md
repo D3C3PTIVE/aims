@@ -42,13 +42,27 @@ client/server/CLI layer built on top — see State below.)
   - Other tools contribute their own idioms where relevant.
 - **One shared database, many contributors.** Any tool can push objects in and read objects
   out over a common gRPC API + SQL store, working with the *same* object instances.
-- **Per-tool scoping in the code API (wanted).** Because many tools share one store, a tool
-  consuming AIMS *as a library* should still be able to easily scope a query to **its own**
-  data — query objects (and/or their children) *by the tool that contributed them* — so a tool
-  that only cares about what it produced can get just that without hand-filtering the whole
-  world. The code-level query API should make "give me only my objects" a first-class,
-  low-friction option (a provenance/tool filter threaded through the domain query helpers),
-  alongside the default cross-tool shared view.
+- **Two orthogonal query-scoping axes.** Because many tools share one store, a query needs to be
+  narrowable along two independent dimensions, both optional, both no-ops when empty (so callers
+  thread them through unconditionally), and both freely composable — "services contributed by
+  nmap, on this host" is one round trip:
+  - **Provenance / tool** — "give me only *my* objects". `provenance.WhereContributedBy` joins
+    through each object's `*_sources` m2m; wrapped as `db.ScopeBySource(query, joinTable,
+    objectFK, tool)` and threaded through every domain Read as a `Source` filter.
+  - **Host / subnet** — "give me only the objects on *this* host". `db.ScopeByHost(query,
+    joinTable, objectFK, hostFK, hostIDs)` joins through a table carrying both FKs (`ports` for
+    services); `host.IDsMatching` resolves a host *filter value* to the host ids it denotes
+    (Id, else addresses, else hostnames), keeping `internal/db` free of domain types. Credentials
+    express the same axis through their own path (`credential.WhereLoggedInHost`, via
+    `sources.service_id -> ports.host_id`). **Subnet/CIDR is deliberately not implemented** —
+    addresses are free text, so containment needs a typed column or a Go-side scan; see the TODO
+    in `host/scope.go`.
+
+  A third, narrower filter rides the same "no-op when empty" convention: `Prefix`, the
+  server-side completion pushdown (`HostFilters.Prefix`, `ReadCredentialRequest.Prefix`,
+  `ReadServiceRequest.Prefix`). Its invariant: the SQL filter must return a **superset** of what
+  the completer renders as its candidate, so carapace's local filter narrows to exactly the right
+  set and the pushdown never drops a valid completion — hence the extra `id` leg on each.
 - **One set of CLI/code utilities around these objects** — to consult them, and to use them
   as **"targets"** of other tools (the `scan/target.go` notion, hosts-as-targets, etc.).
 - **Interoperable technology-wise.** Protobuf is the source of truth (good multi-language
@@ -172,7 +186,7 @@ that is filling out domain by domain.** Read paths work broadly; mutation
 |---------|:---------:|:------:|:--------------------:|-------|
 | host (Hosts) | ✅ | ✅ (dedup) | Upsert ✅ | reference impl. Ingest wired to the shared `host.MergeHost`/`SameHost` fold: Create is additive+idempotent (skip-if-identical), Upsert merges by field-class. Deep in-place child enrichment is DONE (`saveMergedHost`/`saveMergedPorts` write back a new NSE script / filled `Service.Product` / new reason inside an already-persisted port). Delete still stubbed (`server/host/host.go`) |
 | host Users | ❌ | ❌ | ❌ | all methods stubbed |
-| network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; server CRUD still stubbed |
+| network Services | ✅ | ❌ stub | ❌ stub | display/CLI slice done; Read/List share one body and carry all three filters (Source, Host, Prefix); ReadHost/ListHost implemented = same services **plus** their hosts. Create/Upsert/Delete still stubbed (services are only ever written through host ingest) |
 | credential Credentials | ✅ | ✅ | Upsert ✅ · Delete ✅ | full slice done (merge, display, completions, CLI); Delete resolves by identity when no ID given — the worked Delete example |
 | credential Logins | ❌ | ❌ | ❌ | all methods stubbed |
 | scan Scans | ✅ | ✅ | Upsert/Delete/List ✅ | Full CRUD. DB-level host fold (via `host.IngestHosts` + `run_hosts` join, cross-run host unification). Delete clears run_hosts so shared hosts survive; Upsert is idempotent insert-or-return-existing. CLI: `list`/`show` (new `Detail` renderer, `runState` live axis) + `rm` (running-scan guard via `scan.IsRunning`) |
@@ -189,8 +203,9 @@ that is filling out domain by domain.** Read paths work broadly; mutation
   stale and has been removed.)
 - **Empty CLI handlers:** some command `RunE`s are still stubs (e.g. `hosts add`, `hosts rm`);
   the command tree/completions exist but the action does nothing yet.
-- **`credential/core.go`** scope helpers (`WhereLoggedInHost`, `WhereOriginIs`, …) are empty
-  signatures — the Metasploit-style credential querying API is designed but not implemented.
+- **`credential/core.go`** scope helpers are implemented, but only `WhereLoggedInHost` is reachable
+  from the wire (via `ReadCredentialRequest.Host`); `WhereOriginIs` /
+  `WhereOriginServiceForHost` / `WhereOriginSessionForHost` are still code-API-only.
 - **Maltego `AsEntity()`** is inconsistent: some real (`host/group.go` → `maltego.NewEntity`),
   some stubbed (`network/service.go` → `return maltego.Entity{}`).
 - README mentions a `vendor/` dir and a `proto/gen/` layout that don't match reality (deps
