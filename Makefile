@@ -49,11 +49,11 @@ gen:
 
 	# Generate the code for Protobuf definitions (buf; needs Buf Schema Registry
 	# auth for the gorm options module — use `make pb` for an offline equivalent).
-	buf generate --template buf.gen-gorm.yaml
-	buf generate --template buf.gen-grpc.yaml
+	buf generate --template proto/buf.gen-gorm.yaml
+	buf generate --template proto/buf.gen-grpc.yaml
 
 	# Generate struct tags on Go code
-	./maltego-tags.sh
+	./proto/maltego-tags.sh
 
 .PHONY: pb
 pb:
@@ -84,5 +84,5 @@ pb:
 		$$RPC
 
 	# Inject the // @gotags struct tags (xml/display/readonly/strict).
-	./maltego-tags.sh
+	./proto/maltego-tags.sh
 

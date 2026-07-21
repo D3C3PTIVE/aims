@@ -1,0 +1,17 @@
+# Keep generated code and codegen tooling out of the way: `linguist-generated`
+# collapses a file in GitHub diffs ("Load diff") and drops it from the language
+# bar; `linguist-vendored` just drops it from the language bar. None of this
+# affects the build or the repo's file listing — only how GitHub renders things.
+
+# ── Generated code (protoc-gen-go / -gorm / gotemplate / go-grpc output) ──
+# `*.pb.go` also covers the `*_grpc.pb.go` files.
+*.pb.go          linguist-generated=true
+*.pb.gorm.go     linguist-generated=true
+*.proto.gorm.go  linguist-generated=true
+
+# ── Codegen config & tooling (not project source; hide from language stats) ──
+buf.yaml         linguist-generated=true
+buf.work.yaml    linguist-generated=true
+buf.lock         linguist-generated=true
+buf.gen-*.yaml   linguist-generated=true
+maltego-tags.sh  linguist-vendored=true
