@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ func finalFailed(r *scanpb.Run) bool {
 	if fin.GetExit() == scandom.ExitInterrupted {
 		return false
 	}
-	return fin.GetErrorMsg() != "" || (fin.GetExit() != "" && fin.GetExit() != "success")
+	return fin.GetErrorMsg() != "" || (fin.GetExit() != "" && fin.GetExit() != ExitSuccess)
 }
 
 // failureReason is the human message for a failed run: the scanner's errormsg, else a bare fallback.
@@ -131,6 +132,8 @@ type dashboard struct {
 	pct         float64
 	eta         time.Duration
 	hosts       []hostRow
+	warnings    []string // most-recent live scanner notices (capped), oldest first
+	warnCount   int      // total notices seen (so the footer can say how many were elided)
 	done        bool
 	interrupted bool
 	failed      bool
@@ -139,6 +142,10 @@ type dashboard struct {
 
 	prev int // lines emitted by the last render (how far to move the cursor up)
 }
+
+// maxWarnings bounds how many recent notice lines the dashboard keeps on screen — enough to show a
+// scan is busy without letting a chatty scan push the host table off the terminal.
+const maxWarnings = 4
 
 func dashboardStream(stream updateReceiver, opts streamOpts) error {
 	d := &dashboard{w: os.Stdout, opts: opts, start: time.Now()}
@@ -169,6 +176,12 @@ func dashboardStream(stream updateReceiver, opts streamOpts) error {
 			d.eta = etaOf(p)
 		case *scans.RunUpdate_Host:
 			d.hosts = append(d.hosts, hostSummary(u.Host))
+		case *scans.RunUpdate_Warning:
+			d.warnCount++
+			d.warnings = append(d.warnings, u.Warning)
+			if len(d.warnings) > maxWarnings {
+				d.warnings = d.warnings[len(d.warnings)-maxWarnings:]
+			}
 		case *scans.RunUpdate_Final:
 			d.done = true
 			d.interrupted = finalInterrupted(u.Final)
@@ -265,6 +278,21 @@ func (d *dashboard) lines() []string {
 		out = append(out, display.Dim+hostTableHeader()+display.Reset)
 		for _, h := range d.hosts {
 			out = append(out, hostRowLine(h))
+		}
+	}
+
+	// Live notices: the most recent scanner stderr lines (warnings/notices), so a long scan that is
+	// plainly busy is not shown as silent. Warnings are amber, other notices dim; the raw text is
+	// always kept. A header notes how many were elided when the scan is chatty.
+	if len(d.warnings) > 0 {
+		out = append(out, "")
+		hdr := display.Dim + "notices" + display.Reset
+		if d.warnCount > len(d.warnings) {
+			hdr = display.Dim + fmt.Sprintf("notices (latest %d of %d)", len(d.warnings), d.warnCount) + display.Reset
+		}
+		out = append(out, hdr)
+		for _, w := range d.warnings {
+			out = append(out, clipVisible("  "+noticeLine(w), d.width))
 		}
 	}
 
@@ -528,6 +556,8 @@ func lineStream(stream updateReceiver) error {
 				line += ": " + h.services
 			}
 			fmt.Println(line)
+		case *scans.RunUpdate_Warning:
+			fmt.Println("[!] " + u.Warning)
 		case *scans.RunUpdate_Final:
 			printFinal(u.Final)
 			return nil
@@ -578,6 +608,20 @@ func fmtDur(d time.Duration) string {
 	total := int(d.Seconds())
 	return fmt.Sprintf("%d:%02d", total/60, total%60)
 }
+
+// noticeLine colours one raw scanner notice by a light, robust severity read — the only typing
+// nmap's free-text stderr reliably supports (see the investigation): a "Warning:"/"WARNING:" line
+// is amber, everything else (bare notices, NSE traceback lines) is dim. The raw text is never
+// altered, only coloured, so nothing is lost to a misclassification.
+func noticeLine(raw string) string {
+	if warningPrefixRE.MatchString(raw) {
+		return color.YellowString(raw)
+	}
+	return display.Dim + raw + display.Reset
+}
+
+// warningPrefixRE matches nmap's/masscan's warning prefix in either case.
+var warningPrefixRE = regexp.MustCompile(`(?i)^\s*warning:`)
 
 // clipPlain truncates a plain (escape-free) string to n runes, marking a cut with an ellipsis.
 func clipPlain(s string, n int) string {

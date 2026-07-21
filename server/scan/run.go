@@ -180,12 +180,20 @@ func (s *server) startJob(req *scanrpcpb.RunScanRequest, resumedFrom string) (*s
 	job.resumedFrom = resumedFrom
 	s.addJob(job)
 
-	results, progress, errc, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
+	results, progress, warnings, errc, err := scanner.Scan(jobCtx, req.GetTargets(), req.GetArgs()...)
 	if err != nil {
 		cancel()
 		s.removeJob(id)
 		return nil, err
 	}
+
+	// Relay the scanner's live notices to every subscriber as they arrive (independent of the
+	// consume fold, which is busy on results/progress). Best-effort; the channel closes with the scan.
+	go func() {
+		for w := range warnings {
+			job.broadcast(warningUpdate(w))
+		}
+	}()
 
 	// Consume the scan independently of any client: fold + broadcast + persist on completion.
 	go s.consume(job, results, progress, errc)
@@ -646,4 +654,8 @@ func finalUpdate(r *scanpb.Run) *scanrpcpb.RunUpdate {
 
 func errorUpdate(msg string) *scanrpcpb.RunUpdate {
 	return &scanrpcpb.RunUpdate{Update: &scanrpcpb.RunUpdate_Error{Error: msg}}
+}
+
+func warningUpdate(msg string) *scanrpcpb.RunUpdate {
+	return &scanrpcpb.RunUpdate{Update: &scanrpcpb.RunUpdate_Warning{Warning: msg}}
 }

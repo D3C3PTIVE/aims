@@ -147,6 +147,10 @@ message RunUpdate {
         scan.Run Final = 4;
         // Error carries a fatal scan error (the stream ends after it).
         string Error = 5;
+        // Warning is a live, non-fatal scanner notice (a raw nmap/masscan stderr line) streamed as
+        // it is emitted, so a long scan that is plainly busy is not shown as silent. The client
+        // classifies/colours it; the stream continues after it.
+        string Warning = 6;
     }
 }
 

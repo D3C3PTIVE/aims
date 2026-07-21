@@ -20,6 +20,7 @@ package drive
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	scan "github.com/d3c3ptive/aims/scan/pb"
@@ -29,13 +30,60 @@ import (
 // a scan with an empty target list (which nmap would reject or, worse, interpret oddly). This
 // needs no nmap binary.
 func TestScanNoTargets(t *testing.T) {
-	if _, _, _, err := (Nmap{}).Scan(context.Background(), nil); err == nil {
+	if _, _, _, _, err := (Nmap{}).Scan(context.Background(), nil); err == nil {
 		t.Error("Scan with no targets should error")
 	}
-	if _, _, _, err := (Nmap{}).Scan(context.Background(), []*scan.Target{{}}); err == nil {
+	if _, _, _, _, err := (Nmap{}).Scan(context.Background(), []*scan.Target{{}}); err == nil {
 		t.Error("Scan with only empty targets should error")
 	}
 }
 
 // Nmap must satisfy the Scanner interface.
 var _ Scanner = Nmap{}
+
+// TestExtractXMLOutput covers the output-file handling (#2b): a user's -oX/-oA must be pulled out of
+// the nmap args (so the driver's own -oX - has no rival) and mapped to a file the driver writes.
+func TestExtractXMLOutput(t *testing.T) {
+	tests := []struct {
+		name        string
+		in          []string
+		wantCleaned []string
+		wantXML     string
+	}{
+		{
+			"the reported case: -oX <file> is extracted, not passed to nmap",
+			[]string{"-A", "-p-", "--osscan-guess", "-oX", "lan.xml", "192.168.1.1/24"},
+			[]string{"-A", "-p-", "--osscan-guess", "192.168.1.1/24"},
+			"lan.xml",
+		},
+		{
+			"-oA keeps .nmap/.gnmap and maps the XML to <base>.xml",
+			[]string{"-sV", "-oA", "scan", "10.0.0.1"},
+			[]string{"-sV", "-oN", "scan.nmap", "-oG", "scan.gnmap", "10.0.0.1"},
+			"scan.xml",
+		},
+		{
+			"no output flag: args pass through unchanged",
+			[]string{"-sT", "-p22", "10.0.0.1"},
+			[]string{"-sT", "-p22", "10.0.0.1"},
+			"",
+		},
+		{
+			"-oN/-oG (non-XML formats) are left untouched — they coexist with -oX -",
+			[]string{"-oN", "out.nmap", "-oG", "out.gnmap", "10.0.0.1"},
+			[]string{"-oN", "out.nmap", "-oG", "out.gnmap", "10.0.0.1"},
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleaned, xml := extractXMLOutput(tt.in)
+			if xml != tt.wantXML {
+				t.Errorf("xmlFile = %q, want %q", xml, tt.wantXML)
+			}
+			if strings.Join(cleaned, " ") != strings.Join(tt.wantCleaned, " ") {
+				t.Errorf("cleaned = %v, want %v", cleaned, tt.wantCleaned)
+			}
+		})
+	}
+}

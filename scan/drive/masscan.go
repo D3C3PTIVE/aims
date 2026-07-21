@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
+	"strings"
 
 	scandomain "github.com/d3c3ptive/aims/scan"
 	nmapscan "github.com/d3c3ptive/aims/scan/nmap"
@@ -53,13 +54,13 @@ type Masscan struct {
 var masscanProgressRE = regexp.MustCompile(`([0-9]+\.[0-9]+)%\s+done`)
 
 func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...string) (
-	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, <-chan error, error,
+	<-chan *scanpb.Result, <-chan *scanpb.TaskProgress, <-chan string, <-chan error, error,
 ) {
 	specs := scandomain.TargetSpecs(targets)
 	// Reject only when there is nothing at all to scan; in raw-passthrough mode the target is just
 	// another token in args (e.g. `scan run masscan -p80 10.0.0.0/24`).
 	if len(specs) == 0 && len(args) == 0 && len(m.Args) == 0 {
-		return nil, nil, nil, errors.New("drive: no scan targets or arguments")
+		return nil, nil, nil, nil, errors.New("drive: no scan targets or arguments")
 	}
 
 	// masscan writes XML only at completion; capture it in a temp file we parse when the process
@@ -67,7 +68,7 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 	// ports and flags — not an -oX of their own.
 	xmlFile, err := os.CreateTemp("", "aims-masscan-*.xml")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	xmlPath := xmlFile.Name()
 	_ = xmlFile.Close()
@@ -87,38 +88,50 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		os.Remove(xmlPath)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if err := cmd.Start(); err != nil {
 		os.Remove(xmlPath)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	results := make(chan *scanpb.Result)
 	progress := make(chan *scanpb.TaskProgress)
+	warnings := make(chan string, 256)
 	errc := make(chan error, 1)
 	stderrDone := make(chan struct{})
 
-	// Progress: forward masscan's "N.NN% done" stderr frames as TaskProgress. Ranges until stderr
-	// EOF (the process exit), then signals the reaper that all reads are done — the StderrPipe
-	// contract forbids calling Wait before the pipe is drained.
+	// Progress + warnings: masscan's stderr carries both its "N.NN% done" rate line and other
+	// notices. A percent line becomes a TaskProgress; any other non-blank line is forwarded as a
+	// live warning (best-effort), so a masscan run surfaces the same running commentary the nmap
+	// driver does. Ranges until stderr EOF (the process exit), then signals the reaper that all
+	// reads are done — the StderrPipe contract forbids calling Wait before the pipe is drained.
 	go func() {
 		defer close(progress)
+		defer close(warnings)
 		defer close(stderrDone)
 		sc := bufio.NewScanner(stderr)
 		for sc.Scan() {
-			match := masscanProgressRE.FindStringSubmatch(sc.Text())
-			if match == nil {
+			line := sc.Text()
+			if match := masscanProgressRE.FindStringSubmatch(line); match != nil {
+				pct, err := strconv.ParseFloat(match[1], 32)
+				if err != nil {
+					continue
+				}
+				select {
+				case progress <- &scanpb.TaskProgress{Task: "masscan", Percent: float32(pct)}:
+				case <-ctx.Done():
+					return
+				}
 				continue
 			}
-			pct, err := strconv.ParseFloat(match[1], 32)
-			if err != nil {
-				continue
-			}
-			select {
-			case progress <- &scanpb.TaskProgress{Task: "masscan", Percent: float32(pct)}:
-			case <-ctx.Done():
-				return
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				select {
+				case warnings <- trimmed:
+				case <-ctx.Done():
+					return
+				default: // never stall the scan on a slow warnings consumer
+				}
 			}
 		}
 	}()
@@ -157,5 +170,5 @@ func (m Masscan) Scan(ctx context.Context, targets []*scanpb.Target, args ...str
 		}
 	}()
 
-	return results, progress, errc, nil
+	return results, progress, warnings, errc, nil
 }

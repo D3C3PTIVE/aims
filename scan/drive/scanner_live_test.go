@@ -21,6 +21,7 @@ package drive
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,11 +41,16 @@ func TestNmapScanLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	results, progress, errc, err := (Nmap{Args: []string{"-sT", "-p", "22,80,443"}}).
+	results, progress, warnings, errc, err := (Nmap{Args: []string{"-sT", "-p", "22,80,443"}}).
 		Scan(ctx, []*scan.Target{{Address: "127.0.0.1"}})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
+
+	go func() {
+		for range warnings { // drain live notices so the channel is consumed
+		}
+	}()
 
 	hosts := 0
 	frames := 0
@@ -101,11 +107,16 @@ func TestNmapScanLiveUDP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	results, progress, errc, err := (Nmap{Args: []string{"-sU", "-p", "53,123"}}).
+	results, progress, warnings, errc, err := (Nmap{Args: []string{"-sU", "-p", "53,123"}}).
 		Scan(ctx, []*scan.Target{{Address: "127.0.0.1"}})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
+
+	go func() {
+		for range warnings { // drain live notices so the channel is consumed
+		}
+	}()
 
 	hosts := 0
 	done := make(chan struct{}, 2)
@@ -131,5 +142,52 @@ func TestNmapScanLiveUDP(t *testing.T) {
 	}
 	if hosts == 0 {
 		t.Error("expected at least one host result from a -sU scan of 127.0.0.1")
+	}
+}
+
+// TestNmapDriverHonorsOutputFile is the end-to-end proof for the -oX handling (#2b): driving nmap
+// through the driver with a raw `-oX <file>` must (a) still stream results (the driver's own -oX -
+// wins the live stream) AND (b) write the operator's requested file with the scan XML — which the
+// old double-oX silently dropped. Guarded (needs nmap).
+func TestNmapDriverHonorsOutputFile(t *testing.T) {
+	if os.Getenv("AIMS_NMAP_IT") == "" {
+		t.Skip("set AIMS_NMAP_IT=1 to run (requires the nmap binary)")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	out := t.TempDir() + "/operator.xml"
+	results, progress, warnings, errc, err := (Nmap{}).Scan(ctx,
+		[]*scan.Target{{Address: "127.0.0.1"}}, "-sT", "-p", "22,80", "-oX", out)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	go func() {
+		for range progress {
+		}
+	}()
+	go func() {
+		for range warnings {
+		}
+	}()
+	hosts := 0
+	for r := range results {
+		if r.GetHost() != nil {
+			hosts++
+		}
+	}
+	if scanErr := <-errc; scanErr != nil {
+		t.Fatalf("errc: %v", scanErr)
+	}
+	if hosts == 0 {
+		t.Error("expected a streamed host from 127.0.0.1 (driver's -oX - must still feed the stream)")
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("operator's -oX file was not written: %v", err)
+	}
+	if !strings.Contains(string(data), "<nmaprun") {
+		t.Errorf("operator's -oX file lacks nmap XML:\n%s", string(data))
 	}
 }
