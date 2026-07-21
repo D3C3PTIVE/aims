@@ -20,6 +20,7 @@ package credential
 
 import (
 	"context"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -52,6 +53,9 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 	// Per-tool scoping: restrict to credentials contributed by a given tool via the
 	// core_sources provenance join. Empty Source is a no-op (all credentials).
 	query = db.ScopeBySource(query, "core_sources", "core_id", req.GetSource())
+	// Server-side completion filter: when a prefix is set, push a prefix LIKE down to the DB so a
+	// username Tab returns only the candidate credentials. Empty prefix is a no-op.
+	query = scopeCredByPrefix(query, req.GetPrefix())
 
 	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
 	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
@@ -70,11 +74,39 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 		return nil, err
 	}
 
-	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, db.PreloadAll(s.db).Where(&cred), false)
+	// The completion path (Creds.List) pushes the typed username down as a prefix filter; empty is
+	// a no-op. Applied here as well as in Read so a List-backed completer gets the same pushdown.
+	query := scopeCredByPrefix(db.PreloadAll(s.db).Where(&cred), req.GetPrefix())
+	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, query, false)
 	if err != nil {
 		return nil, db.WrapDBError(err)
 	}
 	return &credentials.ReadCredentialResponse{Credentials: pbs}, nil
+}
+
+// scopeCredByPrefix restricts the query to credentials whose public username begins with prefix, OR
+// whose id begins with it — the server-side completion filter behind HostFilters-style username
+// completion (ReadCredentialRequest.Prefix). The id leg keeps the username-less credentials (which
+// the completer renders by their id fallback) within the superset the client filter narrows, so the
+// pushdown never drops a candidate carapace would show. Empty prefix is a no-op. The LIKE is
+// left-anchored (prefix%) and its metacharacters are escaped (ESCAPE '\') so a typed '_'/'%' matches
+// literally; the username leg is index-backed by publics.username's owner join.
+func scopeCredByPrefix(query *gorm.DB, prefix string) *gorm.DB {
+	if prefix == "" {
+		return query
+	}
+	like := escapeLike(prefix) + "%"
+	usernameIDs := query.Session(&gorm.Session{NewDB: true}).
+		Table("publics").
+		Select("publics.core_id").
+		Where(`publics.username LIKE ? ESCAPE '\'`, like)
+	return query.Where(`id IN (?) OR id LIKE ? ESCAPE '\'`, usernameIDs, like)
+}
+
+// escapeLike neutralises the SQL LIKE wildcards in a user-typed prefix so it is matched literally
+// under an `ESCAPE '\'` clause (backslash escaped first so it does not double-escape).
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 // Create inserts credentials that are genuinely new, skipping any whose (public, private, realm)

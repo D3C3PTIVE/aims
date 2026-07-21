@@ -297,9 +297,10 @@ func applyReveal(command *cobra.Command) {
 // candidate column is empty for a row), and turns the remaining columns into the aligned
 // description. `split` explodes a list-valued candidate column into several candidates.
 func completeCredentials(con *client.Client, candidate, fallback, tag, split string) carapace.Action {
-	read := func() ([]*credential.Core, error) {
+	read := func(prefix string) ([]*credential.Core, error) {
 		res, err := con.Creds.List(context.Background(), &rpc.ReadCredentialRequest{
 			Credential: &credential.Core{},
+			Prefix:     prefix,
 		})
 		return res.GetCredentials(), err
 	}
@@ -325,7 +326,11 @@ func completeCredentials(con *client.Client, candidate, fallback, tag, split str
 		return carapace.ActionStyledValuesDescribed(results...).Tag(tag)
 	}
 
-	return completers.CachedList(con, "credentials:"+tag, "credentials:"+tag, "no credentials in database", read, render)
+	// The typed word is pushed down to the DB as a prefix filter (username- or id-anchored), so a
+	// Tab against a large credential store transfers only the matching rows; carapace still does the
+	// final exact filtering. The server filter's id leg keeps it a superset for both the username
+	// and the id completer, so neither drops a candidate.
+	return completers.CachedListByPrefix(con, "credentials:"+tag, "credentials:"+tag, "no credentials in database", read, render)
 }
 
 // CompleteByID completes credential IDs, described by their public/private/type/realm/origin.
