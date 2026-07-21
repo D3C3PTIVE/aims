@@ -18,24 +18,17 @@ package scan
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// `scan run nuclei` is deliberately NOT the server-side, DB-folding shape nmap/masscan are
-// (runNmapCommand/runMasscanCommand in run.go, driven by drive.Scanner over the streaming Run RPC):
-// nuclei has no drive.Scanner or ingest.Ingestor yet. jsonscript.go's schemaless Script mapping
-// already anticipates one ("all zgrab2 modules, and by extension nuclei/httpx/testssl" — see
-// scan/scanners.go's ScannerNuclei comment), but building it — deciding how a nuclei finding folds
-// into Host/Port, writing the ingestor, wiring `scan import --scanner nuclei` — is real, separate
-// work this change does not do.
+// `scan run nuclei` is the server-side, DB-folding shape nmap/masscan are (runNmapCommand/
+// runMasscanCommand in run.go, driven by drive.Scanner over the streaming Run RPC): the scan runs on
+// the teamserver, streams back, and its findings fold into the shared host tree. That wiring now
+// exists — drive.Nuclei (scan/drive/nuclei.go) streams nuclei -jsonl findings live, and the nuclei
+// ingest.Ingestor (scan/ingest/nuclei.go) folds them via jsonscript.go's schemaless Script mapping —
+// so this leaf simply forwards its raw args to the shared runScanner path, exactly like nmap/masscan.
 //
-// What nuclei has TODAY is the hardest, highest-cardinality argument surface of any scanner AIMS
-// touches: ~13k templates, addressed by path, tag, severity, id, author or protocol type (see
-// cmd/completers/nuclei_templates.go). This command is a thin local passthrough purely to give that
-// completer a genuine, testable home: it execs the local `nuclei` binary with every token forwarded
-// verbatim (the same DisableFlagParsing raw-passthrough contract nmap/masscan use), streaming its
-// stdout/stderr straight to the terminal — no server round-trip, no DB write, nothing stored. Once a
-// real driver/ingestor exists, this RunE is what gets replaced by the server-side runScanner path.
+// The substance of this file is nuclei's argument completion: nuclei has the highest-cardinality
+// argument surface of any scanner AIMS touches — ~13k templates, addressed by path, tag, severity,
+// id, author or protocol type (see cmd/completers/nuclei_templates.go).
 import (
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/carapace-sh/carapace"
@@ -46,45 +39,31 @@ import (
 	scandomain "github.com/d3c3ptive/aims/scan"
 )
 
-// runNucleiCommand wires `aims scan run nuclei [nuclei args...]`. See the file-level comment for why
-// this executes locally instead of going through con (the *client.Client is accepted only so this
-// leaf's signature matches every other `scan run <scanner>` command, and so it is ready to switch to
-// the server-side path the moment a real driver lands — nothing here touches the teamclient yet).
+// runNucleiCommand wires `aims scan run nuclei [nuclei args...]`. The scan runs SERVER-SIDE (on the
+// teamserver, via the streaming Run RPC) and its findings are stored, exactly like nmap/masscan: the
+// leaf forwards its raw args to the shared runScanner. Its own contribution is the rich positional
+// completion (templates, tags, severities, ids, authors, protocol types).
 func runNucleiCommand(con *client.Client) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "nuclei [nuclei args...]",
-		Short: "Run nuclei locally, forwarding arguments straight through",
-		Long: "Run nuclei by passing arguments straight through to the local `nuclei` binary. Unlike\n" +
-			"`scan run nmap`/`masscan`, this does NOT run server-side and does NOT store results —\n" +
-			"nuclei has no ingest/driver wiring yet (see run_nuclei.go). Everything after `nuclei` is\n" +
+		Short: "Run a nuclei scan server-side and stream the results",
+		Long: "Run a nuclei scan by passing arguments straight through to nuclei. The scan runs on the\n" +
+			"teamserver and streams back; findings fold into the database. Everything after `nuclei` is\n" +
 			"forwarded verbatim (no `--` needed), with rich completion for templates, tags, severities,\n" +
 			"ids, authors and protocol types:\n\n" +
-			"    aims scan run nuclei -u https://example.com -t http/technologies/ -severity critical,high\n",
+			"    aims scan run nuclei -u https://example.com -t http/technologies/ -severity critical,high\n\n" +
+			"aims-owned flags: --background (submit and return a job id), --quiet (final summary only),\n" +
+			"--json (ndjson stream). Findings are stored; -jsonl and reliability flags are added\n" +
+			"automatically by the driver.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
-			return runNucleiLocal(command, args)
+			return runScanner(command, con, scandomain.ScannerNuclei, args)
 		},
 	}
 
 	carapace.Gen(cmd).PositionalAnyCompletion(completeRunNuclei(con))
 
 	return cmd
-}
-
-// runNucleiLocal execs the local nuclei binary with args forwarded verbatim, inheriting stdio (the
-// same passthrough shape cmd/bring/caps.go uses for setcap) so nuclei's own live output — findings,
-// progress, colouring — reaches the terminal exactly as a bare `nuclei ...` invocation would.
-func runNucleiLocal(command *cobra.Command, args []string) error {
-	if len(args) == 0 || (len(args) == 1 && (args[0] == "-h" || args[0] == "--help")) {
-		return command.Help()
-	}
-	if _, err := exec.LookPath(scandomain.ScannerNuclei); err != nil {
-		return err
-	}
-
-	c := exec.CommandContext(command.Context(), scandomain.ScannerNuclei, args...)
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return c.Run()
 }
 
 // nucleiFlagKind classifies a nuclei value-taking flag by what its value's shape is, so
