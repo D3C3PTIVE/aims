@@ -3,10 +3,11 @@
 > Root context file. Discovered & written 2026-07-19. This is an exploration report
 > for the repository plus working guidance for future sessions.
 >
-> **Companion docs:** [`NAVIGATION.md`](./NAVIGATION.md) — codebase map (directory roles +
-> "where is X?") · [`STATE.md`](./STATE.md) — current state & what's broken ·
-> [`SCAN.md`](./SCAN.md) — scan model & scanner-plug substrate ·
-> [`ROADMAP.md`](./ROADMAP.md) — re-entry plan.
+> **Companion docs** (local working notes under `.claude/`, gitignored — not published):
+> [`NAVIGATION.md`](./.claude/NAVIGATION.md) — codebase map (directory roles +
+> "where is X?") · [`STATE.md`](./.claude/STATE.md) — current state & what's broken ·
+> [`SCAN.md`](./.claude/SCAN.md) — scan model & scanner-plug substrate ·
+> [`ROADMAP.md`](./.claude/ROADMAP.md) — re-entry plan.
 >
 > ✅ **Build status: the whole tree builds and the `aims` binary runs.** A plain `go build ./...`
 > compiles every domain, the generated `pb` layer, all per-domain gRPC servers, `server/transport`,

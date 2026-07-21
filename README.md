@@ -16,9 +16,8 @@ It ships as three things at once:
 - a **binary** — `aims`, a teamserver + client + CLI to populate, query, and browse the store.
 
 > **Status.** The data model and generated layer are mature. The user-facing server/CLI is a
-> vertical slice that fills out domain by domain — see the [status matrix](#status) below and
-> [`STATE.md`](./STATE.md) for the live detail. A plain `go build ./...` builds the whole
-> tree and the `aims` binary runs.
+> vertical slice that fills out domain by domain — see the [status matrix](#status) below.
+> A plain `go build ./...` builds the whole tree and the `aims` binary runs.
 
 ---
 
@@ -109,8 +108,7 @@ read paths work broadly, mutation is landing service by service.
 
 Also in flight: a scanner-plug **substrate** (live/streaming scans, `Ingestor`/`Scanner` plug
 interfaces, stored-object → `Target` bridge, run-to-run diff) and `bring` — sourcing a C2 agent
-context into your live shell. See [`SUBSTRATE.md`](./SUBSTRATE.md), [`SCAN.md`](./SCAN.md), and
-[`BRING.md`](./BRING.md).
+context into your live shell.
 
 ---
 
@@ -145,21 +143,10 @@ GORM ORM types → hand-written helpers + per-domain gRPC services + CLI.
 
 ## Documentation
 
-The companion docs carry the detail:
-
-| Doc                              | What it covers                                           |
-|----------------------------------|---------------------------------------------------------|
-| [`NAVIGATION.md`](./NAVIGATION.md) | Codebase map — directory roles + "where is X?" lookup  |
-| [`CLAUDE.md`](./CLAUDE.md)       | Root context — architecture, pipeline, domain catalog   |
-| [`STATE.md`](./STATE.md)         | Current state, build status, per-service maturity        |
-| [`ROADMAP.md`](./ROADMAP.md)     | Re-entry plan / what to build next                       |
-| [`SCAN.md`](./SCAN.md)           | Scan model & scanner-plug substrate                     |
-| [`SUBSTRATE.md`](./SUBSTRATE.md) | Ingest / target / diff / streaming substrate            |
-| [`DEDUP.md`](./DEDUP.md)         | Identity, dedup, and the merge fold                      |
-| [`DISPLAY.md`](./DISPLAY.md)     | The generic table/detail/completion display engine       |
-| [`COMPLETIONS.md`](./COMPLETIONS.md) | Live, cached, sub-categorized completions           |
-| [`CREDENTIALS.md`](./CREDENTIALS.md) | The credential domain in depth                      |
-| [`BRING.md`](./BRING.md)         | Sourcing a C2 agent context into the shell (design)      |
+See [`CLAUDE.md`](./CLAUDE.md) for the architectural overview — the code-generation pipeline,
+the domain object catalog, and repo conventions. Deeper design and context notes (scan model,
+dedup/merge, display engine, per-domain deep-dives) are kept as local working docs under
+`.claude/` and aren't published.
 
 ---
 
