@@ -54,21 +54,40 @@ shell into, in both directions.
 |---|---|---|
 | **2. Linked Go facade** (`client/contrib`) | `Session.As(tool)` + per-domain `Add`/`Upsert`/`List`, thin wrappers over the existing RPCs. Provenance stamped client-side (host/cred) or via `Run.Scanner` (scan). | ✅ **done** — host/credential/scan; integration-tested through the full transport (`cmd/aims/contrib_test.go`). |
 | **1. Bridge ingest endpoint** (`cmd/contribute`) | Hidden `aims _contribute <domain> --as tool` (machine contract) **and** `--as` on the `hosts`/`credentials` `import` verbs (human path). Both reduce to `contribute.Objects` → `export.ImportJSON` → the facade. | ✅ **done** — integration-tested (`cmd/aims/contribute_test.go`); `scan import --as` deferred (see note). |
-| **3. Bridge transport backend** | The `contrib` `transport` seam backed by exec: no linked server → detect a local `aims` (system config, then `$PATH`) → route each contribution through unit 1. Makes the one handle work "via any detected local aims client". | ⏳ planned |
+| **3. Bridge transport backend** (**fallback only**) | Used *only when a tool has no in-code teamclient to hand the facade*: detect a local `aims` (system config, then `$PATH`) and route each contribution through unit 1's exec endpoint. Never preempts a linked connection. | ⏳ planned |
 | **Event broker** (Phase 2) | An `aims`-provided broker: `Publish`/`Subscribe`, an `Events` stream RPC, and CRUD servers emitting `HostAdded`/… — so tools *react* to contributions (Sliver's `EventBroker` + `StartEventAutomation` auto-register pattern). Same bidirectional bridge treatment (`aims _events` emitting shell-consumable frames). | ⏳ planned |
 
 ## The facade today (unit 2)
 
 ```go
-con, _ := /* connected *client.Client */
-db := contrib.New(con).As("recon-x")     // provenance name, stamped on everything below
+// one call: bootstrap a teamclient from good defaults, connect, ready to contribute
+db, err := contrib.Dial()                // zero-config — discovers the operator's aims server
+defer db.Close()
+db.As("recon-x")                         // provenance name, stamped on everything below
 
 db.Hosts.Add(&host.Host{ Addresses: addr("10.0.0.1"), Ports: ports(443) })  // additive + dedup
 db.Hosts.Upsert(host)                                                        // merge in place
 db.Creds.Add(&credential.Core{ /* ... */ })
 db.Scans.Add(run)                                                            // whole run, host tree folds
 hosts, _ := db.Hosts.List(nil)                                               // reads all contributors
+
+// or, when the program already holds a connected client (a console, a test):
+db := contrib.New(con).As("recon-x")
 ```
+
+### Connection: a pure in-code teamclient, zero-config by default
+
+`Dial()` is the "call the library once" path and its transport is a **pure, in-code teamclient
+connection** — never an exec of the `aims` binary. It is **zero-configuration by deliberate design**:
+the server is discovered from the current user's *system teamclient config* (`client.DefaultConfig`
+→ the team API's on-disk config), so a contributing tool needs **no flag, env var, or JSON path of
+its own** — it inherits whatever connection the operator already set up for `aims`. With no system
+config there is nothing to contribute to, so `Dial` returns a clear error rather than hanging.
+
+Under the hood `Dial` reduces to the new library `client.Connect()` (the coupling-free entry point
+`ConnectRun`/`ConnectComplete` also reduce to: pre-hooks → `Teamclient.Connect` → register clients).
+The exec bridge (unit 3) is a **fallback for programs that cannot link this client at all** — it
+never preempts a live teamclient.
 
 - **`Add`** → the domain's `Create` (additive, skip-if-identical). **`Upsert`** → `Upsert` (merge).
   **`List(nil)`** → `Read`/`List` (host has no `List` RPC; `Read` lists by default).

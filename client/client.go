@@ -225,6 +225,32 @@ func (con *Client) CompletionScope() string {
 	return fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port)
 }
 
+// Connect is the plain, library entry point that establishes the teamclient transport (using a
+// pinned server config when one was set, else the teamclient's own selection / the in-memory
+// dialer) and registers the AIMS gRPC service clients. It carries no cobra or completion coupling —
+// ConnectRun and ConnectComplete are the same three steps (pre-hooks → Teamclient.Connect → Init)
+// with their respective UI concerns layered on. A non-CLI embedder (e.g. the contribution facade's
+// zero-config bootstrap) connects with this. Teamclient.Connect is sync.Once-guarded, so calling
+// Connect after a ConnectRun is a no-op re-register, not a second dial.
+func (con *Client) Connect() error {
+	if err := con.runPreConnectHooks(); err != nil {
+		return err
+	}
+	if err := con.Teamclient.Connect(con.teamConnectOptions()...); err != nil {
+		return err
+	}
+	return con.Init()
+}
+
+// DefaultConfig discovers the current user's system teamclient config for this app — the on-disk
+// config the team API writes when a connection is imported — WITHOUT connecting. It is the
+// zero-configuration default: a contributing tool inherits whatever server the operator already set
+// up for `aims`, with no flag, env var, or JSON path of its own. The bool is false when no system
+// config exists (the caller then has nothing to connect to and should say so, not hang).
+func (con *Client) DefaultConfig() (*client.Config, bool) {
+	return con.Teamclient.SystemConfig()
+}
+
 // Disconnect disconnects the client from its Sliver server,
 // closing all its event/log streams and files, then closing
 // the core Sliver RPC client connection.

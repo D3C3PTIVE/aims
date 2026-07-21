@@ -38,6 +38,7 @@ package contrib
 
 import (
 	"context"
+	"errors"
 
 	"github.com/gofrs/uuid"
 
@@ -68,13 +69,54 @@ type Session struct {
 }
 
 // New returns a contribution Session over an already-connected AIMS client. It performs no I/O; the
-// first RPC happens on the first Add/Upsert/List.
+// first RPC happens on the first Add/Upsert/List. Use it when the program already holds a client (a
+// console, a test harness); use Dial when it does not and wants one bootstrapped from good defaults.
 func New(con *client.Client) *Session {
 	s := &Session{con: con}
 	s.Hosts = HostContrib{s: s}
 	s.Creds = CredContrib{s: s}
 	s.Scans = ScanContrib{s: s}
 	return s
+}
+
+// Dial is the one-call bootstrap: it stands up an AIMS teamclient, connects it to the operator's
+// existing `aims` server, and returns a ready contribution Session — the whole "call the library
+// once and start contributing" path. It is DELIBERATELY zero-configuration: the server is discovered
+// from the current user's system teamclient config (client.DefaultConfig / the team API's on-disk
+// config), so a contributing tool requires no flag, env var, or config file of its own — it inherits
+// whatever connection the operator already set up. When no system config exists there is nothing to
+// contribute to, and Dial returns an error saying so rather than hanging or silently doing nothing.
+//
+// The default send/receive path is thus a pure, in-code teamclient connection — never an exec of the
+// `aims` binary. (The exec bridge is a fallback for programs that cannot link this client at all; it
+// never preempts a live teamclient.) The returned Session owns the connection; Close it when done.
+func Dial() (*Session, error) {
+	con, err := client.New()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, ok := con.DefaultConfig()
+	if !ok {
+		return nil, errors.New("contrib: no system teamclient config found for 'aims' — import one " +
+			"(e.g. `aims teamserver client import <file>`) so tools can discover the server")
+	}
+	con.SetServerConfig(cfg)
+
+	if err := con.Connect(); err != nil {
+		return nil, err
+	}
+	return New(con), nil
+}
+
+// Close tears down the Session's connection. It is meant for a Session obtained from Dial (which owns
+// its client); calling it on a New(con) Session also disconnects that shared client, so only Close
+// what you Dialed.
+func (s *Session) Close() error {
+	if s.con == nil {
+		return nil
+	}
+	return s.con.Disconnect()
 }
 
 // As names the contributing tool. Every object contributed afterwards is stamped with a provenance
