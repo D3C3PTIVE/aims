@@ -27,6 +27,33 @@ import (
 	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
+// TestRunPercent verifies the running-scan percent reflects the CURRENT nmap task, not the max across
+// tasks. nmap runs each task (SYN Stealth Scan, Service scan, …) 0→100% then resets, so maxing would
+// latch at 100% once the first task finished and mislabel a scan still early in a later task as
+// "● 100% while running" — the reported bug.
+func TestRunPercent(t *testing.T) {
+	// SYN scan finished (100%, earlier Time); Service scan is the current task at 18.5% (later Time).
+	r := &scan.Run{Progress: []*scan.TaskProgress{
+		{Task: "SYN Stealth Scan", Percent: 100, Time: 100},
+		{Task: "Service scan", Percent: 18.5, Time: 200},
+	}}
+	if got := runPercent(r); got < 18.4 || got > 18.6 {
+		t.Errorf("runPercent = %v, want ~18.5 (the current task, not the maxed 100)", got)
+	}
+	// Order independence: run.Progress is rebuilt from a map, so the current task may appear first.
+	r2 := &scan.Run{Progress: []*scan.TaskProgress{
+		{Task: "Service scan", Percent: 18.5, Time: 200},
+		{Task: "SYN Stealth Scan", Percent: 100, Time: 100},
+	}}
+	if got := runPercent(r2); got < 18.4 || got > 18.6 {
+		t.Errorf("runPercent (reordered) = %v, want ~18.5", got)
+	}
+	// No progress frames → 0, not a panic (nil-safe getters).
+	if got := runPercent(&scan.Run{}); got != 0 {
+		t.Errorf("runPercent(empty) = %v, want 0", got)
+	}
+}
+
 // TestStateOfHeartbeat covers the run-state axis, including the heartbeat-derived distinction a
 // killed scan needs: a non-final run with a FRESH UpdatedAt is running; the same run once its
 // UpdatedAt has gone stale (the owning process died) is interrupted, not "queued forever".

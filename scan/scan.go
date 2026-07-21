@@ -239,15 +239,20 @@ func IsResumable(r *scan.Run) bool {
 // orphan whose heartbeat went stale) as opposed to failed — used to sub-categorize resumable runs.
 func IsInterrupted(r *scan.Run) bool { return stateOf(r) == stateInterrupted }
 
-// runPercent is the aggregate completion of a running scan: the furthest-along task's percent.
+// runPercent is the CURRENT completion of a running scan. nmap reports progress per task — each task
+// (SYN Stealth Scan, Service scan, OS detection, …) climbs 0→100% and then RESETS for the next — so a
+// max across tasks would latch at 100% the instant the first task finished, showing a bogus "● 100%"
+// for a scan still early in a later task (and disagreeing with the live dashboard). The meaningful
+// figure is the current task's percent: the most recently updated task frame (highest Time), which is
+// exactly what the dashboard shows. Empty progress → 0 (nil-safe getters).
 func runPercent(r *scan.Run) float32 {
-	var max float32
+	var cur *scan.TaskProgress
 	for _, p := range r.GetProgress() {
-		if p.GetPercent() > max {
-			max = p.GetPercent()
+		if cur == nil || p.GetTime() > cur.GetTime() {
+			cur = p
 		}
 	}
-	return max
+	return cur.GetPercent()
 }
 
 // stateToken is the coloured one-word status shown in the list and the detail banner.
