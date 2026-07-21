@@ -21,6 +21,7 @@ package host
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -105,7 +106,7 @@ func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hos
 		return nil, status.Error(codes.InvalidArgument, "no hosts were provided")
 	}
 
-	existing, err := s.loadHostsPB(ctx)
+	existing, err := s.loadCandidateHostsPB(ctx, req.GetHosts())
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +163,7 @@ func IngestHosts(ctx context.Context, gdb *gorm.DB, in []*pb.Host) ([]*pb.Host, 
 // return the persisted rows with their DB-assigned IDs. Hosts later in the batch dedup against the
 // ones already ingested, so a batch that repeats a host folds it into one row.
 func (s *server) ingest(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) {
-	existing, err := s.loadHostsPB(ctx)
+	existing, err := s.loadCandidateHostsPB(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -200,17 +201,88 @@ func (s *server) ingest(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) 
 // [ Ingest helpers ] -----------------------------------------------------
 //
 
-// loadHostsPB loads every host with its full tree preloaded, as PB values — the representation
-// host.SameHost / host.MergeHost operate on. First-level associations (Addresses, Ports,
-// Hostnames, OS, Trace, …) come from db.Preload's clause.Associations; ingestPreloads adds the
-// nested levels the merge reaches into (a port's service/state/scripts, etc.).
-func (s *server) loadHostsPB(ctx context.Context) ([]*pb.Host, error) {
+// loadCandidateHostsPB loads only the stored hosts that could match some host in the incoming
+// batch — the merge candidates — with their full tree preloaded, as the PB values host.SameHost /
+// host.MergeHost operate on. A stored host is a candidate only if it shares a natural key with an
+// incoming one (host.SameHost: a common MAC, else a common address); every other host would be
+// loaded, PB-converted, and rejected for nothing. Narrowing the load to the batch is what keeps
+// ingest from being O(n^2): the felt 1-host-at-a-time import path (scan/CLI) previously reloaded
+// the entire host tree on every call, so importing n hosts loaded ~n^2/2 trees. Now each call
+// loads only the handful sharing an address/MAC with its batch.
+//
+// The returned set is a superset of the true matches (it over-loads a host that merely shares an
+// address but has a differing MAC, which SameHost then rejects) — over-loading is safe; the caller
+// still runs the exact SameHost matcher against it. First-level associations come from db.Preload's
+// clause.Associations; ingestPreloads adds the nested levels the merge reaches into.
+func (s *server) loadCandidateHostsPB(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) {
+	// Collect the natural-key values present in the batch: MACs (case-folded, mirroring
+	// SameHost's EqualFold) and addresses (matched exactly, as sharesAddress does).
+	macSet := make(map[string]struct{})
+	addrSet := make(map[string]struct{})
+	for _, h := range in {
+		if h == nil {
+			continue
+		}
+		if h.MAC != "" {
+			macSet[strings.ToLower(h.MAC)] = struct{}{}
+		}
+		for _, a := range h.Addresses {
+			if a != nil && a.Addr != "" {
+				addrSet[a.Addr] = struct{}{}
+			}
+		}
+	}
+	if len(macSet) == 0 && len(addrSet) == 0 {
+		return nil, nil // no natural keys in the batch → nothing can match → all inserts
+	}
+
+	// Resolve candidate host IDs: those sharing an address (via the host_addresses join table) or
+	// a MAC (a scalar column on hosts). Duplicate ids across the two queries collapse in the set.
+	idSet := make(map[string]struct{})
+	if len(addrSet) > 0 {
+		var ids []string
+		err := s.db.Table("host_addresses").
+			Joins("JOIN addresses ON addresses.id = host_addresses.address_id").
+			Where("addresses.addr IN ?", mapKeys(addrSet)).
+			Pluck("host_addresses.host_id", &ids).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			idSet[id] = struct{}{}
+		}
+	}
+	if len(macSet) > 0 {
+		var ids []string
+		err := s.db.Model(&pb.HostORM{}).
+			Where("LOWER(mac) IN ?", mapKeys(macSet)).
+			Pluck("id", &ids).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			idSet[id] = struct{}{}
+		}
+	}
+	if len(idSet) == 0 {
+		return nil, nil
+	}
+
 	var dbHosts []*pb.HostORM
-	if err := db.Preload(s.db, ingestPreloads()).Find(&dbHosts).Error; err != nil {
+	if err := db.Preload(s.db.Where("id IN ?", mapKeys(idSet)), ingestPreloads()).Find(&dbHosts).Error; err != nil {
 		return nil, err
 	}
 
 	return db.ToPBs[*pb.HostORM, pb.Host](ctx, dbHosts)
+}
+
+// mapKeys returns the keys of a string-set as a slice, for use as a SQL IN list.
+func mapKeys(m map[string]struct{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 // ingestPreloads names the nested associations the host merge reads into; first-level ones are
