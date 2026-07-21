@@ -72,7 +72,7 @@ func completeRunNmap(con *client.Client) carapace.Action {
 			}
 		}
 		if strings.HasPrefix(c.Value, "-") {
-			return nmapFlagCompletions()
+			return nmapFlagCompletions(c.Value)
 		}
 		return completers.Targets(con)
 	}))
@@ -98,10 +98,69 @@ func completeRunNmap(con *client.Client) carapace.Action {
 // carapace-bin has no nmap spec (checked), so the zsh bridge is the only external source; it spawns
 // `zsh` per completion and needs `_nmap` present, contributing nothing if either is absent — which
 // is exactly why the curated set carries the essentials on its own.
-func nmapFlagCompletions() carapace.Action {
-	curated := carapace.ActionValuesDescribed(curatedNmapFlags()...).TagF(classifyNmapFlag)
+//
+// At a bare `-` (nothing typed past the dash yet), the curated side is collapsed through
+// nmapFlagFamilies: instead of dumping every -sS/-sT/-sU/… scan-technique, -Pn/-PS/… probe,
+// -oN/-oX/… output and -T0../-T5 timing variant flat in one list, each family shows as a single
+// placeholder entry. Typing the family prefix (e.g. `-s<TAB>`) re-invokes this with a longer
+// c.Value, which skips the collapse and returns the full curated set — carapace's own prefix
+// matching then narrows it to that family's variants. See the "sub-categorized completions"
+// design intent in CLAUDE.md: this is the same idea (surface the meaningful grouping, not a flat
+// dump), done here by value-length branching rather than tag groups.
+func nmapFlagCompletions(value string) carapace.Action {
+	pairs := curatedNmapFlags()
+	if value == "-" {
+		pairs = collapsedNmapFlags(pairs)
+	}
+	curated := carapace.ActionValuesDescribed(pairs...).TagF(classifyNmapFlag)
 	longTail := bridge.ActionZsh("nmap").Filter(curatedFlagNames()...).TagF(classifyNmapFlag)
 	return carapace.Batch(curated, longTail).ToA()
+}
+
+// nmapFlagFamilies lists the curated short-flag families that fan out into several single-purpose
+// variants (scan technique, host-discovery probe, output format, timing template) and would
+// otherwise flood a bare `-<TAB>`. Keyed by the shared prefix; the value is the placeholder's
+// description, listing the variants it stands in for so the summary stays self-documenting.
+var nmapFlagFamilies = map[string]string{
+	"-s": "scan technique — type more to pick one (-sS/-sT/-sU/-sA/-sN/-sF/-sX/-sO/-sV/-sC/-sn)",
+	"-P": "host-discovery probe — type more to pick one (-Pn/-PS/-PA/-PU/-PE)",
+	"-o": "write output — type more to pick a format (-oN/-oX/-oG/-oA)",
+	"-T": "timing template — type more to pick one (-T0..-T5)",
+	"-i": "target input — type more to pick one (-iL/-iR)",
+}
+
+// nmapFlagFamilyOf reports the nmapFlagFamilies prefix a curated flag is a variant of (e.g. "-sS" →
+// "-s", true). A flag equal to its own family prefix (there are none among the curated set today)
+// would not count as a variant — collapsing only makes sense when there's more than one flag behind
+// the placeholder.
+func nmapFlagFamilyOf(flag string) (string, bool) {
+	for fam := range nmapFlagFamilies {
+		if len(flag) > len(fam) && strings.HasPrefix(flag, fam) {
+			return fam, true
+		}
+	}
+	return "", false
+}
+
+// collapsedNmapFlags replaces every nmapFlagFamilies variant in pairs with a single placeholder
+// entry per family (first-seen order), leaving everything else untouched.
+func collapsedNmapFlags(pairs []string) []string {
+	seen := make(map[string]bool, len(nmapFlagFamilies))
+	out := make([]string, 0, len(pairs))
+	for i := 0; i < len(pairs); i += 2 {
+		flag, desc := pairs[i], pairs[i+1]
+		fam, isVariant := nmapFlagFamilyOf(flag)
+		if !isVariant {
+			out = append(out, flag, desc)
+			continue
+		}
+		if seen[fam] {
+			continue
+		}
+		seen[fam] = true
+		out = append(out, fam, nmapFlagFamilies[fam])
+	}
+	return out
 }
 
 // curatedNmapFlags is the AIMS-owned (flag, description, …) set of high-value nmap flags, flat for
@@ -196,13 +255,17 @@ func curatedNmapFlags() []string {
 	}
 }
 
-// curatedFlagNames returns just the flag names from curatedNmapFlags (the even indices), used to
-// Filter the bridge long-tail so a curated flag is never listed twice.
+// curatedFlagNames returns the flag names from curatedNmapFlags (the even indices) plus the
+// nmapFlagFamilies placeholder names, used to Filter the bridge long-tail so a curated flag — or a
+// family placeholder like "-s" — is never listed twice.
 func curatedFlagNames() []string {
 	pairs := curatedNmapFlags()
-	names := make([]string, 0, len(pairs)/2)
+	names := make([]string, 0, len(pairs)/2+len(nmapFlagFamilies))
 	for i := 0; i < len(pairs); i += 2 {
 		names = append(names, pairs[i])
+	}
+	for fam := range nmapFlagFamilies {
+		names = append(names, fam)
 	}
 	return names
 }
@@ -431,15 +494,33 @@ func completeNSEScriptArgs(con *client.Client) carapace.Action {
 	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
 		// Scope the offered args to whatever `--script` already selects on this command line.
 		selectors := scriptSelectorsFromArgs(c.Args)
-		return carapace.ActionMultiParts(",", func(carapace.Context) carapace.Action {
+		return carapace.ActionMultiParts(",", func(pc carapace.Context) carapace.Action {
+			// pc.Parts are the comma-separated `key=value` segments already typed in this
+			// --script-args list — filter their keys out so a key already set once isn't
+			// offered again (each key only makes sense set once).
+			used := usedNSEArgKeys(pc.Parts)
 			return carapace.ActionMultiParts("=", func(mc carapace.Context) carapace.Action {
 				if len(mc.Parts) > 0 { // past the '=', completing the value of Parts[0]
 					return completeNSEArgValue(con, mc.Parts[0])
 				}
-				return nseArgNames(con, selectors)
+				return nseArgNames(con, selectors).Filter(used...)
 			})
 		})
 	})
+}
+
+// usedNSEArgKeys extracts the key from each already-typed `--script-args` comma segment (a
+// "key=value" pair, or a bare "key" mid-typing before its "="), so completeNSEScriptArgs can filter
+// those keys out of the next segment's key completion.
+func usedNSEArgKeys(parts []string) []string {
+	keys := make([]string, 0, len(parts))
+	for _, p := range parts {
+		key, _, _ := strings.Cut(p, "=")
+		if key = strings.TrimSpace(key); key != "" {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 // scriptSelectorsFromArgs pulls the `--script` value(s) out of the raw positional token stream

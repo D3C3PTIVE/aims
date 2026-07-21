@@ -19,9 +19,37 @@ package scan
 */
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/carapace-sh/carapace"
 )
+
+// actionValues invokes an Action and extracts its candidate values, for tests that need to assert
+// on what a completer actually offers rather than just its side effects. It goes through JSON
+// (InvokedAction has no exported value accessor) — good enough for a test helper.
+func actionValues(t *testing.T, a carapace.Action) []string {
+	t.Helper()
+	raw, err := a.Invoke(carapace.NewContext()).MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal invoked action: %v", err)
+	}
+	var exported struct {
+		Values []struct {
+			Value string `json:"value"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(raw, &exported); err != nil {
+		t.Fatalf("unmarshal invoked action: %v", err)
+	}
+	values := make([]string, 0, len(exported.Values))
+	for _, v := range exported.Values {
+		values = append(values, v.Value)
+	}
+	return values
+}
 
 // A faithful slice of nmap's real script.db format.
 const scriptDBSample = `Entry { filename = "acarsd-info.nse", categories = { "discovery", "safe", } }
@@ -164,9 +192,78 @@ func TestCuratedNmapFlags(t *testing.T) {
 		}
 	}
 
-	// curatedFlagNames must be exactly the flags (the even indices), so the bridge filter dedups.
-	if got := len(curatedFlagNames()); got != len(pairs)/2 {
-		t.Errorf("curatedFlagNames returned %d names, want %d", got, len(pairs)/2)
+	// curatedFlagNames must be the flags (the even indices) plus one name per nmapFlagFamilies
+	// placeholder, so the bridge filter dedups both the curated flags and the family placeholders.
+	want := len(pairs)/2 + len(nmapFlagFamilies)
+	if got := len(curatedFlagNames()); got != want {
+		t.Errorf("curatedFlagNames returned %d names, want %d", got, want)
+	}
+}
+
+// TestCollapsedNmapFlags guards the bare-`-` declutter: every nmapFlagFamilies variant collapses to
+// exactly one placeholder entry per family, everything else passes through untouched, and the
+// placeholder is keyed by the family prefix itself so classifyNmapFlag still buckets it sensibly.
+func TestCollapsedNmapFlags(t *testing.T) {
+	pairs := curatedNmapFlags()
+	collapsed := collapsedNmapFlags(pairs)
+
+	if len(collapsed)%2 != 0 {
+		t.Fatalf("collapsedNmapFlags must be (flag, description) pairs, got odd length %d", len(collapsed))
+	}
+
+	seenFam := map[string]int{}
+	seenFlag := map[string]bool{}
+	for i := 0; i < len(collapsed); i += 2 {
+		flag := collapsed[i]
+		seenFlag[flag] = true
+		if _, ok := nmapFlagFamilies[flag]; ok {
+			seenFam[flag]++
+		}
+	}
+
+	for fam := range nmapFlagFamilies {
+		if seenFam[fam] != 1 {
+			t.Errorf("family placeholder %q appears %d times in collapsedNmapFlags, want 1", fam, seenFam[fam])
+		}
+	}
+
+	// Every original variant (-sS, -Pn, -oA, -T4, -iL, …) must be gone, replaced by its family.
+	for i := 0; i < len(pairs); i += 2 {
+		flag := pairs[i]
+		if fam, isVariant := nmapFlagFamilyOf(flag); isVariant {
+			if seenFlag[flag] {
+				t.Errorf("variant %q (family %q) still present in collapsedNmapFlags, want collapsed", flag, fam)
+			}
+		} else if !seenFlag[flag] {
+			t.Errorf("non-variant flag %q dropped by collapsedNmapFlags", flag)
+		}
+	}
+
+	// A flag not owned by any curated pair (e.g. plain "-p") is not a family variant.
+	if fam, isVariant := nmapFlagFamilyOf("-p"); isVariant {
+		t.Errorf("-p misclassified as a variant of family %q", fam)
+	}
+}
+
+// TestNmapFlagCompletionsBareDash checks the dispatch nmapFlagCompletions is built for: at a bare
+// `-` it must use the collapsed set (no -sS/-sT/… individually), and once a family prefix has been
+// typed (e.g. "-s") it must fall back to the full curated set so the variants are reachable.
+func TestNmapFlagCompletionsBareDash(t *testing.T) {
+	has := func(vs []string, want string) bool {
+		return slices.Contains(vs, want)
+	}
+
+	bareValues := actionValues(t, nmapFlagCompletions("-"))
+	if !has(bareValues, "-s") {
+		t.Errorf("bare `-` completion missing the collapsed \"-s\" placeholder: %v", bareValues)
+	}
+	if has(bareValues, "-sS") {
+		t.Errorf("bare `-` completion still lists a scan-technique variant \"-sS\" instead of collapsing it: %v", bareValues)
+	}
+
+	expandedValues := actionValues(t, nmapFlagCompletions("-s"))
+	if !has(expandedValues, "-sS") {
+		t.Errorf("`-s`-prefixed completion should expose the \"-sS\" variant, got: %v", expandedValues)
 	}
 }
 
@@ -327,6 +424,30 @@ func TestScriptSelectorsFromArgs(t *testing.T) {
 		got := scriptSelectorsFromArgs(c.args)
 		if strings.Join(got, "|") != strings.Join(c.want, "|") {
 			t.Errorf("%s: scriptSelectorsFromArgs(%v) = %v, want %v", c.name, c.args, got, c.want)
+		}
+	}
+}
+
+// TestUsedNSEArgKeys pins the key extraction completeNSEScriptArgs uses to dedup: each already-typed
+// `--script-args` comma segment contributes its key (up to "="), blank/empty segments are dropped,
+// and a bare key with no "=" yet (still mid-typing) still counts as used.
+func TestUsedNSEArgKeys(t *testing.T) {
+	cases := []struct {
+		name  string
+		parts []string
+		want  []string
+	}{
+		{"empty", nil, nil},
+		{"single", []string{"http.useragent=Mozilla"}, []string{"http.useragent"}},
+		{"multiple", []string{"http.useragent=Mozilla", "smbdomain=WORKGROUP"}, []string{"http.useragent", "smbdomain"}},
+		{"bare-key-no-value-yet", []string{"http.useragent"}, []string{"http.useragent"}},
+		{"drops-blank-segments", []string{"a=1", "", "  ", "b=2"}, []string{"a", "b"}},
+		{"value-containing-equals", []string{"userdb=admin=root"}, []string{"userdb"}},
+	}
+	for _, c := range cases {
+		got := usedNSEArgKeys(c.parts)
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: usedNSEArgKeys(%v) = %v, want %v", c.name, c.parts, got, c.want)
 		}
 	}
 }
