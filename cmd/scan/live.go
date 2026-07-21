@@ -151,19 +151,50 @@ func dashboardStream(stream updateReceiver, opts streamOpts) error {
 	d := &dashboard{w: os.Stdout, opts: opts, start: time.Now()}
 	d.resize()
 
-	for {
-		update, err := stream.Recv()
-		if err == io.EOF {
-			d.render()
-			return nil
+	// Receive frames in a goroutine so the render loop can ALSO repaint on a 1s timer. Without this
+	// the loop blocks on stream.Recv(), and a scan that goes quiet between frames (nmap can pause many
+	// seconds between progress ticks) would freeze the elapsed clock and look completely hung. The
+	// channel is buffered so the receiver never blocks handing off its final frame after we return.
+	type recv struct {
+		u   *scans.RunUpdate
+		err error
+	}
+	updates := make(chan recv, 1)
+	go func() {
+		for {
+			u, err := stream.Recv()
+			updates <- recv{u, err}
+			if err != nil {
+				return
+			}
 		}
-		if err != nil {
-			if status.Code(err) == codes.Canceled || errors.Is(err, context.Canceled) {
+	}()
+
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+
+	for {
+		var update *scans.RunUpdate
+		select {
+		case <-tick.C:
+			// Repaint on the timer so elapsed keeps advancing and the view stays alive between frames.
+			d.resize()
+			d.render()
+			continue
+		case r := <-updates:
+			if r.err == io.EOF {
 				d.render()
-				fmt.Fprintln(d.w, display.Dim+"Detached; the scan keeps running (see `scan jobs`)."+display.Reset)
 				return nil
 			}
-			return aims.CheckError(err)
+			if r.err != nil {
+				if status.Code(r.err) == codes.Canceled || errors.Is(r.err, context.Canceled) {
+					d.render()
+					fmt.Fprintln(d.w, display.Dim+"Detached; the scan keeps running (see `scan jobs`)."+display.Reset)
+					return nil
+				}
+				return aims.CheckError(r.err)
+			}
+			update = r.u
 		}
 
 		switch u := update.GetUpdate().(type) {
