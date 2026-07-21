@@ -32,8 +32,10 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
+	hostdomain "github.com/d3c3ptive/aims/host"
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/network"
@@ -215,11 +217,11 @@ func numColored(port *pb.Port) string {
 		return n
 	}
 	switch port.State.State {
-	case "open":
+	case hostdomain.PortOpen:
 		return color.HiGreenString(n)
-	case "filtered":
+	case hostdomain.PortFiltered:
 		return color.HiYellowString(n)
-	case "closed":
+	case hostdomain.PortClosed:
 		return color.HiRedString(n)
 	}
 	return n
@@ -232,29 +234,24 @@ func numColored(port *pb.Port) string {
 // CompleteByID completes services by their (short) ID, described by host / number / proto /
 // product / state, and colours each candidate by port state (open green, filtered yellow, else dim).
 func CompleteByID(con *client.Client) carapace.Action {
-	return aims.CacheCompletion(con, "services:id", carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
+	read := func() ([]svcRow, error) {
 		res, err := con.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
 			Host:    &pb.Host{},
 			Filters: &hosts.HostFilters{Ports: true},
 		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
+		if err != nil {
+			return nil, err
 		}
-
 		var rows []svcRow
 		for _, h := range res.GetHosts() {
 			for _, p := range h.GetPorts() {
 				rows = append(rows, svcRow{host: h, port: p})
 			}
 		}
-		if len(rows) == 0 {
-			return carapace.ActionMessage("no services in database")
-		}
+		return rows, nil
+	}
 
+	render := func(rows []svcRow) carapace.Action {
 		fields := map[string]func(svcRow) string{
 			"ID":   func(r svcRow) string { return display.FormatSmallID(r.port.GetId()) },
 			"Host": func(r svcRow) string { return hostLabel(r.host) },
@@ -283,9 +280,9 @@ func CompleteByID(con *client.Client) carapace.Action {
 				return style.Dim
 			}
 			switch r.port.State.State {
-			case "open":
+			case hostdomain.PortOpen:
 				return style.Green
-			case "filtered":
+			case hostdomain.PortFiltered:
 				return style.Yellow
 			default:
 				return style.Dim
@@ -295,7 +292,9 @@ func CompleteByID(con *client.Client) carapace.Action {
 		results := display.CompletionsStyled(rows, fields, styleOf, opts...)
 
 		return carapace.ActionStyledValuesDescribed(results...).Tag("services (by id)")
-	}))
+	}
+
+	return completers.CachedList(con, "services:id", "services:id", "no services in database", read, render)
 }
 
 //

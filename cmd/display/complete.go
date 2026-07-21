@@ -27,7 +27,10 @@ import (
 func Completions[T any](values []T, fields map[string]func(T) string, opts ...Options) []string {
 	triples := CompletionsStyled(values, fields, nil, opts...)
 
-	// Drop the style column from each (candidate, description, style) triple.
+	// CompletionsStyled emits exactly three strings per candidate — (candidate, description, style)
+	// — so triples is always a multiple of 3. Drop the style column to get (candidate, description)
+	// pairs. The step-by-3 walk requires a full triple to remain (i+2 < len), so a short trailing
+	// group — impossible unless that 3-wide contract is broken — is ignored rather than mis-paired.
 	pairs := make([]string, 0, len(triples)/3*2)
 	for i := 0; i+2 < len(triples); i += 3 {
 		pairs = append(pairs, triples[i], triples[i+1])

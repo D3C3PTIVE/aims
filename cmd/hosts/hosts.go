@@ -29,6 +29,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/host"
@@ -154,107 +155,77 @@ func Commands(client *client.Client) *cobra.Command {
 	return hostsCmd
 }
 
+// readHostsForCompletion reads every host with the base preloads (OS matches, status, hostnames,
+// addresses) the completion descriptions render. A non-nil (even empty) filter is what triggers
+// those base preloads server-side — passing nil would load only depth-1 associations and leave the
+// OS/status columns thin.
+func readHostsForCompletion(client *client.Client) ([]*pb.Host, error) {
+	res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
+		Host:    &pb.Host{},
+		Filters: &hosts.HostFilters{},
+	})
+	return res.GetHosts(), err
+}
+
 // CompleteByID returns hosts completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
-	return aims.CacheCompletion(client, "hosts:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		// Request
-		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
-			Host: &pb.Host{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		if len(res.GetHosts()) == 0 {
-			return carapace.ActionMessage("no hosts in database")
-		}
-
-		options := host.Completions()
-		options = append(options, display.WithCandidateValue("ID", ""))
-
-		results := display.Completions(res.Hosts, host.DisplayFields, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
-	}))
+	return completers.CachedList(client, "hosts:id", "hosts:id", "no hosts in database",
+		func() ([]*pb.Host, error) { return readHostsForCompletion(client) },
+		func(hs []*pb.Host) carapace.Action {
+			options := host.Completions()
+			options = append(options, display.WithCandidateValue("ID", ""))
+			results := display.Completions(hs, host.DisplayFields, options...)
+			return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
+		},
+	)
 }
 
 // CompleteByHostnameOrIP returns completions for all hostnames,
 // or if not found for some hosts, their corresponding addresses.
 func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
-	return aims.CacheCompletion(client, "hosts:hostname-or-ip", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		// Request
-		res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
-			Host: &pb.Host{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		if len(res.GetHosts()) == 0 {
-			return carapace.ActionMessage("no hosts in database")
-		}
-
-		options := host.Completions()
-		options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))
-		options = append(options, display.WithSplitCandidate(","))
-
-		results := display.Completions(res.Hosts, host.DisplayFields, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
-	}))
+	return completers.CachedList(client, "hosts:hostname-or-ip", "hosts:hostname-or-ip", "no hosts in database",
+		func() ([]*pb.Host, error) { return readHostsForCompletion(client) },
+		func(hs []*pb.Host) carapace.Action {
+			options := host.Completions()
+			options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))
+			options = append(options, display.WithSplitCandidate(","))
+			results := display.Completions(hs, host.DisplayFields, options...)
+			return carapace.ActionValuesDescribed(results...).Tag("hostnames ")
+		},
+	)
 }
 
 func exportCommand(con *client.Client) func(cmd *cobra.Command, args []string) any {
 	// If we have some data, export it according
 	// to command flag specifications (format, file, etc)
 	exportRunE := func(command *cobra.Command, args []string) (data any) {
+		// Same read for both paths (all hosts, ports+trace preloaded); only the post-read
+		// filtering differs, so issue it once and branch on whether IDs were given.
+		res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
+			Host: &pb.Host{},
+			Filters: &hosts.HostFilters{
+				Ports: true,
+				Trace: true,
+			},
+		})
+		if err = aims.CheckError(err); err != nil {
+			return err
+		}
+
 		if len(args) == 0 {
-			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-					Trace: true,
-				},
-			})
-			err = aims.CheckError(err)
-			if err != nil {
-				return err
-			}
-
 			return res.GetHosts()
-		} else {
-			res, err := con.Hosts.Read(command.Context(), &hosts.ReadHostRequest{
-				Host: &pb.Host{},
-				Filters: &hosts.HostFilters{
-					Ports: true,
-					Trace: true,
-				},
-			})
-			err = aims.CheckError(err)
-			if err != nil {
-				return err
-			}
+		}
 
-			scanList := []*pb.Host{}
-
-			// Display
-			for _, arg := range args {
-				for _, h := range res.GetHosts() {
-					if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
-						scanList = append(scanList, h)
-					}
+		// Keep only the hosts whose ID carries one of the given prefixes.
+		scanList := []*pb.Host{}
+		for _, arg := range args {
+			for _, h := range res.GetHosts() {
+				if strings.HasPrefix(h.Id, aims.StripANSI(arg)) {
+					scanList = append(scanList, h)
 				}
 			}
-			return scanList
 		}
+		return scanList
 	}
 
 	return exportRunE

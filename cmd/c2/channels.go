@@ -30,6 +30,7 @@ import (
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 )
 
@@ -112,28 +113,16 @@ func ChannelsCommands(con *client.Client) *cobra.Command {
 
 // CompleteChannelByID returns channel completions with their smallened IDs as keys.
 func CompleteChannelByID(client *client.Client) carapace.Action {
-	return aims.CacheCompletion(client, "channels:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		// Request
-		res, err := client.Channels.Read(context.Background(), &c2.ReadChannelRequest{
-			Channel: &pb.Channel{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		if len(res.GetChannels()) == 0 {
-			return carapace.ActionMessage("no channels in database")
-		}
-
-		options := core.CompletionsChannel()
-		options = append(options, display.WithCandidateValue("ID", ""))
-
-		results := display.Completions(res.Channels, core.DisplayFieldsChannel, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("channels ")
-	}))
+	return completers.CachedList(client, "channels:id", "channels:id", "no channels in database",
+		func() ([]*pb.Channel, error) {
+			res, err := client.Channels.Read(context.Background(), &c2.ReadChannelRequest{Channel: &pb.Channel{}})
+			return res.GetChannels(), err
+		},
+		func(channels []*pb.Channel) carapace.Action {
+			options := core.CompletionsChannel()
+			options = append(options, display.WithCandidateValue("ID", ""))
+			results := display.Completions(channels, core.DisplayFieldsChannel, options...)
+			return carapace.ActionValuesDescribed(results...).Tag("channels ")
+		},
+	)
 }

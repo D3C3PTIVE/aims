@@ -297,21 +297,14 @@ func applyReveal(command *cobra.Command) {
 // candidate column is empty for a row), and turns the remaining columns into the aligned
 // description. `split` explodes a list-valued candidate column into several candidates.
 func completeCredentials(con *client.Client, candidate, fallback, tag, split string) carapace.Action {
-	return aims.CacheCompletion(con, "credentials:"+tag, carapace.ActionCallback(func(_ carapace.Context) carapace.Action {
-		if msg, err := con.ConnectComplete(); err != nil {
-			return msg
-		}
-
+	read := func() ([]*credential.Core, error) {
 		res, err := con.Creds.List(context.Background(), &rpc.ReadCredentialRequest{
 			Credential: &credential.Core{},
 		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-		if len(res.GetCredentials()) == 0 {
-			return carapace.ActionMessage("no credentials in database")
-		}
+		return res.GetCredentials(), err
+	}
 
+	render := func(creds []*credential.Core) carapace.Action {
 		opts := cred.Completions()
 		opts = append(opts, display.WithCandidateValue(candidate, fallback))
 		if split != "" {
@@ -327,10 +320,12 @@ func completeCredentials(con *client.Client, candidate, fallback, tag, split str
 			return style.Dim
 		}
 
-		results := display.CompletionsStyled(res.GetCredentials(), cred.DisplayFields, styleOf, opts...)
+		results := display.CompletionsStyled(creds, cred.DisplayFields, styleOf, opts...)
 
 		return carapace.ActionStyledValuesDescribed(results...).Tag(tag)
-	}))
+	}
+
+	return completers.CachedList(con, "credentials:"+tag, "credentials:"+tag, "no credentials in database", read, render)
 }
 
 // CompleteByID completes credential IDs, described by their public/private/type/realm/origin.

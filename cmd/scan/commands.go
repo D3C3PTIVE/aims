@@ -29,6 +29,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/scan"
@@ -84,77 +85,86 @@ func Commands(con *client.Client) *cobra.Command {
 // wrapped in CacheCompletion (once, filter many); the per-invocation Filter(c.Args...) that drops
 // already-selected IDs is applied OUTSIDE the cache, since the cache key is static.
 func CompleteByID(client *client.Client) carapace.Action {
-	cached := aims.CacheCompletion(client, "scans:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
+	cached := completers.CachedList(client, "scans:id", "scans:id", "no scans in database",
+		func() ([]*pb.Run, error) {
+			res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
+				Scan:    &pb.Run{},
+				Filters: &scans.RunFilters{},
+			})
+			return res.GetScans(), err
+		},
+		func(scanList []*pb.Run) carapace.Action {
+			options := scan.Completions()
+			options = append(options, display.WithCandidateValue("ID", ""))
 
-		// Request
-		res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
-			Scan:    &pb.Run{},
-			Filters: &scans.RunFilters{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
+			// The server's default read already returns only surviving heads — a tombstoned run is
+			// browsed via `scan history`, not offered as a first-class completion target. Order them
+			// like `scan list` (running first, then newest-first) so the list matches the table.
+			scan.SortRuns(scanList)
 
-		if len(res.GetScans()) == 0 {
-			return carapace.ActionMessage("no scans in database")
-		}
+			// Surface running scans as their own group above the rest: a live scan is the most likely
+			// completion target (attach/stop/show it), so it should not be buried among historical
+			// runs. Both slices keep the SortRuns order (newest-first within each group).
+			var running, others []*pb.Run
+			for _, r := range scanList {
+				if scan.IsRunning(r) {
+					running = append(running, r)
+				} else {
+					others = append(others, r)
+				}
+			}
+			describe := func(runs []*pb.Run, tag string) carapace.Action {
+				return carapace.ActionValuesDescribed(
+					display.Completions(runs, scan.DisplayFields, options...)...).Tag(tag)
+			}
+			if len(running) == 0 {
+				return describe(others, "scans")
+			}
+			if len(others) == 0 {
+				return describe(running, "running scans")
+			}
+			return carapace.Batch(
+				describe(running, "running scans"),
+				describe(others, "scans"),
+			).ToA()
+		},
+	)
 
-		options := scan.Completions()
-		options = append(options, display.WithCandidateValue("ID", ""))
-
-		// The server's default read already returns only surviving heads — a tombstoned run is
-		// browsed via `scan history`, not offered as a first-class completion target. Order them like
-		// `scan list` (running first, then newest-first) so the candidate list matches the table.
-		scanList := res.GetScans()
-		scan.SortRuns(scanList)
-		results := display.Completions(scanList, scan.DisplayFields, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("scans")
-	}))
-
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		return cached.Filter(c.Args...)
-	})
+	return completers.FilterSelected(cached)
 }
 
 // CompleteSeriesHead completes only scans that head a collapsed series (FormerRuns > 0) — the
 // meaningful arguments to `scan history`, since a run with no series has nothing to browse.
 func CompleteSeriesHead(client *client.Client) carapace.Action {
-	cached := aims.CacheCompletion(client, "scans:series", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
-		res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
-			Scan:    &pb.Run{},
-			Filters: &scans.RunFilters{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-		var heads []*pb.Run
-		for _, r := range res.GetScans() {
-			if r.GetFormerRuns() > 0 {
-				heads = append(heads, r)
+	cached := completers.CachedList(client, "scans:series", "scans:series", "no collapsed scan series yet",
+		func() ([]*pb.Run, error) {
+			res, err := client.Scans.Read(context.Background(), &scans.ReadScanRequest{
+				Scan:    &pb.Run{},
+				Filters: &scans.RunFilters{},
+			})
+			if err != nil {
+				return nil, err
 			}
-		}
-		if len(heads) == 0 {
-			return carapace.ActionMessage("no collapsed scan series yet")
-		}
-		scan.SortRuns(heads) // newest-first, matching the `scan list`/`scan history` table order
+			var heads []*pb.Run
+			for _, r := range res.GetScans() {
+				if r.GetFormerRuns() > 0 {
+					heads = append(heads, r)
+				}
+			}
+			return heads, nil
+		},
+		func(heads []*pb.Run) carapace.Action {
+			scan.SortRuns(heads) // newest-first, matching the `scan list`/`scan history` table order
 
-		options := scan.Completions()
-		options = append(options, display.WithCandidateValue("ID", ""))
-		results := display.Completions(heads, scan.DisplayFields, options...)
+			options := scan.Completions()
+			options = append(options, display.WithCandidateValue("ID", ""))
+			results := display.Completions(heads, scan.DisplayFields, options...)
 
-		return carapace.ActionValuesDescribed(results...).Tag("scan series")
-	}))
+			return carapace.ActionValuesDescribed(results...).Tag("scan series")
+		},
+	)
 
-	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		return cached.Filter(c.Args...)
-	})
+	return completers.FilterSelected(cached)
 }
 
 func listCommand(con *client.Client) *cobra.Command {

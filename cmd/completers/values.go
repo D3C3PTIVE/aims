@@ -31,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/carapace-sh/carapace"
 
@@ -336,7 +337,7 @@ func collectOpenPorts(all []*pb.Host, agentHost *pb.Host) []*portInfo {
 	for _, h := range all {
 		rel := agentctx.RelevanceOfHost(h, agentHost)
 		for _, p := range h.GetPorts() {
-			if p.GetState().GetState() != "open" {
+			if p.GetState().GetState() != host.PortOpen {
 				continue
 			}
 			pi := byNum[p.GetNumber()]
@@ -423,7 +424,7 @@ func portDesc(pi *portInfo) string {
 		label = pi.proto
 	}
 	if label == "" {
-		label = "open"
+		label = host.PortOpen
 	}
 	unit := " hosts"
 	if pi.hosts == 1 {
@@ -466,17 +467,43 @@ func commonPorts() []namedPort {
 // credential reuse, and the operator owns the store (cf. Sliver's GetPlaintextCredsByHashType).
 func Secret(con *client.Client) carapace.Action {
 	return cachedCompleter(con, "scan:secret", "secret", func() carapace.Action {
-		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
+		creds, agentCreds, err := credsWithAgentPromotion(con)
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
 		}
-		if len(res.GetCredentials()) == 0 {
+		if len(creds) == 0 {
 			return carapace.ActionMessage("no credentials in database")
 		}
-
-		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedSecrets(res.GetCredentials(), agentHostCredIDs(con, agentHost))
+		return groupedSecrets(creds, agentCreds)
 	})
+}
+
+// credsWithAgentPromotion runs the two independent legs of an agent-context credential completer
+// concurrently: the full credential list, and the agent-host credential-id promote-set (itself a
+// CurrentHost resolve → Logins.List chain). The legs share no data until the render, so overlapping
+// them removes the serial wait that dominated Secret/Username on a cache miss (the Creds.List no
+// longer blocks in front of the 2-RPC host resolve). Only the credential-list error is returned; the
+// promotion leg degrades to an empty (nil) set on error rather than failing the whole completion.
+// gRPC clients are safe for concurrent use and the legs write disjoint variables, so no lock is
+// needed beyond the WaitGroup join.
+func credsWithAgentPromotion(con *client.Client) (creds []*credential.Core, agentCreds map[string]bool, err error) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		res, listErr := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
+		creds, err = res.GetCredentials(), listErr
+	}()
+
+	go func() {
+		defer wg.Done()
+		agentHost, _ := agentctx.CurrentHost(con)
+		agentCreds = agentHostCredIDs(con, agentHost)
+	}()
+
+	wg.Wait()
+	return creds, agentCreds, err
 }
 
 // agentHostCredIDs returns the set of credential ids that have a login on the current agent's host —
@@ -622,15 +649,14 @@ var usernameGroupOrder = agentctx.PromotedOrder(tagUserWithSecret, tagUserNoSecr
 // the flat credentials.CompleteByUsername for scan slots. Cached; the key carries the agent id.
 func Username(con *client.Client) carapace.Action {
 	return cachedCompleter(con, "scan:username", "username", func() carapace.Action {
-		res, err := con.Creds.List(context.Background(), &credrpc.ReadCredentialRequest{Credential: &credential.Core{}})
+		creds, agentCreds, err := credsWithAgentPromotion(con)
 		if err = aims.CheckError(err); err != nil {
 			return carapace.ActionMessage("Error: %s", err)
 		}
-		if len(res.GetCredentials()) == 0 {
+		if len(creds) == 0 {
 			return carapace.ActionMessage("no credentials in database")
 		}
-		agentHost, _ := agentctx.CurrentHost(con)
-		return groupedUsernames(res.GetCredentials(), agentHostCredIDs(con, agentHost))
+		return groupedUsernames(creds, agentCreds)
 	})
 }
 
@@ -870,7 +896,7 @@ func groupedURLs(all []*pb.Host, agentHost *pb.Host) carapace.Action {
 	for _, h := range all {
 		rel := agentctx.RelevanceOfHost(h, agentHost)
 		for _, p := range h.GetPorts() {
-			if p.GetState().GetState() != "open" {
+			if p.GetState().GetState() != host.PortOpen {
 				continue
 			}
 			named := isNamedWeb(p)

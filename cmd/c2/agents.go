@@ -31,6 +31,7 @@ import (
 	c2 "github.com/d3c3ptive/aims/c2/pb/rpc"
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 )
 
@@ -117,28 +118,16 @@ func AgentsCommands(con *client.Client) *cobra.Command {
 
 // CompleteByID returns agent completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
-	return aims.CacheCompletion(client, "agents:id", carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-		if msg, err := client.ConnectComplete(); err != nil {
-			return msg
-		}
-
-		// Request
-		res, err := client.Agents.Read(context.Background(), &c2.ReadAgentRequest{
-			Agent: &pb.Agent{},
-		})
-		if err = aims.CheckError(err); err != nil {
-			return carapace.ActionMessage("Error: %s", err)
-		}
-
-		if len(res.GetAgents()) == 0 {
-			return carapace.ActionMessage("no agents in database")
-		}
-
-		options := core.CompletionsAgent()
-		options = append(options, display.WithCandidateValue("ID", ""))
-
-		results := display.Completions(res.Agents, core.DisplayFieldsAgent, options...)
-
-		return carapace.ActionValuesDescribed(results...).Tag("agents ")
-	}))
+	return completers.CachedList(client, "agents:id", "agents:id", "no agents in database",
+		func() ([]*pb.Agent, error) {
+			res, err := client.Agents.Read(context.Background(), &c2.ReadAgentRequest{Agent: &pb.Agent{}})
+			return res.GetAgents(), err
+		},
+		func(agents []*pb.Agent) carapace.Action {
+			options := core.CompletionsAgent()
+			options = append(options, display.WithCandidateValue("ID", ""))
+			results := display.Completions(agents, core.DisplayFieldsAgent, options...)
+			return carapace.ActionValuesDescribed(results...).Tag("agents ")
+		},
+	)
 }

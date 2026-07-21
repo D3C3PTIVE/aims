@@ -50,20 +50,56 @@ func Guard(label string, fn carapace.CompletionCallback) carapace.CompletionCall
 	}
 }
 
-// cachedCompleter is the shared shell every DB-backed completer wears: an agent-scoped on-disk cache
-// (the agent id is folded into the cache name so a different loaded context is a distinct entry), a
-// guard so a panic degrades to a message, and the teamclient connect. body does the actual read +
-// render — it only runs on a cache miss with a live connection, never touching the DB directly.
-func cachedCompleter(con *client.Client, name, label string, body func() carapace.Action) carapace.Action {
-	if ctx, ok := agentctx.Current(); ok {
-		name += ":" + ctx.ID
-	}
+// listCompleter is the shared cache + panic-guard + connect shell every DB-backed completer wears:
+// an on-disk cache (read once, filter many), a Guard so a panic degrades to a visible message
+// instead of hanging `_carapace`, and the teamclient connect. body does the actual read + render —
+// it only runs on a cache miss with a live connection, never touching the DB directly.
+func listCompleter(con *client.Client, name, label string, body func() carapace.Action) carapace.Action {
 	return aims.CacheCompletion(con, name, carapace.ActionCallback(Guard(label, func(_ carapace.Context) carapace.Action {
 		if msg, err := con.ConnectComplete(); err != nil {
 			return msg
 		}
 		return body()
 	})))
+}
+
+// cachedCompleter specialises listCompleter for agent-scoped completers: the loaded agent id is
+// folded into the cache name so a different context is a distinct entry (the host-set completers
+// render relevance relative to the loaded agent's host).
+func cachedCompleter(con *client.Client, name, label string, body func() carapace.Action) carapace.Action {
+	if ctx, ok := agentctx.Current(); ok {
+		name += ":" + ctx.ID
+	}
+	return listCompleter(con, name, label, body)
+}
+
+// CachedList is the exported, generic shell for a plain DB-backed list completer — the one the
+// per-domain ID completers (hosts, services, credentials, scans, agents, channels) share. It folds
+// the cache + Guard + connect boilerplate each of them used to hand-roll (and, crucially, gives them
+// the panic Guard they previously lacked). read runs only on a cache miss with a live connection and
+// returns the domain objects; an error becomes a visible message, an empty result short-circuits to
+// emptyMsg, otherwise render turns the objects into the candidate action (its own Tag/style/order).
+func CachedList[T any](con *client.Client, name, label, emptyMsg string, read func() ([]T, error), render func([]T) carapace.Action) carapace.Action {
+	return listCompleter(con, name, label, func() carapace.Action {
+		items, err := read()
+		if err = aims.CheckError(err); err != nil {
+			return carapace.ActionMessage("Error: %s", err)
+		}
+		if len(items) == 0 {
+			return carapace.ActionMessage(emptyMsg)
+		}
+		return render(items)
+	})
+}
+
+// FilterSelected wraps a completer so already-typed positional args are dropped from its candidates.
+// The filter runs per-invocation OUTSIDE the static cache key (which CachedList owns), so a cached
+// read is still reused across keystrokes while the selected-args elision stays live. It is the
+// shared tail the scan completers (CompleteByID, CompleteSeriesHead) used to inline.
+func FilterSelected(a carapace.Action) carapace.Action {
+	return carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		return a.Filter(c.Args...)
+	})
 }
 
 // cachedHostCompleter specialises cachedCompleter for the host-set-backed completers (targets, ports,
