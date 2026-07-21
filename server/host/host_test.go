@@ -269,3 +269,41 @@ func TestUpsertInsertsUnknownHost(t *testing.T) {
 		t.Fatalf("db holds %d hosts, want 2", len(all))
 	}
 }
+
+// TestReadMaxResultsCaps locks the P4 fix: MaxResults>1 must LIMIT the result set (before the
+// fix any value other than 1 loaded the whole table), ==1 returns a single row, and <=0 (unset)
+// loads everything.
+func TestReadMaxResultsCaps(t *testing.T) {
+	s, ctx := newTestServer(t)
+
+	seed := []*pb.Host{
+		{Addresses: []*network.Address{{Addr: "10.0.0.1"}}},
+		{Addresses: []*network.Address{{Addr: "10.0.0.2"}}},
+		{Addresses: []*network.Address{{Addr: "10.0.0.3"}}},
+	}
+	if _, err := s.Create(ctx, &hosts.CreateHostRequest{Hosts: seed}); err != nil {
+		t.Fatalf("seed create: %v", err)
+	}
+
+	read := func(max int64) int {
+		t.Helper()
+		res, err := s.Read(ctx, &hosts.ReadHostRequest{
+			Host:    &pb.Host{},
+			Filters: &hosts.HostFilters{MaxResults: max},
+		})
+		if err != nil {
+			t.Fatalf("read (MaxResults=%d): %v", max, err)
+		}
+		return len(res.GetHosts())
+	}
+
+	if n := read(2); n != 2 {
+		t.Fatalf("MaxResults=2 returned %d hosts, want 2 (LIMIT not applied)", n)
+	}
+	if n := read(1); n != 1 {
+		t.Fatalf("MaxResults=1 returned %d hosts, want 1", n)
+	}
+	if n := read(0); n != 3 {
+		t.Fatalf("MaxResults=0 returned %d hosts, want all 3", n)
+	}
+}

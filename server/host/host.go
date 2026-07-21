@@ -64,10 +64,15 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	query = db.ScopeBySource(query, "host_sources", "host_id", filts.GetSource())
 	database := db.Preload(query, filters)
 
-	// Query
-	if filts != nil && filts.MaxResults == 1 {
+	// Query. MaxResults==1 keeps the First fast-path (single row, ErrRecordNotFound on miss);
+	// any other positive value caps the Find with a LIMIT so a large request no longer silently
+	// loads the whole table. MaxResults<=0 means "no cap" (load all).
+	switch {
+	case filts != nil && filts.MaxResults == 1:
 		database = database.First(&dbHosts)
-	} else {
+	case filts != nil && filts.MaxResults > 1:
+		database = database.Limit(int(filts.MaxResults)).Find(&dbHosts)
+	default:
 		database = database.Find(&dbHosts)
 	}
 

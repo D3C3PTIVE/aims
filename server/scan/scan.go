@@ -349,10 +349,14 @@ func (s *server) Read(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 	}
 	database := db.Preload(query, scanFilters)
 
-	// Query
-	if filters.MaxResults == 1 {
+	// Query. As in the host server: ==1 keeps the First fast-path, any other positive value caps
+	// the Find with a LIMIT, <=0 loads all.
+	switch {
+	case filters.MaxResults == 1:
 		database = database.First(&dbScans)
-	} else {
+	case filters.MaxResults > 1:
+		database = database.Limit(int(filters.MaxResults)).Find(&dbScans)
+	default:
 		database = database.Find(&dbScans)
 	}
 
