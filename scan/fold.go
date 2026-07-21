@@ -28,7 +28,7 @@ import (
 // contribute to the same objects without duplicating or dropping data. The actual
 // host-tree merge and identity live in the host domain (host.MergeHost / host.SameHost,
 // see host/merge.go) so this path and the gRPC CRUD servers share one implementation;
-// the fold here only owns the Run-scoped orchestration. Contract: DEDUP.md.
+// the fold here only owns the Run-scoped orchestration. Contract: .claude/DEDUP.md.
 
 // AddHosts folds one or more hosts into this Run, deduplicating and merging by natural
 // key. It is the bulk entry point behind the import path: the Hosts of a freshly parsed

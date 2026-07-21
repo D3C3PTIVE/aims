@@ -248,7 +248,7 @@ func TestConsumeCoalescesConsecutiveFailures(t *testing.T) {
 	}
 }
 
-// TestConsumeTracksTargetCompletion is the resume foundation (SCAN.md Phase 6): a streamed run with
+// TestConsumeTracksTargetCompletion is the resume foundation (.claude/SCAN.md Phase 6): a streamed run with
 // structured Targets, interrupted before it reached them all, must persist which targets were
 // scanned. A target that produced a result is marked done; a target never reached stays unmarked and
 // is exactly what RemainingTargets (the reforged work of a `scan resume`) returns. This proves the

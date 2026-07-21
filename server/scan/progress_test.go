@@ -25,7 +25,7 @@ import (
 )
 
 // TestPersistRunUpdatesProgress is the persistence contract the cross-process live progress view
-// depends on (SCAN.md Part C): a running scan re-snapshots the SAME TaskProgress row (stable Id,
+// depends on (.claude/SCAN.md Part C): a running scan re-snapshots the SAME TaskProgress row (stable Id,
 // keyed by task name) with a climbing Percent on each heartbeat, and persistRun must UPDATE that row
 // in place — one row, latest Percent — not duplicate it per snapshot nor keep the stale value. If
 // this fails, the DB-attach progress bar would either stall at the first percent or fan out a row per

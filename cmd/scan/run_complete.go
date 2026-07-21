@@ -48,7 +48,7 @@ import (
 // teamserver over RPC — correct whether the CLI is the in-process teamserver or a remote
 // teamclient. (NSE names are read from the local nmap script.db; see completeNSEScripts.)
 //
-// SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we still add no
+// .claude/SCAN.md's contract is "raw passthrough, complete only where AIMS adds value": we still add no
 // typed cobra flags. Flag completion (see nmapFlagCompletions) is a curated, described, tagged set
 // of the high-value flags AIMS owns — because the system's zsh `_nmap` completer is often a stale,
 // pre-NSE stub that drops --script and friends — supplemented, deduped, by the carapace-bridge
@@ -437,7 +437,7 @@ func classifyMasscanFlag(flag string) string {
 // and the short TTL bounds staleness against an nmap upgrade.
 //
 // Caveat: script.db is read from the *local* machine — the one running the CLI/completion —
-// while scans execute server-side (SCAN.md). The authoritative list is the server's; a
+// while scans execute server-side (.claude/SCAN.md). The authoritative list is the server's; a
 // server-side NSE-list RPC is the correct long-term source. This local read is a good-enough
 // first cut (script names are stable across nmap installs) and degrades to a message if absent.
 func completeNSEScripts(con *client.Client) carapace.Action {

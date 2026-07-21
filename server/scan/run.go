@@ -18,7 +18,7 @@ package scan
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// This file implements server-side scan jobs and their streaming (SCAN.md Part C, Phase 4). A
+// This file implements server-side scan jobs and their streaming (.claude/SCAN.md Part C, Phase 4). A
 // scan runs on the teamserver so it outlives the operator's terminal and is visible to every
 // operator: the job owns its own cancellable context (independent of any client stream), folds
 // hosts as they arrive, fans RunUpdate frames out to the foreground stream and any later Attach
@@ -61,7 +61,7 @@ type scanJob struct {
 
 	// resumedFrom is the Id of the interrupted run this job continues, or "" for a fresh scan. When
 	// set, consume stamps it onto the persisted run (Run.ResumedFrom) and tombstones the parent under
-	// this run — a resume chain is a series (SCAN.md Phase 6).
+	// this run — a resume chain is a series (.claude/SCAN.md Phase 6).
 	resumedFrom string
 
 	ctx    context.Context // the job's own context; ctx.Err() != nil means it was Stopped (cancelled)
@@ -220,7 +220,7 @@ func (s *server) streamJob(stream updateStream, job *scanJob, background bool) e
 // resume reforges the command over just the uncompleted ones — AIMS's own, scanner-uniform
 // target-diff. When targets rode inside Args (a raw `scan run nmap … 10.0.0.0/24`), there is no
 // per-target record to diff, so resume re-runs the whole command, which the ingest fold makes
-// idempotent (no duplicate rows, just repeated work). See SCAN.md Phase 6.
+// idempotent (no duplicate rows, just repeated work). See .claude/SCAN.md Phase 6.
 func (s *server) Resume(req *scanrpcpb.ResumeScanRequest, stream scanrpcpb.Scans_ResumeServer) error {
 	run, err := s.readRun(stream.Context(), req.GetId())
 	if err != nil {
@@ -366,7 +366,7 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 			_ = run.AddResult((*scan.Result)(r))
 			if r.GetHost() != nil {
 				// Record which target this result completes, so an interrupted run persists an
-				// authoritative per-target-done set for `scan resume` to diff against (SCAN.md
+				// authoritative per-target-done set for `scan resume` to diff against (.claude/SCAN.md
 				// Phase 6). Marking is scanner-uniform and survives a kill because it is derived
 				// here, from the stream, not from any native checkpoint.
 				scan.MarkTargetsDone(run.Targets, r.GetHost())

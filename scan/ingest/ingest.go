@@ -18,7 +18,7 @@ package ingest
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Package ingest is the ingest-side plug point of the scanner substrate (SCAN.md Part C):
+// Package ingest is the ingest-side plug point of the scanner substrate (.claude/SCAN.md Part C):
 // it turns any scanner's native output into the shared scan.Run object tree so that many
 // tools contribute to and consume the same host/port/service objects. Each supported tool
 // is an Ingestor registered under its name; nmap is the reference adapter (its XML already

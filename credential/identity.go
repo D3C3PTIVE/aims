@@ -24,7 +24,7 @@ import (
 	credential "github.com/d3c3ptive/aims/credential/pb"
 )
 
-// The credential identity model (see CREDENTIALS.md §2).
+// The credential identity model (see .claude/CREDENTIALS.md §2).
 //
 // A Core credential is identified by the *value* triple (Public, Private, Realm). Any component
 // may be absent, and we match on whatever is present — never requiring what is unknown — so a

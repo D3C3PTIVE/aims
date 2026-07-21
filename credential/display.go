@@ -116,7 +116,7 @@ var DisplayFields = map[string]func(c *credential.Core) string{
 // [ Derived Insights ] ---------------------------------------------------
 //
 
-// Insights returns the cross-set observations for a single credential (see CREDENTIALS.md §5):
+// Insights returns the cross-set observations for a single credential (see .claude/CREDENTIALS.md §5):
 // secret reuse, replayability, cracked-from lineage, and validation. `all` is the full set the
 // credential is being viewed within (reuse cannot be computed from one credential alone).
 func Insights(target *credential.Core, all []*credential.Core) (lines []string) {

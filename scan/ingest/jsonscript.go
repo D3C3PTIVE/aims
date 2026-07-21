@@ -27,7 +27,7 @@ import (
 )
 
 // jsonToScript maps arbitrary decoded JSON into the recursive nmap NSE Script tree. This is
-// the schemaless-extension principle (SCAN.md Part A#4 / Part D) put to work: any JSON
+// the schemaless-extension principle (.claude/SCAN.md Part A#4 / Part D) put to work: any JSON
 // scanner's bespoke output files itself into the same Script{Table, Element} rows nmap's own
 // NSE scripts land in, so adding a JSON tool never means new proto/DB columns. Written once,
 // it serves every JSON adapter (all zgrab2 modules, and by extension nuclei/httpx/testssl).

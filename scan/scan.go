@@ -85,13 +85,13 @@ func (r *Run) InitResult() *Result {
 // AddResult folds one feeder Result into the Run's host tree. The Result is the
 // universal adapter output (one {Host, Address, Port, Service, Data} tuple emitted by
 // any scanner); AddResult assembles it into a single-host subtree and merges that in
-// via the non-destructive fold (see fold.go / DEDUP.md). Calling it twice with the
+// via the non-destructive fold (see fold.go / .claude/DEDUP.md). Calling it twice with the
 // same observation is idempotent — the second call merges into the row the first
 // created and changes nothing.
 //
 // If the Result carries Data (a custom scanner's opaque payload), it is preserved as
 // a script observation on the port (or host) so nothing is lost; mapping structured
-// payloads into the recursive NSE Script/Table/Element tree (jsonToScript, SCAN.md §D)
+// payloads into the recursive NSE Script/Table/Element tree (jsonToScript, .claude/SCAN.md §D)
 // is the richer, philosophy-true follow-on.
 func (r *Run) AddResult(res *Result) (err error) {
 	if res == nil {

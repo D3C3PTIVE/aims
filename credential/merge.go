@@ -24,7 +24,7 @@ import (
 	"github.com/d3c3ptive/aims/provenance"
 )
 
-// MergeCore folds `src` into `dst` in place using the four field-classes (see CREDENTIALS.md §3):
+// MergeCore folds `src` into `dst` in place using the four field-classes (see .claude/CREDENTIALS.md §3):
 //
 //   - Identity fields (Public.Type/Username, Private.Type/Data, Realm.Key/Value) are left
 //     untouched — by definition they are equal when two Cores match, and changing them would

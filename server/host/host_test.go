@@ -107,7 +107,7 @@ func TestCreateIsAdditiveAndIdempotent(t *testing.T) {
 	}
 }
 
-// TestUpsertMergesAndIsIdempotent is the DEDUP.md prime directive end to end: re-importing the
+// TestUpsertMergesAndIsIdempotent is the .claude/DEDUP.md prime directive end to end: re-importing the
 // identical host writes nothing, and importing an enriched observation of the same host (new
 // port, new hostname, same address) merges into the one record instead of duplicating or
 // dropping — additive and idempotent.

@@ -37,17 +37,17 @@ import (
 // CRUD servers — so identity and merge semantics never diverge between them.
 //
 // It is the value-typed (`*pb.Host`) identity+merge primitive, and it follows the
-// contract in DEDUP.md:
+// contract in .claude/DEDUP.md:
 //
 //   - match ≠ merge: a matched record is merged field-by-field, never discarded
-//     whole (a match-then-drop filter would lose data) — DEDUP.md §1.
+//     whole (a match-then-drop filter would lose data) — .claude/DEDUP.md §1.
 //   - keyed-first, always scoped: a port is only matched within its matched host,
-//     a script within its matched port — DEDUP.md §2/§3.
+//     a script within its matched port — .claude/DEDUP.md §2/§3.
 //   - the no-false-merge asymmetry: when identity is uncertain we split (keep both)
-//     rather than risk collapsing two distinct objects — DEDUP.md §0.
+//     rather than risk collapsing two distinct objects — .claude/DEDUP.md §0.
 //   - field classes: Identity is set once; scalars are fill-only (a known value is
 //     never clobbered by an empty one); collections are unioned; contradicting
-//     Observations are kept, not overwritten — DEDUP.md §4/§5.
+//     Observations are kept, not overwritten — .claude/DEDUP.md §4/§5.
 //
 // Every merge returns whether it changed the destination, so callers can skip no-op
 // writes (idempotent re-import issues zero updates).
@@ -57,7 +57,7 @@ import (
 //
 
 // SameHost reports whether two in-memory hosts denote the same machine, using natural
-// keys only (DEDUP.md §2, keyed-first): MAC is definitive, otherwise a shared address
+// keys only (.claude/DEDUP.md §2, keyed-first): MAC is definitive, otherwise a shared address
 // is decisive. A shared hostname alone is deliberately NOT enough to merge — virtual
 // hosts share names — so per the no-false-merge asymmetry we would rather split than
 // wrongly collapse two hosts.
@@ -130,7 +130,7 @@ func MergeHost(dst, src *host.Host) (changed bool) {
 	}
 	// Host up/down status is an Observation: fill if empty, but never clobber an
 	// existing observation with a conflicting one. True latest-wins needs a
-	// per-observation timestamp the proto lacks today (DEDUP.md §5, gap C1).
+	// per-observation timestamp the proto lacks today (.claude/DEDUP.md §5, gap C1).
 	if dst.Status == nil && src.Status != nil {
 		dst.Status = src.Status
 		changed = true
@@ -230,7 +230,7 @@ func mergeExtraPorts(dst, src *host.Host) (changed bool) {
 //
 
 // mergePorts is the scoped recursion: each src port is matched only against dst's
-// ports (same host), then merged or appended (DEDUP.md §3).
+// ports (same host), then merged or appended (.claude/DEDUP.md §3).
 func mergePorts(dst, src *host.Host) (changed bool) {
 	for _, sp := range src.Ports {
 		if sp == nil {
@@ -269,7 +269,7 @@ func mergePortInto(dst, src *host.Port) (changed bool) {
 	}
 
 	// Port state is an Observation. Fill if empty; if both are present and differ,
-	// keep the existing one — do not clobber (DEDUP.md §5). Retaining full state
+	// keep the existing one — do not clobber (.claude/DEDUP.md §5). Retaining full state
 	// history needs the per-observation-timestamp proto change (gap C1); until then
 	// the non-destructive choice is to preserve the first observation.
 	if dst.State == nil && src.State != nil {
@@ -340,7 +340,7 @@ func mergeReasons(dst, src *host.Port) (changed bool) {
 }
 
 //
-// NSE scripts — content-hash identity (DEDUP.md §6.2) ------------------------
+// NSE scripts — content-hash identity (.claude/DEDUP.md §6.2) ------------------------
 //
 
 // mergeScripts unions two script slices by content identity: two script outputs are
@@ -373,7 +373,7 @@ func mergeScripts(dst, src []*nmap.Script, changed bool) ([]*nmap.Script, bool) 
 
 // scriptKey is the content-hash identity of a script observation. normalize() strips
 // only provably-insignificant whitespace so an identical re-scan hashes equal; when
-// in doubt a difference is treated as significant (keep both) — DEDUP.md §6.2.
+// in doubt a difference is treated as significant (keep both) — .claude/DEDUP.md §6.2.
 func scriptKey(s *nmap.Script) string {
 	if s == nil {
 		return ""

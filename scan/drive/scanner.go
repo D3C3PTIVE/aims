@@ -18,7 +18,7 @@ package drive
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-// Package drive is the target-side plug point of the scanner substrate (SCAN.md Part C, plug
+// Package drive is the target-side plug point of the scanner substrate (.claude/SCAN.md Part C, plug
 // point B): where ingest.Ingestor folds a foreign tool's *output* into the model, a Scanner
 // *runs* a tool against scan Targets (derived from stored hosts via scan.TargetsFromHosts) and
 // streams Results + progress back for the fold to consume — closing the query → target → scan →
@@ -44,7 +44,7 @@ import (
 )
 
 // Scanner drives a tool against AIMS-selected targets and streams results back. It is the
-// in-process form of the substrate; the server-side streaming RPC (SCAN.md Part C, Phase 4)
+// in-process form of the substrate; the server-side streaming RPC (.claude/SCAN.md Part C, Phase 4)
 // puts the same surface behind the teamserver so foreground and detached scans share one path.
 type Scanner interface {
 	// Scan runs the tool against targets (plus any extra tool arguments) and returns four

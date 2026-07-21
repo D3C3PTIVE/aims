@@ -19,7 +19,7 @@ package host
 */
 
 // BenchmarkIngestHosts measures the host ingest fold — the additive/idempotent merge that backs
-// server.Upsert, IngestHosts, and (via those) scan import. It is the hot path ROADMAP.md flags as
+// server.Upsert, IngestHosts, and (via those) scan import. It is the hot path .claude/ROADMAP.md flags as
 // an O(n^2) shape: ingest() calls loadHostsPB(), which loads the WHOLE host table with its full
 // child tree on EVERY call, then matches each incoming host against that set (indexSameHost is
 // O(existing) per incoming host). Nothing here was measured before.

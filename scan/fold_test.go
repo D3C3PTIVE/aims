@@ -46,7 +46,7 @@ func portOf(h *host.Host, number uint32) *host.Port {
 }
 
 // The single most important property: re-importing the same scan is a no-op —
-// no new host, no new port, and the second fold reports no change (DEDUP.md §9).
+// no new host, no new port, and the second fold reports no change (.claude/DEDUP.md §9).
 func TestFoldIdempotent(t *testing.T) {
 	r := &Run{}
 	r.AddHosts(buildHost("10.0.0.1", 80))
@@ -64,7 +64,7 @@ func TestFoldIdempotent(t *testing.T) {
 }
 
 // Two partial observations of the same host must union, never intersect and never
-// drop: ports from both, plus enrichment (OS) that only one carried (DEDUP.md §0).
+// drop: ports from both, plus enrichment (OS) that only one carried (.claude/DEDUP.md §0).
 func TestFoldUnionEnrichment(t *testing.T) {
 	r := &Run{}
 	r.AddHosts(buildHost("10.0.0.1", 80))
@@ -97,7 +97,7 @@ func TestFoldNoFalseMerge(t *testing.T) {
 }
 
 // Service fields are fill-only: a blank field is filled from a later scan, but a
-// known value is never clobbered back to empty (DEDUP.md §4).
+// known value is never clobbered back to empty (.claude/DEDUP.md §4).
 func TestServiceFillOnly(t *testing.T) {
 	r := &Run{}
 
@@ -150,7 +150,7 @@ func TestPortStateNoClobber(t *testing.T) {
 }
 
 // Scripts union by content identity: identical output dedups, differing output is
-// kept as a second observation — opaque content is never fuzzy-merged (DEDUP.md §6.2).
+// kept as a second observation — opaque content is never fuzzy-merged (.claude/DEDUP.md §6.2).
 func TestScriptUnionByContent(t *testing.T) {
 	r := &Run{}
 

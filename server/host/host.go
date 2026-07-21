@@ -169,7 +169,7 @@ func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hos
 	return &hosts.CreateHostResponse{Hosts: created}, nil
 }
 
-// Upsert is the non-destructive ingest path (DEDUP.md): each incoming host is matched against the
+// Upsert is the non-destructive ingest path (.claude/DEDUP.md): each incoming host is matched against the
 // database by natural key and, when found, merged field-by-field into the existing record — a
 // known value is never clobbered by an empty one, collections are unioned, and contradicting
 // observations are kept rather than overwritten (host.MergeHost). An unmatched host is inserted.

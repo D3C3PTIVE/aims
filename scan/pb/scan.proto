@@ -71,7 +71,7 @@ message Run {
   repeated string NmapErrors = 28;
   string RawXML = 30;
 
-  // Run lifecycle (see SCAN.md Phase 5 — cleanup/tombstone/history).
+  // Run lifecycle (see .claude/SCAN.md Phase 5 — cleanup/tombstone/history).
   //
   // SupersededBy tombstones a run: when non-empty it holds the Id of the surviving "head" run of
   // the same scan series (same scanner + args + targets), and the run is hidden from the default
@@ -84,7 +84,7 @@ message Run {
   // surviving run shows ("former runs: 3") so a collapsed series still advertises its depth.
   // @gotags: display:"Former runs" xml:"-"
   int32 FormerRuns = 43;
-  // ResumedFrom links a resumed run to the interrupted run it continues (see SCAN.md Phase 6). A
+  // ResumedFrom links a resumed run to the interrupted run it continues (see .claude/SCAN.md Phase 6). A
   // `scan resume` mints a new run with ResumedFrom set to the orphan's Id, folds the remaining
   // work into it, and tombstones the orphan (SupersededBy) — so a resume chain is itself a series.
   // @gotags: display:"Resumed from" xml:"-"

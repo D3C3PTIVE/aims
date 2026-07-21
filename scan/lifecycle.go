@@ -39,7 +39,7 @@ import (
 // This file is the pure-Go core (no DB, no RPC): it groups runs into series, picks each series'
 // head, and produces a CleanupPlan of field mutations the caller persists via the existing Upsert /
 // Delete RPCs. Identity here is deliberately coarse (the scan *definition*), distinct from
-// AreScansIdentical's fine *output* identity — the two answer different questions (§ the SCAN.md
+// AreScansIdentical's fine *output* identity — the two answer different questions (§ the .claude/SCAN.md
 // Phase-5 table).
 
 // IsSuperseded reports whether a run has been tombstoned under a surviving head.

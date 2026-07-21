@@ -27,7 +27,7 @@ import (
 	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
-// This file is run-to-run diff (SCAN.md Part C, capability 2: attack-surface drift). Because
+// This file is run-to-run diff (.claude/SCAN.md Part C, capability 2: attack-surface drift). Because
 // Runs are timestamped and hosts share one identity primitive, an ndiff across ANY scanners at
 // once is nearly free: reuse host.SameHost / host.SamePort so the diff agrees with the ingest
 // fold on what "the same host/port" means, then classify each host and port as new, gone, or

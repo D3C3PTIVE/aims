@@ -63,7 +63,7 @@ func New(db *gorm.DB) *server {
 // hosts are folded through the global host records (host.IngestHosts): the run is linked to the
 // resulting shared rows via the run_hosts join rather than getting a private copy of every host, so
 // one physical host observed by several runs is a single row referenced by each — cross-run
-// host-row unification (DEDUP.md's documented follow-on), not the old match-then-drop.
+// host-row unification (.claude/DEDUP.md's documented follow-on), not the old match-then-drop.
 func (s *server) Create(ctx context.Context, req *scanrpcpb.CreateScanRequest) (*scanrpcpb.CreateScanResponse, error) {
 	// Load existing runs once to detect exact-duplicate re-imports. Their host trees need not be
 	// preloaded: AreScansIdentical keys on RawXML and the scan tasks, not on the host subtree.
@@ -432,7 +432,7 @@ func (s *server) List(ctx context.Context, req *scanrpcpb.ReadScanRequest) (*sca
 // same host unification via host.IngestHosts (persistRun), except a duplicate is echoed back tagged
 // with the Id it already has rather than being silently dropped. A Run is an immutable historical
 // record, so there is no in-place field merge here; enriching a stored run as it runs (the live-scan
-// case) is the streaming follow-on (SCAN.md Part C), not an Upsert concern.
+// case) is the streaming follow-on (.claude/SCAN.md Part C), not an Upsert concern.
 func (s *server) Upsert(ctx context.Context, req *scanrpcpb.UpsertScanRequest) (*scanrpcpb.UpsertScanResponse, error) {
 	dbScans := []*scanpb.RunORM{}
 	if err := s.db.Find(&dbScans).Error; err != nil {

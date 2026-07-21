@@ -198,7 +198,7 @@ func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRe
 	return &credentials.CreateCredentialResponse{Credentials: pbs}, nil
 }
 
-// Upsert inserts or enriches credentials following the identity + merge model (CREDENTIALS.md
+// Upsert inserts or enriches credentials following the identity + merge model (.claude/CREDENTIALS.md
 // §2–4): match on the value triple, merge by field-class when found, absorb a Public-only partial
 // when a richer credential subsumes it, otherwise insert.
 func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {

@@ -83,7 +83,7 @@ type Run struct {
 	End        []*ScanTask `protobuf:"bytes,27,rep,name=End,proto3" json:"End,omitempty" xml:"taskend"`
 	NmapErrors []string    `protobuf:"bytes,28,rep,name=NmapErrors,proto3" json:"NmapErrors,omitempty"`
 	RawXML     string      `protobuf:"bytes,30,opt,name=RawXML,proto3" json:"RawXML,omitempty"`
-	// Run lifecycle (see SCAN.md Phase 5 — cleanup/tombstone/history).
+	// Run lifecycle (see .claude/SCAN.md Phase 5 — cleanup/tombstone/history).
 	//
 	// SupersededBy tombstones a run: when non-empty it holds the Id of the surviving "head" run of
 	// the same scan series (same scanner + args + targets), and the run is hidden from the default
@@ -96,7 +96,7 @@ type Run struct {
 	// surviving run shows ("former runs: 3") so a collapsed series still advertises its depth.
 	// @gotags: display:"Former runs" xml:"-"
 	FormerRuns int32 `protobuf:"varint,43,opt,name=FormerRuns,proto3" json:"FormerRuns,omitempty" display:"Former runs" xml:"-"`
-	// ResumedFrom links a resumed run to the interrupted run it continues (see SCAN.md Phase 6). A
+	// ResumedFrom links a resumed run to the interrupted run it continues (see .claude/SCAN.md Phase 6). A
 	// `scan resume` mints a new run with ResumedFrom set to the orphan's Id, folds the remaining
 	// work into it, and tombstones the orphan (SupersededBy) — so a resume chain is itself a series.
 	// @gotags: display:"Resumed from" xml:"-"

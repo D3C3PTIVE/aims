@@ -36,7 +36,7 @@ import (
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
-// diffCommand wires `aims scan diff <id-a> <id-b>`: the run-to-run drift view (SCAN.md Part C,
+// diffCommand wires `aims scan diff <id-a> <id-b>`: the run-to-run drift view (.claude/SCAN.md Part C,
 // capability 2). Both runs are read through the teamclient (hosts+ports preloaded), resolved by
 // ID prefix like `show`/`rm`, then compared by scan.DiffRuns (which reuses the host identity
 // primitives so the diff agrees with the ingest fold). Output is a colored +/-/~ tree.

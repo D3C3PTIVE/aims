@@ -35,7 +35,7 @@ import (
 )
 
 // resumeCommand wires `aims scan resume <id>`: continue an interrupted (or failed) run over only the
-// targets it never completed (SCAN.md Phase 6). The scan runs server-side and streams back exactly
+// targets it never completed (.claude/SCAN.md Phase 6). The scan runs server-side and streams back exactly
 // like `scan run`; the resumed run links to the original (ResumedFrom) and tombstones it, so the
 // resume chain shows in `scan history`. The id is resolved by prefix like `show`/`rm`/`diff`.
 func resumeCommand(con *client.Client) *cobra.Command {

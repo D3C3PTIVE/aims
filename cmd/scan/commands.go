@@ -239,7 +239,7 @@ func rmCommand(con *client.Client) *cobra.Command {
 			// A mid-flight run must not be dropped out from under a live scan: deleting its row
 			// would not stop the scanner (there is no cancellation path yet) and a later progress
 			// write could recreate it. Skip running scans with a warning unless --force. Today no
-			// running run is ever persisted, so this only bites once streaming lands (SCAN.md C).
+			// running run is ever persisted, so this only bites once streaming lands (.claude/SCAN.md C).
 			var matched []*pb.Run
 			var skipped int
 			for _, r := range res.GetScans() {
@@ -547,7 +547,7 @@ func importScan(command *cobra.Command, arg string, data []byte) ([]*pb.Run, err
 	scanList := make([]*pb.Run, 0)
 
 	// If a named ingestor was requested, fold the file through the scanner substrate
-	// (SCAN.md Part C): any registered tool's native output — nmap XML, zgrab2 JSON, ... —
+	// (.claude/SCAN.md Part C): any registered tool's native output — nmap XML, zgrab2 JSON, ... —
 	// becomes a scan.Run that Scans.Create dedups/merges into the same objects. This takes
 	// precedence over format sniffing and the --nmap hint.
 	if scanner, _ := command.Flags().GetString("scanner"); scanner != "" {

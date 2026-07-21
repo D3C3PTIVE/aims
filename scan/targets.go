@@ -23,7 +23,7 @@ import (
 	scan "github.com/d3c3ptive/aims/scan/pb"
 )
 
-// This file is the hosts-as-targets bridge (SCAN.md Part C, plug point B): it turns stored
+// This file is the hosts-as-targets bridge (.claude/SCAN.md Part C, plug point B): it turns stored
 // Host objects into scan Targets so AIMS can drive a scanner against what it already knows,
 // then fold the results back onto the same objects. Target is the input side of scan.Target
 // (Address/Domain/Tag/Port); the scan/drive package consumes TargetSpecs to build a scanner's
