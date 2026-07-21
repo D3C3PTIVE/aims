@@ -11,3 +11,7 @@ cmd/aims/aims
 
 # Local Qubes deploy tooling (personal environment; kept out of the repo for now)
 contrib/qubes/
+
+# Claude Code local settings (per-session permission allowlist) + scratch notes.
+# Machine-local tooling config, not source.
+/.claude/
