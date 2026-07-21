@@ -19,6 +19,8 @@ package scan
 */
 
 import (
+	"strings"
+
 	hostmerge "github.com/d3c3ptive/aims/host"
 	host "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
@@ -71,21 +73,32 @@ func DiffRuns(a, b *scan.Run) *RunDiff {
 		bHosts = b.Hosts
 	}
 
+	// Index each side once, then match by O(1) lookup instead of re-scanning a slice per host
+	// (findHost was O(n·m)). The indexes only answer "which host matches"; the b-then-a output
+	// order DiffRuns documents is preserved because we still walk the original slices in order.
+	aIndex := newHostIndex(aHosts)
+	bIndex := newHostIndex(bHosts)
+
+	// The two port indexes are allocated once here and reset (not reallocated) for each matched
+	// host pair, so port matching costs one allocation for the whole diff rather than one per host.
+	aPorts := portIndex{}
+	bPorts := portIndex{}
+
 	// New hosts + changed hosts: walk b, match against a.
 	for _, bh := range bHosts {
-		ah := findHost(aHosts, bh)
+		ah := aIndex.find(bh)
 		if ah == nil {
 			diff.NewHosts = append(diff.NewHosts, bh)
 			continue
 		}
-		if hd, changed := diffHost(ah, bh); changed {
+		if hd, changed := diffHost(ah, bh, aPorts, bPorts); changed {
 			diff.Changed = append(diff.Changed, hd)
 		}
 	}
 
 	// Gone hosts: walk a, anything not in b disappeared.
 	for _, ah := range aHosts {
-		if findHost(bHosts, ah) == nil {
+		if bIndex.find(ah) == nil {
 			diff.GoneHosts = append(diff.GoneHosts, ah)
 		}
 	}
@@ -93,30 +106,81 @@ func DiffRuns(a, b *scan.Run) *RunDiff {
 	return diff
 }
 
-func findHost(hosts []*host.Host, target *host.Host) *host.Host {
+// hostIndex resolves a host to its match within one Run's host slice in O(1). It mirrors
+// hostmerge.SameHost's keyed-first identity — MAC is definitive when both sides carry one,
+// otherwise any shared address decides — so the diff agrees with the ingest fold on what "the
+// same host" is. Entries are first-wins (never overwritten), so a duplicate key resolves to the
+// same host the old linear findHost returned.
+type hostIndex struct {
+	byMAC  map[string]*host.Host // lower-cased MAC → first host carrying it
+	byAddr map[string]*host.Host // address → first host carrying it
+}
+
+func newHostIndex(hosts []*host.Host) *hostIndex {
+	idx := &hostIndex{
+		byAddr: make(map[string]*host.Host, len(hosts)),
+	}
 	for _, h := range hosts {
-		if hostmerge.SameHost(h, target) {
+		if h == nil {
+			continue
+		}
+		// byMAC is allocated lazily: most scans have no MAC on hosts, so we avoid a wasted map.
+		if h.MAC != "" {
+			key := strings.ToLower(h.MAC)
+			if idx.byMAC == nil {
+				idx.byMAC = make(map[string]*host.Host)
+			}
+			if idx.byMAC[key] == nil {
+				idx.byMAC[key] = h
+			}
+		}
+		for _, a := range h.Addresses {
+			if a == nil || a.Addr == "" {
+				continue
+			}
+			if idx.byAddr[a.Addr] == nil {
+				idx.byAddr[a.Addr] = h
+			}
+		}
+	}
+	return idx
+}
+
+// find returns the indexed host matching target under SameHost, or nil. MAC takes precedence
+// over address, matching SameHost's rule that a shared MAC is definitive when both hosts carry
+// one; an address hit is re-checked with SameHost so a both-have-MAC-but-differ pair (which
+// SameHost never merges on a shared address) is rejected rather than falsely matched.
+func (idx *hostIndex) find(target *host.Host) *host.Host {
+	if target == nil {
+		return nil
+	}
+	if target.MAC != "" {
+		if h := idx.byMAC[strings.ToLower(target.MAC)]; h != nil {
+			return h
+		}
+	}
+	for _, a := range target.Addresses {
+		if a == nil || a.Addr == "" {
+			continue
+		}
+		if h := idx.byAddr[a.Addr]; h != nil && hostmerge.SameHost(h, target) {
 			return h
 		}
 	}
 	return nil
 }
 
-func findPort(ports []*host.Port, target *host.Port) *host.Port {
-	for _, p := range ports {
-		if hostmerge.SamePort(p, target) {
-			return p
-		}
-	}
-	return nil
-}
-
-func diffHost(a, b *host.Host) (HostDelta, bool) {
+// diffHost matches b's ports against a's by lookup. aPorts/bPorts are caller-owned indexes reused
+// across host pairs; diffHost resets them to the two port slices before probing.
+func diffHost(a, b *host.Host, aPorts, bPorts portIndex) (HostDelta, bool) {
 	hd := HostDelta{Before: a, After: b}
 	changed := false
 
+	aPorts.reset(a.Ports)
+	bPorts.reset(b.Ports)
+
 	for _, bp := range b.Ports {
-		ap := findPort(a.Ports, bp)
+		ap := aPorts.find(bp)
 		if ap == nil {
 			hd.NewPorts = append(hd.NewPorts, bp)
 			changed = true
@@ -128,13 +192,46 @@ func diffHost(a, b *host.Host) (HostDelta, bool) {
 		}
 	}
 	for _, ap := range a.Ports {
-		if findPort(b.Ports, ap) == nil {
+		if bPorts.find(ap) == nil {
 			hd.GonePorts = append(hd.GonePorts, ap)
 			changed = true
 		}
 	}
 
 	return hd, changed
+}
+
+// portKey is a port's natural key within a host: (number, lower-cased protocol), mirroring
+// hostmerge.SamePort's case-insensitive-protocol comparison.
+type portKey struct {
+	number   uint32
+	protocol string
+}
+
+// portIndex resolves a port to its match within one host's port slice in O(1). First-wins (never
+// overwritten), so a duplicate (number, protocol) resolves to the same port the old findPort did.
+type portIndex map[portKey]*host.Port
+
+// reset clears the index and repopulates it from ports, reusing the backing map so a diff over
+// many host pairs indexes ports without reallocating for each one.
+func (idx portIndex) reset(ports []*host.Port) {
+	clear(idx)
+	for _, p := range ports {
+		if p == nil {
+			continue
+		}
+		key := portKey{p.Number, strings.ToLower(p.Protocol)}
+		if idx[key] == nil {
+			idx[key] = p
+		}
+	}
+}
+
+func (idx portIndex) find(target *host.Port) *host.Port {
+	if target == nil {
+		return nil
+	}
+	return idx[portKey{target.Number, strings.ToLower(target.Protocol)}]
 }
 
 // portChanged reports whether a same-keyed port's state or service identity moved between runs.
