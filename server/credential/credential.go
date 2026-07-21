@@ -83,26 +83,32 @@ func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRe
 		return nil, status.Error(codes.InvalidArgument, "no credentials were provided")
 	}
 
-	existing, err := s.loadAll(ctx)
+	// The whole batch runs in one transaction (P3): a Create that fails partway must not leave the
+	// earlier credentials committed. New(tx) rebinds loadAll to the transaction.
+	var created []*credpb.CoreORM
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		existing, err := New(tx).loadAll(ctx)
+		if err != nil {
+			return err
+		}
+		for _, c := range req.GetCredentials() {
+			corm, err := c.ToORM(ctx)
+			if err != nil {
+				return err
+			}
+			if findIdentical(&corm, existing) != nil {
+				continue
+			}
+			if err := tx.Create(&corm).Error; err != nil {
+				return err
+			}
+			existing = append(existing, &corm)
+			created = append(created, &corm)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	var created []*credpb.CoreORM
-
-	for _, c := range req.GetCredentials() {
-		corm, err := c.ToORM(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if findIdentical(&corm, existing) != nil {
-			continue
-		}
-		if err := s.db.Create(&corm).Error; err != nil {
-			return nil, err
-		}
-		existing = append(existing, &corm)
-		created = append(created, &corm)
 	}
 
 	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, created)
@@ -120,45 +126,53 @@ func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRe
 		return nil, status.Error(codes.InvalidArgument, "no credentials were provided")
 	}
 
-	existing, err := s.loadAll(ctx)
+	// The whole batch runs in one transaction (P3): the read (loadAll), each merge/absorb/insert
+	// write commit or roll back together, so a partial failure never leaves the batch half-applied.
+	// New(tx) rebinds loadAll to the transaction. Closing the concurrent read-then-write race fully
+	// still needs the DB unique constraint on the value triple (P3, blocked on schema/regen).
+	var out []*credpb.CoreORM
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		existing, err := New(tx).loadAll(ctx)
+		if err != nil {
+			return err
+		}
+		for _, c := range req.GetCredentials() {
+			corm, err := c.ToORM(ctx)
+			if err != nil {
+				return err
+			}
+
+			// 1. Same credential already present → merge by field-class.
+			if match := findIdentical(&corm, existing); match != nil {
+				if credential.MergeCore(match, &corm) {
+					if err := tx.Session(&gorm.Session{FullSaveAssociations: true}).Save(match).Error; err != nil {
+						return err
+					}
+				}
+				out = append(out, match)
+				continue
+			}
+
+			// 2. A richer credential subsumes an existing Public-only partial → absorb (drop the
+			//    partial and its children) before inserting the fuller credential.
+			if partial := findAbsorbable(&corm, existing); partial != nil {
+				if err := tx.Select(clause.Associations).Delete(partial).Error; err != nil {
+					return err
+				}
+				existing = removeCore(existing, partial)
+			}
+
+			// 3. New credential → insert.
+			if err := tx.Create(&corm).Error; err != nil {
+				return err
+			}
+			existing = append(existing, &corm)
+			out = append(out, &corm)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	var out []*credpb.CoreORM
-
-	for _, c := range req.GetCredentials() {
-		corm, err := c.ToORM(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		// 1. Same credential already present → merge by field-class.
-		if match := findIdentical(&corm, existing); match != nil {
-			if credential.MergeCore(match, &corm) {
-				if err := s.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(match).Error; err != nil {
-					return nil, err
-				}
-			}
-			out = append(out, match)
-			continue
-		}
-
-		// 2. A richer credential subsumes an existing Public-only partial → absorb (drop the
-		//    partial and its children) before inserting the fuller credential.
-		if partial := findAbsorbable(&corm, existing); partial != nil {
-			if err := s.db.Select(clause.Associations).Delete(partial).Error; err != nil {
-				return nil, err
-			}
-			existing = removeCore(existing, partial)
-		}
-
-		// 3. New credential → insert.
-		if err := s.db.Create(&corm).Error; err != nil {
-			return nil, err
-		}
-		existing = append(existing, &corm)
-		out = append(out, &corm)
 	}
 
 	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, out)

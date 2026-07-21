@@ -44,11 +44,21 @@
 - **Fix:** add index tags (via the proto `(gorm.field)` options / `@gotags`) on `sources.tool`, the source join FKs, `runs.scanner`, `runs.superseded_by`, and `addresses.addr`. Prerequisite for the P1 narrowed-query fix to actually be fast.
 - **Impact:** every scoped read and the future narrowed ingest query.
 
-### P3 — Ingest concurrency + missing transaction/uniqueness `[M]`
-- `host.go:159-192` `ingest`: `loadHostsPB` (read) → in-memory match → `insertHost`/`saveMergedHost` (write). The load is outside any transaction and there is **no DB unique constraint** on host identity, so two concurrent Upserts/Creates both load, both miss, both insert → duplicate host rows that the in-memory dedup can't catch. Same shape in `credential.go:122` `Upsert` and `Create`.
-- The batch itself isn't atomic: `insertHost` (`host.go:233`) is a bare `Create`; `saveMergedHost` (`host.go:259`) opens its **own** per-host transaction. A batch that fails on host N leaves hosts 1..N-1 committed.
-- **Fix:** wrap a whole `ingest` batch in one `s.db.Transaction`; add a unique index on the host natural key (or `OnConflict` clause) so the DB is the arbiter under concurrency. `scan.persistRun` already models the single-tx pattern (`scan.go:128`).
-- **Impact:** correctness under concurrent operators/tools — the core "many tools, one store" use case.
+### P3 — Ingest concurrency + missing transaction/uniqueness `[M]` — ◑ DONE (2026-07-21, tx half; unique constraint blocked)
+- Done — batch atomicity: host `ingest` + `Create` and credential `Upsert` + `Create` now run their
+  whole batch inside one `s.db.Transaction(func(tx){ … })`, with a `New(tx)` tx-bound server so the
+  read (loadCandidateHostsPB/loadAll) and every insert/merge/absorb write commit or roll back
+  together. A batch that fails on item N no longer leaves 1..N-1 committed. When the caller already
+  passed a transaction (scan.persistRun via IngestHosts), it nests as a savepoint — the same
+  mechanism `saveMergedHost` already used, so proven under the pure-Go sqlite driver. Bonus: batching
+  the writes into one commit roughly halved `BenchmarkIngestHosts/fresh-batch` (N=500 853ms→419ms).
+- Blocked — the DB unique constraint on the natural key (host MAC/address, credential value triple):
+  the read-then-write window is now narrow but not fully closed under true concurrency; making the DB
+  the arbiter needs a unique index via the proto `(gorm.field)` options → regen, currently blocked
+  (see [[aims-provenance-source-domain]] / P2). Same prerequisite as P2's indexes.
+- Original: the load ran outside any transaction with no unique constraint, so concurrent
+  Upserts/Creates could double-insert; and the batch wasn't atomic (bare `Create` + per-host tx in
+  `saveMergedHost`), so a mid-batch failure left earlier rows committed.
 
 ### P4 — `MaxResults` ignored except `==1`; no pagination `[S]` — ✅ DONE (2026-07-21)
 - Fixed: both `server/host/host.go` `Read` and `server/scan/scan.go` `Read` now cap with `.Limit(MaxResults)` for any `MaxResults>1` (==1 keeps the `First` fast-path, <=0 loads all). Regression test `TestReadMaxResultsCaps` (`server/host/host_test.go`) locks the 2/1/all behavior. credential/network/c2 servers don't expose a `MaxResults` filter, so nothing to cap there.

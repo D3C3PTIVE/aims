@@ -106,22 +106,30 @@ func (s *server) Create(ctx context.Context, req *hosts.CreateHostRequest) (*hos
 		return nil, status.Error(codes.InvalidArgument, "no hosts were provided")
 	}
 
-	existing, err := s.loadCandidateHostsPB(ctx, req.GetHosts())
+	// The whole batch runs in one transaction (P3): a Create that fails on host N must not leave
+	// hosts 1..N-1 committed. New(tx) rebinds the ingest helpers to the transaction.
+	var created []*pb.Host
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		txs := New(tx)
+		existing, err := txs.loadCandidateHostsPB(ctx, req.GetHosts())
+		if err != nil {
+			return err
+		}
+		for _, h := range req.GetHosts() {
+			if h == nil || findSameHost(h, existing) != nil {
+				continue
+			}
+			saved, err := txs.insertHost(ctx, h)
+			if err != nil {
+				return err
+			}
+			existing = append(existing, saved) // so later hosts in the batch dedup against it
+			created = append(created, saved)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	var created []*pb.Host
-	for _, h := range req.GetHosts() {
-		if h == nil || findSameHost(h, existing) != nil {
-			continue
-		}
-		saved, err := s.insertHost(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		existing = append(existing, saved) // so later hosts in the batch dedup against it
-		created = append(created, saved)
 	}
 
 	return &hosts.CreateHostResponse{Hosts: created}, nil
@@ -163,35 +171,50 @@ func IngestHosts(ctx context.Context, gdb *gorm.DB, in []*pb.Host) ([]*pb.Host, 
 // return the persisted rows with their DB-assigned IDs. Hosts later in the batch dedup against the
 // ones already ingested, so a batch that repeats a host folds it into one row.
 func (s *server) ingest(ctx context.Context, in []*pb.Host) ([]*pb.Host, error) {
-	existing, err := s.loadCandidateHostsPB(ctx, in)
+	// The whole fold runs in one transaction (P3): the read (loadCandidateHostsPB), the in-memory
+	// match, and every insert/merge write commit or roll back together, so a batch that fails on
+	// host N never leaves 1..N-1 committed. New(tx) rebinds the helpers to the transaction; when the
+	// caller already passed a transaction (scan.persistRun via IngestHosts), this nests as a
+	// savepoint under it, exactly as saveMergedHost already does. It also narrows the concurrent
+	// read-then-write window — though closing it fully still needs the DB unique constraint (P3,
+	// blocked on schema/regen).
+	var out []*pb.Host
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		txs := New(tx)
+		existing, err := txs.loadCandidateHostsPB(ctx, in)
+		if err != nil {
+			return err
+		}
+
+		for _, h := range in {
+			if h == nil {
+				continue
+			}
+
+			if i := indexSameHost(h, existing); i >= 0 {
+				if host.MergeHost(existing[i], h) {
+					saved, err := txs.saveMergedHost(ctx, existing[i])
+					if err != nil {
+						return err
+					}
+					existing[i] = saved // adopt DB-assigned IDs for any newly-merged children
+				}
+				out = append(out, existing[i])
+				continue
+			}
+
+			saved, err := txs.insertHost(ctx, h)
+			if err != nil {
+				return err
+			}
+			existing = append(existing, saved)
+			out = append(out, saved)
+		}
+
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	var out []*pb.Host
-	for _, h := range in {
-		if h == nil {
-			continue
-		}
-
-		if i := indexSameHost(h, existing); i >= 0 {
-			if host.MergeHost(existing[i], h) {
-				saved, err := s.saveMergedHost(ctx, existing[i])
-				if err != nil {
-					return nil, err
-				}
-				existing[i] = saved // adopt DB-assigned IDs for any newly-merged children
-			}
-			out = append(out, existing[i])
-			continue
-		}
-
-		saved, err := s.insertHost(ctx, h)
-		if err != nil {
-			return nil, err
-		}
-		existing = append(existing, saved)
-		out = append(out, saved)
 	}
 
 	return out, nil
