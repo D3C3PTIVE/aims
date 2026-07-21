@@ -24,14 +24,17 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/carapace-sh/carapace"
 	"github.com/carapace-sh/carapace/pkg/style"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	"github.com/d3c3ptive/aims/cmd/agentctx"
 	"github.com/d3c3ptive/aims/cmd/completers"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
@@ -39,6 +42,8 @@ import (
 	pb "github.com/d3c3ptive/aims/host/pb"
 	hosts "github.com/d3c3ptive/aims/host/pb/rpc"
 	"github.com/d3c3ptive/aims/network"
+	netpb "github.com/d3c3ptive/aims/network/pb"
+	netrpc "github.com/d3c3ptive/aims/network/pb/rpc"
 )
 
 // Commands returns a command tree to manage and display services.
@@ -61,7 +66,7 @@ func Commands(con *client.Client) *cobra.Command {
 // host's identity (name + short ID) is printed once on its first port row and blanked on the
 // continuation rows — grouping that costs zero extra header or blank lines.
 func listCommand(con *client.Client) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Display services grouped by host",
 		RunE: func(command *cobra.Command, args []string) error {
@@ -70,7 +75,8 @@ func listCommand(con *client.Client) *cobra.Command {
 				return err
 			}
 
-			rows := groupedRows(hostList)
+			name, _ := command.Flags().GetString("name")
+			rows := filterByName(groupedRows(hostList), name)
 			if len(rows) == 0 {
 				fmt.Println("No services in database.")
 				return nil
@@ -82,6 +88,40 @@ func listCommand(con *client.Client) *cobra.Command {
 			return nil
 		},
 	}
+
+	// --name narrows the listing to one service by name (or, for the unnamed ones, by ID prefix).
+	// Its completion is the host-scoped, prefix-filtered service list: the candidates are real
+	// service names read from the services table, not port UUIDs.
+	aims.BindFlags("filters", false, cmd, func(f *pflag.FlagSet) {
+		f.StringP("name", "n", "", "Only show services with this name (or ID prefix)")
+	})
+	aims.CompleteFlags(cmd, func(comp *carapace.ActionMap) {
+		(*comp)["name"] = CompleteByName(con)
+	})
+
+	return cmd
+}
+
+// filterByName narrows grouped rows to the services whose name matches, or — for the services with
+// no name, which the completer offers by their short ID — whose service or port ID has it as a
+// prefix. An empty name is a no-op, matching the server-side filters' "empty means everything" rule.
+func filterByName(rows []svcRow, name string) []svcRow {
+	if name == "" {
+		return rows
+	}
+	var out []svcRow
+	for _, r := range rows {
+		svc := r.port.GetService()
+		switch {
+		case svc.GetName() != "" && strings.EqualFold(svc.GetName(), name):
+		case svc.GetName() == "" && aims.MatchesAnyPrefix(svc.GetId(), []string{name}):
+		case aims.MatchesAnyPrefix(r.port.GetId(), []string{name}):
+		default:
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // showCommand renders one or more services in detail, resolved by host-ID prefix (all of a host's
@@ -295,6 +335,74 @@ func CompleteByID(con *client.Client) carapace.Action {
 	}
 
 	return completers.CachedList(con, "services:id", "services:id", "no services in database", read, render)
+}
+
+// CompleteByName completes services by a real service attribute — their name (falling back to the
+// short ID for the unnamed ones) — described by product/version/protocol. Unlike CompleteByID, which
+// walks hosts and inserts port UUIDs, this reads the services table directly, so the typed word can
+// be pushed down to the server as a prefix filter (ReadServiceRequest.Prefix) and a Tab against a
+// large store transfers only the candidate rows instead of every host with its ports.
+//
+// When an agent context is loaded, the read is additionally scoped to that agent's host
+// (ReadServiceRequest.Host) — by far the biggest result-set reducer available here, and the right
+// default: the services worth completing while operating from a host are that host's. The candidates
+// are tagged accordingly so the heading says which set is on screen; with no context loaded it falls
+// back to every service in the database.
+func CompleteByName(con *client.Client) carapace.Action {
+	// Resolving the agent host costs two RPCs, so it is done once outside the per-prefix read.
+	agentHost, scoped := agentctx.CurrentHost(con)
+
+	read := func(prefix string) ([]*netpb.Service, error) {
+		req := &netrpc.ReadServiceRequest{Service: &netpb.Service{}, Prefix: prefix}
+		if scoped {
+			req.Host = agentHost
+		}
+		res, err := con.Services.List(context.Background(), req)
+		return res.GetServices(), err
+	}
+
+	tag := "services (by name)"
+	if scoped {
+		tag = "services on " + hostLabel(agentHost)
+	}
+
+	render := func(svcs []*netpb.Service) carapace.Action {
+		opts := []display.Options{
+			display.WithHeader("Name", 1),
+			display.WithHeader("Product", 1),
+			display.WithHeader("Version", 2),
+			display.WithHeader("Proto", 2),
+			// The candidate is the service name; the unnamed services fall back to their short ID,
+			// which is why the server-side prefix filter carries an id leg too — without it the
+			// pushdown would drop candidates the id fallback would otherwise have shown.
+			display.WithCandidateValue("Name", "ID"),
+		}
+
+		results := display.Completions(svcs, serviceNameFields, opts...)
+
+		return carapace.ActionValuesDescribed(results...).Tag(tag)
+	}
+
+	// The cache name carries the scope so a context switch is a distinct entry rather than a stale
+	// hit from the unscoped set (cachedCompleter does the same for the agent-scoped completers).
+	name := "services:name"
+	if scoped {
+		name += ":" + agentHost.GetId()
+	}
+
+	return completers.CachedListByPrefix(con, name, "services:name", "no services in database", read, render)
+}
+
+// serviceNameFields are the value-generators for the service-name completion candidates. They are
+// spelled here rather than reused from network.DisplayFields because that map is keyed on *host.Port
+// (the port carries the display identity of a service in the table views), whereas this completer
+// reads the services table directly and so holds a *netpb.Service.
+var serviceNameFields = map[string]func(*netpb.Service) string{
+	"ID":      func(s *netpb.Service) string { return display.FormatSmallID(s.GetId()) },
+	"Name":    func(s *netpb.Service) string { return s.GetName() },
+	"Product": func(s *netpb.Service) string { return s.GetProduct() },
+	"Version": func(s *netpb.Service) string { return s.GetVersion() },
+	"Proto":   func(s *netpb.Service) string { return s.GetProtocol() },
 }
 
 //
