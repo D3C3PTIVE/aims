@@ -41,6 +41,37 @@ func ScopeBySource(query *gorm.DB, joinTable, objectFK, tool string) *gorm.DB {
 	return query.Scopes(provenance.WhereContributedBy(joinTable, objectFK, tool))
 }
 
+// ScopeByHost restricts a query to the objects attached to a given host — the second query-scoping
+// axis, orthogonal to (and freely composable with) ScopeBySource: "only MY objects" narrows by the
+// tool that contributed them, "only objects on THIS host" narrows by where they live. Chaining both
+// answers "services contributed by nmap, on 10.0.0.0/24"-style questions in one round trip, and both
+// shrink the result set (and so the wire payload) rather than changing what an object means.
+//
+// Domains differ in how their objects reach a host, so the join is a parameter rather than baked in:
+// joinTable is a table carrying BOTH a column referencing the queried object (objectFK) and one
+// referencing its host (hostFK) — for services that is `ports` (service_id + host_id). hostIDs is
+// the subquery selecting the host ids to scope to, as returned by host.IDsMatching; nil means the
+// caller sent no host filter and the query is returned untouched, so a request's Host field can be
+// threaded through unconditionally.
+//
+// Not every domain fits this shape. Credentials reach a host through their provenance sources rather
+// than a two-FK join table (sources.service_id -> ports.host_id), and use the Metasploit-style
+// credential.WhereLoggedInHost scope instead; it is the same axis expressed through that domain's own
+// path, not a second mechanism.
+func ScopeByHost(query *gorm.DB, joinTable, objectFK, hostFK string, hostIDs *gorm.DB) *gorm.DB {
+	if hostIDs == nil {
+		return query
+	}
+	// The object FK is nullable on the join row (a port need not have a resolved service), and a
+	// NULL in an IN-list would neither match nor be filtered out cheaply, so it is excluded here.
+	sub := query.Session(&gorm.Session{NewDB: true}).
+		Table(joinTable).
+		Select(joinTable+"."+objectFK).
+		Where(joinTable + "." + objectFK + " IS NOT NULL").
+		Where(joinTable+"."+hostFK+" IN (?)", hostIDs)
+	return query.Where("id IN (?)", sub)
+}
+
 // FindMatch returns the first element of in for which pred is true, and whether one was found.
 // It is the generic form of the per-domain "find the matching row in this slice" helpers
 // (identity/absorbable/same-host lookups) so they need not each re-spell the loop.

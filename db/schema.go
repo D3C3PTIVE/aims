@@ -158,6 +158,13 @@ var indexes = []secondaryIndex{
 
 	// Host child preloads: every Read/list fans a WHERE host_id IN (batch) per association.
 	{"idx_ports_host", "ports", "host_id"},
+
+	// Host/subnet scope ("only objects on THIS host"): ports is the join both legs of the axis
+	// walk — services scope forward (SELECT service_id WHERE host_id IN …, backed by idx_ports_host
+	// above) and ReadHost/ListHost walk back the other way (SELECT host_id WHERE service_id IN …),
+	// which is unindexed without this. Credentials reach the same join through sources.service_id.
+	{"idx_ports_service", "ports", "service_id"},
+	{"idx_sources_service", "sources", "service_id"},
 	{"idx_extra_ports_host", "extra_ports", "host_id"},
 	{"idx_hostnames_host", "hostnames", "host_id"},
 	{"idx_processes_host", "processes", "host_id"},
