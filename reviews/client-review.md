@@ -4,6 +4,35 @@
 > `cmd/completers/`, `cmd/display/complete.go`, `cmd/agentctx/agentctx.go`, and every domain
 > `CompleteBy*`. No files were edited.
 
+## ✅ Resolution (2026-07-21)
+
+The completion-refactor track is implemented:
+
+- **New shared helpers in `cmd/completers/plumbing.go`:** extracted a non-agent-folding
+  `listCompleter` core; added exported generic **`CachedList[T]`** (cache + **Guard** + connect +
+  read + empty-check + render) and **`FilterSelected`** (the outside-cache `.Filter(c.Args...)` tail).
+- **All 8 hand-rolled domain completers folded onto `CachedList`** — `cmd/hosts` (ByID +
+  HostnameOrIP), `cmd/services` (ByID, `T=svcRow`), `cmd/c2` (agents + channels), `cmd/credentials`
+  (`completeCredentials`, styled), `cmd/scan` (ByID + SeriesHead, via `FilterSelected`). This closes
+  the **panic-hang gap** (they all get `Guard` now) and removes the copy-pasted connect/read/format
+  shell. (A concurrent change further sub-grouped `scan CompleteByID` into running-vs-rest on top of
+  the refactored form.)
+- **host completer `nil` Filters fixed:** both host completers now pass a non-nil `&HostFilters{}`,
+  which is what triggers the server's base preloads (`OS.Matches`/`Status`/`Hostnames`) — nil loaded
+  only depth-1 and left the OS/status columns thin.
+- **`exportCommand` dedup:** the two byte-identical `Hosts.Read` branches collapsed to one read + a
+  branch on `len(args)`.
+- **`display/complete.go` triple→pair reshape:** documented the 3-wide `CompletionsStyled` contract
+  the walk relies on (short-tail groups are ignored, not mis-paired).
+- **Secret/Username RPC chain parallelized:** new `credsWithAgentPromotion` runs `Creds.List`
+  concurrently with the `CurrentHost`→`agentHostCredIDs` leg (a `sync.WaitGroup`, no new dep) —
+  the two legs are independent, so this overlaps ~3 of the 4 RPCs on a cache miss. `-race` clean.
+
+Full tree builds; 250 tests pass. **Not done** (out of client scope / needs proto work): the
+`agentctx.CurrentHost` process-lifetime memo (latent, low value), and the server-side `LIKE` prefix
+filter — the real completion-latency lever (the `MaxResults` cap half of it landed server-side, see
+[[aims-code-sweep-audits]] P4).
+
 ## Top items (highest impact first)
 
 1. **9 domain ID-completers hand-roll the exact cache/connect/read boilerplate that `cachedCompleter` already abstracts — and none of them get panic protection.** (Refactor, plus a real robustness gap.)

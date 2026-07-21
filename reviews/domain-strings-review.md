@@ -30,6 +30,30 @@ Crucially: **host/port `State`, `Protocol`, address `Type`, and scan `Exit` are 
 | **Credential type values** (Password/NTLM/hash/key/JWT/Certificate) | 0 raw literals | correctly used as enum: `credential/password.go:38`, `credential/nonreplayable-hash.go:35`, `credential/display.go:127-129,267-296` | **`credential.PrivateType` / `PublicType`** | **Already consolidated — no action.** This is the reference example of the target state. |
 | **Scan run-state** (running/interrupted/done/failed/queued) | 0 logic literals | `scan/scan.go:165-173` — already a typed `runState int` with `stateCreated/stateRunning/stateDone/stateFailed/stateInterrupted` consts; `stateOf()` classifies | none needed (internal derived state, not persisted) | **Already consolidated — no action.** The `"running"`/`"interrupted"`/`"queued"` tokens that appear are only prose in comments and display strings (`stateToken` at `scan/scan.go:227`), not logic literals. |
 
+## ✅ Resolution (2026-07-21)
+
+Implemented the three top consolidations as Go string consts (no enums — the values are the
+nmap-XML contract):
+
+- **`host/states.go`** (new) — `StateUp`/`StateDown` (host liveness) + `PortOpen`/`PortClosed`/
+  `PortFiltered` (+ `PortUnfiltered`/`PortOpenFiltered`/`PortClosedFiltered`). All ~35 port-state
+  and host-status comparison/switch/assign sites across `host`, `network`, `scan`, `scan/ingest`,
+  `server/scan`, and `cmd/{services,scan,completers}` now reference these. `network`/`cmd` packages
+  that only imported `host/pb` gained a `hostdomain "…/host"` import.
+- **`scan/scanners.go`** (new) — `ScannerNmap`/`ScannerMasscan`/`ScannerZgrab2`. The identity
+  join-key sites — ingestor `Name()` + `Run.Scanner` stamp (`scan/ingest/{nmap,zgrab}.go`), driver
+  dispatch (`server/scan/run.go` `scannerFor`), completion guards (`cmd/scan/run_complete.go`),
+  the `runScanner` arg (`cmd/scan/run.go`), and `capableScanners` (`cmd/bring/caps.go`) — all use
+  the consts now.
+
+**Deliberately left as literals** (a different concern than the driver↔ingestor identity key):
+OS-binary lookup/exec (`scan/drive/{scanner,masscan}.go` `exec.LookPath`/`binary=`), the `_nmap`
+zsh-completer name, the masscan progress-task label, the `--nmap` CLI flag name, and proto/prose
+comments. The lower-value clusters (§4: `"success"` exit, address types, `tcp/udp`) were **not**
+done — pick them up if touching those files.
+
+Full tree builds; 234 tests pass. Reference pattern for future domain consts.
+
 ## Prioritized summary (highest-value consolidations)
 
 1. **Port-state strings `"open"/"closed"/"filtered"` (~25 occurrences)** — the single biggest literal cluster, duplicated across `network/service.go`, `host/host.go`, `scan/history.go`, and three `cmd/*` packages, each re-implementing the same color/switch logic. Factor into a `host`-domain const block. No enum should be invented — the values are the nmap XML contract — but string consts (`host.PortOpen`, etc.) end the duplication and give one authoritative spelling.

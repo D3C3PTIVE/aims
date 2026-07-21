@@ -35,10 +35,9 @@
 - **Fix:** wrap a whole `ingest` batch in one `s.db.Transaction`; add a unique index on the host natural key (or `OnConflict` clause) so the DB is the arbiter under concurrency. `scan.persistRun` already models the single-tx pattern (`scan.go:128`).
 - **Impact:** correctness under concurrent operators/tools — the core "many tools, one store" use case.
 
-### P4 — `MaxResults` ignored except `==1`; no pagination `[S]`
-- `host.go:68` and `scan.go:314` branch `MaxResults == 1` → `First`, else `Find` with **no `.Limit`**. A `MaxResults=50` request loads the whole table. No `.Offset` anywhere.
-- **Fix:** `if MaxResults > 0 { db = db.Limit(int(MaxResults)) }`; add offset for paging.
-- **Impact:** unbounded reads/completions as the DB grows.
+### P4 — `MaxResults` ignored except `==1`; no pagination `[S]` — ✅ DONE (2026-07-21)
+- Fixed: both `server/host/host.go` `Read` and `server/scan/scan.go` `Read` now cap with `.Limit(MaxResults)` for any `MaxResults>1` (==1 keeps the `First` fast-path, <=0 loads all). Regression test `TestReadMaxResultsCaps` (`server/host/host_test.go`) locks the 2/1/all behavior. credential/network/c2 servers don't expose a `MaxResults` filter, so nothing to cap there.
+- Not done: `.Offset` paging (no `Offset` field on the filters yet — a proto add), and the server-side `LIKE` prefix filter for completions (the real completion-latency lever; also a proto/regen change).
 
 ### P5 — Read paths over-preload / bare-load `[S-M]`
 - `credential.go:69` `List` / `:215` `loadAll` use `db.PreloadAll` (= `clause.Associations`, every sub-credential) and load the whole table — heavy for a list view.
@@ -60,19 +59,18 @@
 ### R2 — Stubbed methods inventory `[tracking]`
 `codes.Unimplemented` returns: network `Create`/`Upsert`/`Delete` (`service.go:44,94,98`), host `Delete` (`host.go:452`), host Users all 5 (`user.go:40-58`), credential Logins all 5 (`login.go:40-57`), c2 Agents `Upsert`/`Delete` (`agent.go:88,93`), c2 Channels `Upsert`/`Delete` (`channel.go:86,90`). Users and Logins services are entirely stubbed.
 
-### R3 — c2 Create swallows conversion errors `[S]` (real bug)
-- `server/c2/agent.go:29` and `server/c2/channel.go:29`: `horm, _ := h.ToORM(ctx)` discards the error, then bulk-inserts possibly-zero ORM values. Every other server checks `ToORM` err. Fix: propagate the error.
+### R3 — c2 Create swallows conversion errors `[S]` (real bug) — ✅ DONE (2026-07-21)
+- Fixed: `server/c2/agent.go` `Create` and `server/c2/channel.go` `Create` now propagate the `ToORM` error instead of discarding it.
 
-### R4 — Inconsistent input validation & error mapping `[S]`
-- `host.Create`/`Upsert` (`host.go:99,132`) return `status.Error(codes.InvalidArgument, …)` on empty input; network/credential/c2 Create do no such validation and return raw gorm errors (not gRPC status). `ErrRecordNotFound`→nil is handled in the five Read paths but not uniformly documented. Standardize on gRPC status codes across servers.
+### R4 — Inconsistent input validation & error mapping `[S]` — ◑ PARTIAL (2026-07-21)
+- Done: empty-input `status.Error(codes.InvalidArgument, …)` guards added to the implemented mutating paths — credential `Create`/`Upsert` and c2 agent/channel `Create` — matching host. (network `Create`/`Upsert` are still `Unimplemented` stubs, nothing to guard.)
+- Remaining: uniform gorm-error → gRPC-status wrapping on the read/write paths that still return raw gorm errors, and documenting the `ErrRecordNotFound`→nil convention.
 
-### R5 — c2 type-name asymmetry + login/user init `[S, cosmetic]`
-- `server/c2/agent.go:16` `type server` vs `server/c2/channel.go:16` `type channelServer` (the documented wart; rename `server`→`agentServer`).
-- `server/credential/login.go:37` `NewLoginServer` does **not** initialize the embedded `*UnimplementedLoginsServer` (every other `New` does) — nil embedded pointer; harmless today because all 5 methods are defined, but a future proto method → nil-panic.
-- `server/host/user.go` uses value receivers `(userServer)` while all peers use pointer receivers — minor stylistic drift.
+### R5 — c2 type-name asymmetry + login/user init `[S, cosmetic]` — ✅ DONE (2026-07-21)
+- Fixed: `server/c2/agent.go` `type server`→`agentServer`; `server/credential/login.go` `NewLoginServer` now initializes the embedded `*UnimplementedLoginsServer`; `server/host/user.go` receivers switched value→pointer to match peers.
 
-### R6 — Dead parameter `[S]`
-- `server/c2/agent.go:100` `Preloads(database, filters *c2.AgentFilters)` never reads `filters`; both callers pass `&c2.AgentFilters{}`. Drop the param or use it.
+### R6 — Dead parameter `[S]` — ✅ DONE (2026-07-21)
+- Fixed: dropped the unused `filters *c2.AgentFilters` param from `server/c2/agent.go` `Preloads`; both callers updated.
 
 ---
 
