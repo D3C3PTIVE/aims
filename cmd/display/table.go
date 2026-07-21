@@ -33,11 +33,13 @@ import (
 func Table[T any](values []T, fields map[string]func(T) string, opts ...Options) *table.Table {
 	options := defaultOpts(opts...)
 
-	// Generate all values for each row.
-	var rows [][]string
+	// Generate all values for each row. Both dimensions are known up front (one row per
+	// value, at most one cell per header), so preallocate to avoid append regrowth — at 10k
+	// rows the nil-append path churned ~590k allocs just building this scratch grid.
+	rows := make([][]string, 0, len(values))
 
 	for _, val := range values {
-		var row []string
+		row := make([]string, 0, len(options.headers))
 
 		for _, column := range options.headers {
 			if fieldFunc, ok := fields[column]; ok {
