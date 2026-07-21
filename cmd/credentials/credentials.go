@@ -31,6 +31,7 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/completers"
+	"github.com/d3c3ptive/aims/cmd/contribute"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	cred "github.com/d3c3ptive/aims/credential"
@@ -54,32 +55,12 @@ func Commands(con *client.Client) *cobra.Command {
 	credentialsCmd.AddCommand(infoCommand(con))
 	credentialsCmd.AddCommand(addCommand(con))
 	credentialsCmd.AddCommand(rmCommand(con))
-	credentialsCmd.AddCommand(export.ImportCommand(credentialsCmd, con, importCredentials(con)))
+	// Import shares the contribution fold (parse JSON → provenance stamp → server-side merge) with
+	// the hidden `_contribute` bridge, so `credentials import --as <tool>` enriches rather than
+	// duplicates and attributes what it wrote — the human path over the same engine.
+	credentialsCmd.AddCommand(export.ImportCommand(credentialsCmd, con, contribute.ImportRunE(con, "credential")))
 
 	return credentialsCmd
-}
-
-// importCredentials unmarshals a JSON file of credential.Core objects and upserts them, so
-// re-importing the same file enriches rather than duplicates (the merge engine, from the CLI).
-func importCredentials(con *client.Client) func(cmd *cobra.Command, arg string, data []byte) error {
-	return func(cmd *cobra.Command, arg string, data []byte) error {
-		creds, err := export.ImportJSON[*credential.Core](data, arg)
-		if err != nil {
-			return fmt.Errorf("JSON: %w", err)
-		}
-		if len(creds) == 0 {
-			return nil
-		}
-
-		res, err := con.Creds.Upsert(cmd.Context(), &rpc.UpsertCredentialRequest{Credentials: creds})
-		if err = aims.CheckError(err); err != nil {
-			return err
-		}
-		aims.InvalidateCompletionCache() // credentials changed: next Tab re-queries
-
-		fmt.Printf("Imported %d credential(s) from %s.\n", len(res.GetCredentials()), arg)
-		return nil
-	}
 }
 
 // listCommand renders all credentials as a responsive table.

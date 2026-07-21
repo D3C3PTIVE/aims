@@ -53,7 +53,7 @@ shell into, in both directions.
 | Unit | What | State |
 |---|---|---|
 | **2. Linked Go facade** (`client/contrib`) | `Session.As(tool)` + per-domain `Add`/`Upsert`/`List`, thin wrappers over the existing RPCs. Provenance stamped client-side (host/cred) or via `Run.Scanner` (scan). | ✅ **done** — host/credential/scan; integration-tested through the full transport (`cmd/aims/contrib_test.go`). |
-| **1. Bridge ingest endpoint** | Hidden `aims _contribute <domain> --as tool` (machine contract) **and** `--as` on the visible per-domain `import` verbs (human path). Both reuse one fold: parse JSON (`export.ImportJSON`) → stamp → `Create`/`Upsert`. | ▶ **next** |
+| **1. Bridge ingest endpoint** (`cmd/contribute`) | Hidden `aims _contribute <domain> --as tool` (machine contract) **and** `--as` on the `hosts`/`credentials` `import` verbs (human path). Both reduce to `contribute.Objects` → `export.ImportJSON` → the facade. | ✅ **done** — integration-tested (`cmd/aims/contribute_test.go`); `scan import --as` deferred (see note). |
 | **3. Bridge transport backend** | The `contrib` `transport` seam backed by exec: no linked server → detect a local `aims` (system config, then `$PATH`) → route each contribution through unit 1. Makes the one handle work "via any detected local aims client". | ⏳ planned |
 | **Event broker** (Phase 2) | An `aims`-provided broker: `Publish`/`Subscribe`, an `Events` stream RPC, and CRUD servers emitting `HostAdded`/… — so tools *react* to contributions (Sliver's `EventBroker` + `StartEventAutomation` auto-register pattern). Same bidirectional bridge treatment (`aims _events` emitting shell-consumable frames). | ⏳ planned |
 
@@ -79,6 +79,31 @@ hosts, _ := db.Hosts.List(nil)                                               // 
 - **Trust, verified.** `TestContribHostsAddThroughFacade` adds a host, re-adds an identical one and
   asserts **zero** new rows (server dedup), then reads `--source recon-x` back and asserts the stamp
   landed. `TestContribCredsAddThroughFacade` does the same for credentials.
+
+## The bridge ingest endpoint today (unit 1)
+
+```sh
+# machine: any tool that can run a subprocess — no gRPC, no proto, no linking
+echo '{"addresses":[{"addr":"10.0.0.1"}],"ports":[{"number":443,"protocol":"tcp"}]}' \
+    | aims _contribute host --as recon-x          # prints the stored-object count
+aims _contribute credential --as dump-tool creds.json
+
+# human: the same fold, discoverable, attributed
+aims hosts import --as recon-x findings.json
+cat creds.json | aims credentials import --as dump-tool -i
+```
+
+- `aims _contribute <domain> [files...]` is **hidden** (a wire format, not an operator command),
+  `MinimumNArgs(1)` (the domain), reads each file arg then piped stdin, prints the count stored. The
+  connect pre-run every leaf gets has already reached the teamserver by the time it runs, so it
+  inherits the exact auto-detect the completion path uses — the "any detected local aims client".
+- `--as` (or `$AIMS_TOOL`) is the provenance name, threaded into `contribute.Objects` and stamped by
+  the facade. `contribute.Objects` maps each domain to its enriching write (host/cred → `Upsert`,
+  scan → `Add`/`Create`), so a re-contribution merges rather than duplicates.
+- **Deferred, on purpose:** `scan import --as`. The scan CLI (`cmd/scan`) was under concurrent edit;
+  rewiring its bespoke import runE (per-run "Saved …" output, one-Create batching) through
+  `contribute.ImportRunE` was held back to avoid a merge collision. The hidden `_contribute scan`
+  path already covers scan contribution; only the visible verb's `--as` is pending.
 
 ## Design calls made
 

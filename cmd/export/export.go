@@ -80,6 +80,11 @@ func ImportCommand(parent *cobra.Command, con *client.Client, runE func(cmd *cob
 	aims.BindFlags(importCmd.Name(), false, importCmd, func(f *pflag.FlagSet) {
 		f.StringP("format", "F", "json", "Hint (or force) the file with a specific serialization format")
 		f.BoolP("stdin", "i", false, "Read values from stdin")
+		// Provenance attribution for a contribution: the domain runE that reads it (see
+		// cmd/contribute.ImportRunE) stamps every imported object as coming from this tool, so a
+		// later `--source <tool>` read returns exactly what was imported. Empty falls back to
+		// $AIMS_TOOL, then to no stamp.
+		f.String("as", "", "attribute the imported objects to this tool (provenance; else $AIMS_TOOL)")
 	})
 
 	argsUsage := fmt.Sprintf("%s files to import", parent.Use)

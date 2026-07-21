@@ -30,6 +30,7 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/completers"
+	"github.com/d3c3ptive/aims/cmd/contribute"
 	"github.com/d3c3ptive/aims/cmd/display"
 	"github.com/d3c3ptive/aims/cmd/export"
 	"github.com/d3c3ptive/aims/host"
@@ -151,6 +152,11 @@ func Commands(client *client.Client) *cobra.Command {
 	// Export
 	exportCmd := export.ExportCommand(hostsCmd, client, exportCommand(client))
 	hostsCmd.AddCommand(exportCmd)
+
+	// Import contributes a JSON file (or stdin) of hosts through the shared contribution fold, so
+	// `hosts import --as <tool>` folds/enriches them exactly as the hidden `_contribute` bridge and
+	// the live nmap ingest do — a re-import merges rather than duplicates, and is attributed.
+	hostsCmd.AddCommand(export.ImportCommand(hostsCmd, client, contribute.ImportRunE(client, "host")))
 
 	return hostsCmd
 }

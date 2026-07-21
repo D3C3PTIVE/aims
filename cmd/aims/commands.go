@@ -25,6 +25,7 @@ import (
 	"github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/bring"
 	"github.com/d3c3ptive/aims/cmd/c2"
+	"github.com/d3c3ptive/aims/cmd/contribute"
 	"github.com/d3c3ptive/aims/cmd/credentials"
 	"github.com/d3c3ptive/aims/cmd/hosts"
 	"github.com/d3c3ptive/aims/cmd/scan"
@@ -50,7 +51,13 @@ func bindCommands(rootCmd *cobra.Command, con *client.Client) {
 		bring.InitCommand,
 		bring.PromptCommand,
 	)
+
+	// The hidden `_contribute` bridge ingest endpoint: not grouped (never shown in help), added
+	// straight to the root so bindRunners still attaches the client-connect pre-run to it, exactly
+	// like a visible leaf command. This is what lets any tool contribute by exec-ing `aims`.
+	rootCmd.AddCommand(contribute.Command(con))
 }
+
 // bindRunners is used to register specific pre/post-runs for a given command/tree.
 // This allows us to optimize client-to-server connections for things like completions.
 func bindRunners(root *cobra.Command, pre bool, runs ...func(_ *cobra.Command, _ []string) error) {
@@ -105,4 +112,3 @@ func bindRunners(root *cobra.Command, pre bool, runs ...func(_ *cobra.Command, _
 		}
 	}
 }
-
