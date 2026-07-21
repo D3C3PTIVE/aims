@@ -38,6 +38,13 @@ message HostFilters {
     // against provenance.Source.Tool via the host_sources join) — the "give me only my
     // objects" filter. Empty means the default cross-tool shared view (all hosts).
     string Source = 80;
+
+    // Prefix: if set, scope the read to hosts having an address OR a hostname that begins with
+    // this string — a SQL prefix LIKE 'x%' pushed down to the database (index-backed by
+    // addresses.addr) rather than loading the whole table for the client to filter. It is the
+    // server-side completion filter: the CLI passes the word being completed so the DB returns
+    // only the candidate hosts. Empty is a no-op (no prefix scoping).
+    string Prefix = 81;
 }
 
 // General
