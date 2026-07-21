@@ -38,13 +38,17 @@ func (s *agentServer) Create(ctx context.Context, req *c2.CreateAgentRequest) (*
 
 	// TODO: filter agents to add according to AIMS criteria first (dedup against
 	// existing rows), as the host domain does via host.IngestHosts.
-	err := s.db.Create(&agents).Error
-
-	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
-	if convErr != nil {
-		return nil, convErr
+	// A failed write must not return a partially-built response alongside the error (the raw
+	// gorm error is also wrapped to a coded gRPC status here — R4).
+	if err := s.db.Create(&agents).Error; err != nil {
+		return nil, db.WrapDBError(err)
 	}
-	return &c2.CreateAgentResponse{Agents: agentspb}, err
+
+	agentspb, err := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
+	if err != nil {
+		return nil, db.WrapDBError(err)
+	}
+	return &c2.CreateAgentResponse{Agents: agentspb}, nil
 }
 
 func (s *agentServer) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
@@ -57,9 +61,10 @@ func (s *agentServer) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.R
 	// Query. QueryToPBs swallows gorm.ErrRecordNotFound as an empty result: a filtered Read that
 	// matches no rows is a valid "nothing here" answer, so the CLI's len(res)==0 branch (e.g.
 	// "No agents in database.") fires instead of surfacing a bare gorm "record not found".
+	// Any other error is a real DB failure, so it is wrapped to a coded gRPC status (R4).
 	agentspb, err := db.QueryToPBs[*pb.AgentORM, pb.Agent](ctx, Preloads(s.db).Where(cred), true)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &c2.ReadAgentResponse{Agents: agentspb}, nil
 }
@@ -76,7 +81,7 @@ func (s *agentServer) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.R
 	// subtree the detail Read pulls, which would otherwise be fetched for every row (P5).
 	agentspb, err := db.QueryToPBs[*pb.AgentORM, pb.Agent](ctx, listPreloads(s.db).Where(cred), false)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &c2.ReadAgentResponse{Agents: agentspb}, nil
 }

@@ -22,6 +22,8 @@ import (
 	"context"
 	"errors"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -119,4 +121,31 @@ func QueryToPBs[O pbConvertible[P], P any](ctx context.Context, query *gorm.DB, 
 	}
 
 	return ToPBs[O, P](ctx, rows)
+}
+
+// WrapDBError maps a raw database (or other server-internal) error to a coded gRPC status, so a
+// client never receives an ungraded/Unknown-coded gorm/sql error off a server/<domain> return
+// site (audit finding R4). It is deliberately a single, simple policy: nil passes through
+// unchanged; an error that already carries a gRPC status (e.g. an InvalidArgument a caller
+// raised earlier in the same method) passes through unchanged too, so WrapDBError is safe to
+// call defensively without risking a double-wrap or downgrading a status a caller deliberately
+// chose; everything else — a failed query, a broken write, an ORM<->PB conversion error — becomes
+// codes.Internal, since it reflects a server-side failure rather than a caller mistake.
+//
+// gorm.ErrRecordNotFound is deliberately NOT special-cased to codes.NotFound here. The
+// established convention on filtered Read/List paths (see QueryToPBs) is to swallow
+// ErrRecordNotFound internally and return an empty, successful result: an unmatched filter is a
+// valid "nothing here" answer the caller's len==0 branch renders, not a failure. QueryToPBs
+// already implements that swallow, so any error reaching WrapDBError from a Read/List path is a
+// real failure worth a coded status. A call site resolving a *required* row (e.g. a delete/update
+// target that must already exist) may still special-case ErrRecordNotFound to codes.NotFound
+// itself before calling WrapDBError, rather than letting it fall through to codes.Internal.
+func WrapDBError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+	return status.Error(codes.Internal, err.Error())
 }

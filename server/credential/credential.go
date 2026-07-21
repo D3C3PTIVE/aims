@@ -55,9 +55,10 @@ func (s *server) Read(ctx context.Context, req *credentials.ReadCredentialReques
 
 	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
 	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
+	// Any other error is a real DB failure, so it is wrapped to a coded gRPC status (R4).
 	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, query, true)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &credentials.ReadCredentialResponse{Credentials: pbs}, nil
 }
@@ -71,7 +72,7 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 
 	pbs, err := db.QueryToPBs[*credpb.CoreORM, credpb.Core](ctx, db.PreloadAll(s.db).Where(&cred), false)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &credentials.ReadCredentialResponse{Credentials: pbs}, nil
 }
@@ -108,12 +109,12 @@ func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRe
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 
 	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, created)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &credentials.CreateCredentialResponse{Credentials: pbs}, nil
 }
@@ -172,12 +173,12 @@ func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRe
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 
 	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, out)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &credentials.UpsertCredentialResponse{Credentials: pbs}, nil
 }
@@ -187,7 +188,7 @@ func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRe
 func (s *server) Delete(ctx context.Context, req *credentials.DeleteCredentialRequest) (*credentials.DeleteCredentialResponse, error) {
 	existing, err := s.loadAll(ctx)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 
 	var deleted []*credpb.CoreORM
@@ -208,14 +209,14 @@ func (s *server) Delete(ctx context.Context, req *credentials.DeleteCredentialRe
 		}
 
 		if err := s.db.Select(clause.Associations).Delete(target).Error; err != nil {
-			return nil, err
+			return nil, db.WrapDBError(err)
 		}
 		deleted = append(deleted, target)
 	}
 
 	pbs, err := db.ToPBs[*credpb.CoreORM, credpb.Core](ctx, deleted)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &credentials.DeleteCredentialResponse{Credentials: pbs}, nil
 }

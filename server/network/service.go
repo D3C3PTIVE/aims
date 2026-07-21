@@ -60,9 +60,10 @@ func (s *server) Read(ctx context.Context, req *network.ReadServiceRequest) (*ne
 
 	// QueryToPBs runs the First and swallows gorm.ErrRecordNotFound as an empty result, so a
 	// filtered Read matching no rows returns an empty list the caller's len==0 branch renders.
+	// Any other error is a real DB failure, so it is wrapped to a coded gRPC status (R4).
 	servicespb, err := db.QueryToPBs[*pb.ServiceORM, pb.Service](ctx, query, true)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &network.ReadServiceResponse{Services: servicespb}, nil
 }
@@ -77,7 +78,7 @@ func (s *server) List(ctx context.Context, req *network.ReadServiceRequest) (*ne
 	// Query. Preload provenance Sources for a consistent, non-bare list (P5) — matching Read.
 	servicespb, err := db.QueryToPBs[*pb.ServiceORM, pb.Service](ctx, db.PreloadAll(s.db).Where(service), false)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &network.ReadServiceResponse{Services: servicespb}, nil
 }

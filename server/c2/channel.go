@@ -39,13 +39,17 @@ func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest
 	// TODO: filter channels to add according to AIMS criteria first (dedup on
 	// insert, as the host/credential ingest paths do). For now this is a plain
 	// additive insert of the incoming channels.
-	err := s.db.Create(&channelsORM).Error
-
-	chanspb, convErr := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, channelsORM)
-	if convErr != nil {
-		return nil, convErr
+	// A failed write must not return a partially-built response alongside the error (the raw
+	// gorm error is also wrapped to a coded gRPC status here — R4).
+	if err := s.db.Create(&channelsORM).Error; err != nil {
+		return nil, db.WrapDBError(err)
 	}
-	return &c2.CreateChannelResponse{Channels: chanspb}, err
+
+	chanspb, err := db.ToPBs[*pb.ChannelORM, pb.Channel](ctx, channelsORM)
+	if err != nil {
+		return nil, db.WrapDBError(err)
+	}
+	return &c2.CreateChannelResponse{Channels: chanspb}, nil
 }
 
 func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*c2.ReadChannelResponse, error) {
@@ -56,10 +60,11 @@ func (s *channelServer) Read(ctx context.Context, req *c2.ReadChannelRequest) (*
 	}
 
 	// Query. QueryToPBs swallows gorm.ErrRecordNotFound as an empty result (see Agents.Read), so
-	// the CLI renders "no channels" rather than surfacing a bare "record not found".
+	// the CLI renders "no channels" rather than surfacing a bare "record not found". Any other
+	// error is a real DB failure, so it is wrapped to a coded gRPC status (R4).
 	chanspb, err := db.QueryToPBs[*pb.ChannelORM, pb.Channel](ctx, s.db.Where(cred), true)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &c2.ReadChannelResponse{Channels: chanspb}, nil
 }
@@ -71,10 +76,10 @@ func (s *channelServer) List(ctx context.Context, req *c2.ReadChannelRequest) (*
 		return nil, err
 	}
 
-	// Query
+	// Query. Any error is a real DB failure, so it is wrapped to a coded gRPC status (R4).
 	chanspb, err := db.QueryToPBs[*pb.ChannelORM, pb.Channel](ctx, s.db.Where(cred), false)
 	if err != nil {
-		return nil, err
+		return nil, db.WrapDBError(err)
 	}
 	return &c2.ReadChannelResponse{Channels: chanspb}, nil
 }
