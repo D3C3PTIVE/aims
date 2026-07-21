@@ -283,6 +283,35 @@ func TestDetailOSGuessNotDuplicated(t *testing.T) {
 	}
 }
 
+// TestDisplayFieldsNilSafe runs every table value-generator over hosts that a non-nmap contributor
+// (e.g. a service scanner like zgrab) yields — no OS, Status, Trace, Uptime, or ports — and over a
+// wholly empty host. The `hosts list` table path used to SIGSEGV on these (unguarded h.OS.Matches /
+// h.Status.State / h.Trace.Hops derefs); this locks in that every field is nil-safe.
+func TestDisplayFieldsNilSafe(t *testing.T) {
+	hosts := map[string]*pb.Host{
+		"wholly empty": {},
+		"service-scanner shape (no OS/Status/Trace)": {
+			Id:        "bbbbbbbb-2222-4bbb-8bbb-zgrab000000001",
+			Addresses: []*networkpb.Address{{Addr: "93.184.216.34"}},
+			Ports:     []*pb.Port{openPort(443, "tcp", "https")},
+		},
+	}
+	for name, h := range hosts {
+		t.Run(name, func(t *testing.T) {
+			for field, gen := range DisplayFields {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							t.Errorf("DisplayFields[%q] panicked on %s host: %v", field, name, r)
+						}
+					}()
+					_ = gen(h)
+				}()
+			}
+		})
+	}
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {
