@@ -72,6 +72,70 @@ func TargetsFromHosts(hosts ...*host.Host) []*scan.Target {
 	return targets
 }
 
+// TargetDone marks a target that produced a result and so was actually scanned. It is AIMS's own,
+// scanner-uniform record of per-target completion: because the fold sees every result stream in,
+// a target the scan reached is one AIMS matched a result back to — a signal that survives a
+// SIGKILL (which would lose a scanner's native checkpoint) and needs no per-tool support. It is
+// deliberately target-granular, not port-granular: a target is "done" once ANY result matches it,
+// so an interrupted host is re-scanned whole on resume (the fold makes that idempotent), while a
+// host that was never reached is the remaining work. A down host counts as done — it was scanned,
+// and deriving completion from targets-minus-observed-hosts would wrongly re-scan it forever.
+const TargetDone = "done"
+
+// TargetMatchesHost reports whether an observed host is the result of scanning this target: the
+// host carries the target's address among its addresses, or the target's domain among its
+// hostnames. This is the same identity a resume uses to decide a target is finished.
+func TargetMatchesHost(t *scan.Target, h *host.Host) bool {
+	if t == nil || h == nil {
+		return false
+	}
+	if t.Address != "" {
+		for _, a := range h.Addresses {
+			if a != nil && a.Addr == t.Address {
+				return true
+			}
+		}
+	}
+	if t.Domain != "" {
+		for _, hn := range h.Hostnames {
+			if hn != nil && hn.Name == t.Domain {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// MarkTargetsDone stamps TargetDone on every target the observed host satisfies, so a run's
+// persisted Targets record which targets have been scanned. Returns the number newly marked (so a
+// caller can persist only when the completion set actually advanced).
+func MarkTargetsDone(targets []*scan.Target, h *host.Host) int {
+	marked := 0
+	for _, t := range targets {
+		if t.GetStatus() == TargetDone {
+			continue
+		}
+		if TargetMatchesHost(t, h) {
+			t.Status = TargetDone
+			marked++
+		}
+	}
+	return marked
+}
+
+// RemainingTargets returns the targets a run has not yet completed — those not marked TargetDone.
+// This is the reforged target set a resume re-scans: only the work an interrupted run never
+// reached, uniform across scanners and independent of any native checkpoint.
+func RemainingTargets(targets []*scan.Target) []*scan.Target {
+	var remaining []*scan.Target
+	for _, t := range targets {
+		if t.GetStatus() != TargetDone {
+			remaining = append(remaining, t)
+		}
+	}
+	return remaining
+}
+
 // TargetSpecs renders targets as the address/host tokens a scanner takes on its command line —
 // Address preferred, else Domain — preserving order and dropping blanks, so the result can be
 // appended straight onto a scanner's arguments.

@@ -277,6 +277,11 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 			}
 			_ = run.AddResult((*scan.Result)(r))
 			if r.GetHost() != nil {
+				// Record which target this result completes, so an interrupted run persists an
+				// authoritative per-target-done set for `scan resume` to diff against (SCAN.md
+				// Phase 6). Marking is scanner-uniform and survives a kill because it is derived
+				// here, from the stream, not from any native checkpoint.
+				scan.MarkTargetsDone(run.Targets, r.GetHost())
 				job.broadcast(hostUpdate(r.GetHost()))
 				snapshot() // a new host is worth persisting immediately (live `scan show`)
 			}

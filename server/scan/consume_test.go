@@ -248,6 +248,52 @@ func TestConsumeCoalescesConsecutiveFailures(t *testing.T) {
 	}
 }
 
+// TestConsumeTracksTargetCompletion is the resume foundation (SCAN.md Phase 6): a streamed run with
+// structured Targets, interrupted before it reached them all, must persist which targets were
+// scanned. A target that produced a result is marked done; a target never reached stays unmarked and
+// is exactly what RemainingTargets (the reforged work of a `scan resume`) returns. This proves the
+// Target.Status column survives the snapshot upsert path — an association insert alone would freeze
+// it empty and a resume would wastefully re-scan everything.
+func TestConsumeTracksTargetCompletion(t *testing.T) {
+	s, _, ctx := newTestServer(t)
+
+	jobCtx, cancel := context.WithCancel(context.Background())
+	cancel() // interrupted before draining every target
+	job := newScanJob(&scanrpcpb.RunScanRequest{
+		Scanner: "nmap",
+		Args:    []string{"-sT", "-p1-100"},
+		Targets: []*scanpb.Target{
+			{Id: "t-a", Address: "10.0.0.1"},
+			{Id: "t-b", Address: "10.0.0.2"}, // never reached before the interrupt
+		},
+	}, "job-track", jobCtx, cancel, time.Now().Unix())
+	s.addJob(job)
+
+	// Only 10.0.0.1 produced a result.
+	results, progress := feed(upHost("10.0.0.1"), &scanpb.TaskProgress{Task: "SYN Stealth Scan", Percent: 50})
+	s.consume(job, results, progress, errChan(errors.New("signal: killed")))
+
+	run, err := s.readRun(ctx, "job-track")
+	if err != nil || run == nil {
+		t.Fatalf("readRun: %v (run=%v)", err, run)
+	}
+	status := map[string]string{}
+	for _, tg := range run.GetTargets() {
+		status[tg.GetAddress()] = tg.GetStatus()
+	}
+	if status["10.0.0.1"] != scan.TargetDone {
+		t.Errorf("target 10.0.0.1 status = %q, want %q (it produced a result)", status["10.0.0.1"], scan.TargetDone)
+	}
+	if status["10.0.0.2"] == scan.TargetDone {
+		t.Error("target 10.0.0.2 marked done but was never reached")
+	}
+
+	remaining := scan.TargetSpecs(scan.RemainingTargets(run.GetTargets()))
+	if len(remaining) != 1 || remaining[0] != "10.0.0.2" {
+		t.Errorf("remaining = %v, want [10.0.0.2] (the untouched target a resume re-scans)", remaining)
+	}
+}
+
 // TestAttachFromDBStreamsProgress asserts the cross-process attach now streams the persisted progress
 // (the #1 payoff): a DB-only terminal run carrying a progress row and a host is replayed as a
 // progress frame + a host frame + the terminal Final frame, so an operator attaching from another

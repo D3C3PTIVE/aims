@@ -171,6 +171,25 @@ func (s *server) persistRun(ctx context.Context, run *scanpb.Run) (*scanpb.Run, 
 			}
 		}
 
+		// Refresh the target rows for the same reason: a live scan re-snapshots its Targets each
+		// heartbeat with a climbing set of Status="done" marks (see run.go / scan.MarkTargetsDone),
+		// but the run Create's association insert only ever INSERTs a target row and never updates a
+		// stored one's Status on conflict. Without this explicit column-scoped upsert the persisted
+		// Status would freeze at the first snapshot (empty), and `scan resume` would re-scan every
+		// target. Pre-assigned stable Ids (set in consume) make the upsert idempotent.
+		for _, t := range run.GetTargets() {
+			tORM, err := t.ToORM(ctx)
+			if err != nil {
+				return err
+			}
+			if err := tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "id"}},
+				UpdateAll: true,
+			}).Create(&tORM).Error; err != nil {
+				return err
+			}
+		}
+
 		pb, err := runORM.ToPB(ctx)
 		if err != nil {
 			return err
