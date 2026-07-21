@@ -631,8 +631,11 @@ func scannerFor(name string) (drive.Scanner, error) {
 		return drive.Nmap{}, nil
 	case scan.ScannerMasscan:
 		return drive.Masscan{}, nil
+	case scan.ScannerNuclei:
+		return drive.Nuclei{}, nil
 	default:
-		return nil, fmt.Errorf("unknown scanner %q (known: %s, %s)", name, scan.ScannerNmap, scan.ScannerMasscan)
+		return nil, fmt.Errorf("unknown scanner %q (known: %s)", name,
+			strings.Join([]string{scan.ScannerNmap, scan.ScannerMasscan, scan.ScannerNuclei}, ", "))
 	}
 }
 
