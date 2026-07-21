@@ -216,3 +216,33 @@ func TestDetailSharedHostsInsight(t *testing.T) {
 		t.Errorf("sharedRunCount for a non-overlapping run = %d, want 0", got)
 	}
 }
+
+// TestHostTokensSkipsOutputFileArgs is the regression for the "-oX <file> shown as a target" bug:
+// hostTokens (feeding targetsLabel/formatTargets for a raw-passthrough run whose targets ride in
+// Args) must not mistake the value token of an output flag for a target, even when the filename
+// looks like a hostname. Only the real target must survive.
+func TestHostTokensSkipsOutputFileArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want []string
+	}{
+		{
+			"the reported case: -oX filename must not be a target",
+			"-A -p- --osscan-guess -oX lan-20260720T192700.xml 192.168.1.1/24",
+			[]string{"192.168.1.1/24"},
+		},
+		{"-oA basename that looks like a host", "-sV -oA scan.example.com 10.0.0.1", []string{"10.0.0.1"}},
+		{"-iL input list file is not a target", "-sT -iL targets.txt scanme.nmap.org", []string{"scanme.nmap.org"}},
+		{"plain targets still extracted", "-sT 10.0.0.1 example.com 192.168.0.0/16", []string{"10.0.0.1", "example.com", "192.168.0.0/16"}},
+		{"no targets, only an output file", "-sn -oX out.xml", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hostTokens(tt.args)
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("hostTokens(%q) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
+	}
+}

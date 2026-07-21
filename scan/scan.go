@@ -673,12 +673,30 @@ func targetsLabel(r *scan.Run) string {
 // matched, avoiding false positives on flag values like "250ms".
 var targetTokenRE = regexp.MustCompile(`^(\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?|([a-zA-Z0-9_]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}|[0-9a-fA-F:]*:[0-9a-fA-F:]+(/\d{1,3})?)$`)
 
+// valueFlags are the scanner flags whose FOLLOWING token is a value, not a target — chiefly the
+// output-file flags (-oX/-oN/-oG/-oA/-oJ/-oS), whose filename can look exactly like a hostname
+// (e.g. `-oX lan-scan.xml`). Without skipping that token, hostTokens would mis-read the output file
+// as a scan target (the `-oX <file>` shown as a target bug). Kept to the common value-taking flags
+// that carry a target-shaped argument; -p/--script values don't match targetTokenRE, so they need
+// no entry.
+var valueFlags = map[string]bool{
+	"-oX": true, "-oN": true, "-oG": true, "-oA": true, "-oJ": true, "-oS": true,
+	"--stylesheet": true, "--datadir": true, "--servicedb": true, "--versiondb": true,
+	"-e": true, "--exclude": true, "--excludefile": true, "-iL": true,
+}
+
 // hostTokens extracts target specs (host/CIDR/domain) from a raw scanner command line: the non-flag
-// tokens that look like a target.
+// tokens that look like a target, skipping the value token consumed by a value-taking flag so a
+// filename like `-oX out.xml` is never mistaken for a target.
 func hostTokens(args string) []string {
 	var out []string
-	for _, tok := range strings.Fields(args) {
+	fields := strings.Fields(args)
+	for i := 0; i < len(fields); i++ {
+		tok := fields[i]
 		if strings.HasPrefix(tok, "-") {
+			if valueFlags[tok] {
+				i++ // the next token is this flag's value (a filename/spec), not a target
+			}
 			continue
 		}
 		if targetTokenRE.MatchString(tok) {
