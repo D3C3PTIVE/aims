@@ -144,8 +144,9 @@ type dashboard struct {
 }
 
 // maxWarnings bounds how many recent notice lines the dashboard keeps on screen — enough to show a
-// scan is busy without letting a chatty scan push the host table off the terminal.
-const maxWarnings = 4
+// full NSE traceback (which spans several lines) without letting a chatty scan push the host table
+// off the terminal.
+const maxWarnings = 8
 
 func dashboardStream(stream updateReceiver, opts streamOpts) error {
 	d := &dashboard{w: os.Stdout, opts: opts, start: time.Now()}
