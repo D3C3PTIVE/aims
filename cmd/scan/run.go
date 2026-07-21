@@ -38,6 +38,7 @@ func runCommand(con *client.Client) *cobra.Command {
 
 	runCmd.AddCommand(runNmapCommand(con))
 	runCmd.AddCommand(runMasscanCommand(con))
+	runCmd.AddCommand(runNucleiCommand(con))
 
 	return runCmd
 }

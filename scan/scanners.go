@@ -30,4 +30,11 @@ const (
 	ScannerNmap    = "nmap"
 	ScannerMasscan = "masscan"
 	ScannerZgrab2  = "zgrab2"
+	// ScannerNuclei names nuclei (github.com/projectdiscovery/nuclei) — a JSON-emitting scanner
+	// jsonscript.go's schemaless Script mapping already anticipates (see its doc comment: "all
+	// zgrab2 modules, and by extension nuclei/httpx/testssl"). Today it names only the local
+	// `scan run nuclei` passthrough (cmd/scan/run_nuclei.go) and the template/tag/severity/id
+	// completers (cmd/completers/nuclei_templates.go); there is no drive.Scanner or ingest.Ingestor
+	// for it yet — that is real, anticipated future work, not done here.
+	ScannerNuclei = "nuclei"
 )
