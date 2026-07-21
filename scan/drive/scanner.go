@@ -34,6 +34,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	nmapfork "github.com/d3c3ptive/nmap"
@@ -249,9 +250,30 @@ func nmapPrivileged(binaryPath string) bool {
 	if path == "" {
 		return false
 	}
-	out, err := exec.Command("getcap", path).Output()
+	getcap, ok := lookToolPath("getcap")
+	if !ok {
+		return false
+	}
+	out, err := exec.Command(getcap, path).Output()
 	if err != nil {
 		return false
 	}
 	return strings.Contains(string(out), "cap_net_raw")
+}
+
+// lookToolPath resolves a system tool by name with a fallback to the standard sbin directories that
+// are commonly absent from a non-root $PATH — getcap lives in /usr/sbin (and /sbin), so a plain
+// exec.LookPath fails on many desktops even when libcap is installed. It tries $PATH first, then those
+// well-known sbin dirs, returning the path of the first executable found.
+func lookToolPath(name string) (string, bool) {
+	if p, err := exec.LookPath(name); err == nil {
+		return p, true
+	}
+	for _, dir := range []string{"/usr/sbin", "/sbin", "/usr/local/sbin"} {
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, true
+		}
+	}
+	return "", false
 }

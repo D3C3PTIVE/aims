@@ -20,11 +20,32 @@ package drive
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	scan "github.com/d3c3ptive/aims/scan/pb"
 )
+
+// TestLookToolPath covers the sbin-fallback resolver: the $PATH hit, the not-found miss, and — the
+// bug this fixes — resolving a tool that lives only in a standard sbin dir absent from $PATH.
+func TestLookToolPath(t *testing.T) {
+	if _, ok := lookToolPath("sh"); !ok {
+		t.Error("expected to resolve 'sh' via $PATH")
+	}
+	if p, ok := lookToolPath("definitely-not-a-real-tool-xyz"); ok {
+		t.Errorf("nonexistent tool resolved to %q", p)
+	}
+	// The exact bug: setcap/getcap live in /usr/sbin, commonly off a non-root $PATH. If present there,
+	// the fallback must find it.
+	for _, tool := range []string{"setcap", "getcap"} {
+		if _, err := os.Stat("/usr/sbin/" + tool); err == nil {
+			if _, ok := lookToolPath(tool); !ok {
+				t.Errorf("%s present in /usr/sbin but lookToolPath did not find it (sbin fallback broken)", tool)
+			}
+		}
+	}
+}
 
 // TestScanNoTargets asserts the guard fires before any nmap exec, so the driver never launches
 // a scan with an empty target list (which nmap would reject or, worse, interpret oddly). This

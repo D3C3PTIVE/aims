@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -75,9 +76,9 @@ or in a provisioning script).`,
 // setcap via sudo (or, with printOnly, emitting the commands). It reports what it did and is safe to
 // re-run: scanners that already have the caps are skipped.
 func grantScannerCaps(w io.Writer, printOnly bool) error {
-	setcap, err := exec.LookPath("setcap")
-	if err != nil {
-		return fmt.Errorf("setcap not found — install libcap (Debian/Ubuntu: libcap2-bin) and re-run")
+	setcap, ok := lookToolPath("setcap")
+	if !ok {
+		return fmt.Errorf("setcap not found in $PATH or the standard sbin dirs — install libcap (Debian/Ubuntu: libcap2-bin) and re-run")
 	}
 
 	// Resolve installed scanners, skipping those that already carry the capabilities.
@@ -137,8 +138,8 @@ func grantScannerCaps(w io.Writer, printOnly bool) error {
 // hasRawCap reports whether a binary already carries CAP_NET_RAW, so re-runs skip it. A missing or
 // unreadable getcap is treated as "no caps" — setcap is idempotent, so re-applying is harmless.
 func hasRawCap(path string) bool {
-	getcap, err := exec.LookPath("getcap")
-	if err != nil {
+	getcap, ok := lookToolPath("getcap")
+	if !ok {
 		return false
 	}
 	out, err := exec.Command(getcap, path).Output()
@@ -146,6 +147,23 @@ func hasRawCap(path string) bool {
 		return false
 	}
 	return capsOutputHasRaw(string(out))
+}
+
+// lookToolPath resolves a system tool by name with a fallback to the standard sbin directories that
+// are commonly absent from a non-root $PATH — setcap/getcap live in /usr/sbin (and /sbin), so a plain
+// exec.LookPath fails on many desktops even when libcap is installed. It tries $PATH first, then those
+// well-known sbin dirs, returning the path of the first executable found.
+func lookToolPath(name string) (string, bool) {
+	if p, err := exec.LookPath(name); err == nil {
+		return p, true
+	}
+	for _, dir := range []string{"/usr/sbin", "/sbin", "/usr/local/sbin"} {
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return p, true
+		}
+	}
+	return "", false
 }
 
 // capsOutputHasRaw parses getcap output for CAP_NET_RAW across its format variants (e.g.
