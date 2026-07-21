@@ -31,6 +31,7 @@ import (
 	"github.com/d3c3ptive/aims/cmd/display"
 	host "github.com/d3c3ptive/aims/host/pb"
 	"github.com/d3c3ptive/aims/scan"
+	"github.com/d3c3ptive/aims/scan/ingest"
 	pb "github.com/d3c3ptive/aims/scan/pb"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
@@ -70,7 +71,16 @@ func diffCommand(con *client.Client) *cobra.Command {
 				return fmt.Errorf("no scan matching %q", args[1])
 			}
 
-			renderDiff(a, b, scan.DiffRuns(a, b))
+			// Prefer an EXACT diff: re-parse each run's stored raw output so drift that
+			// cross-run host unification folded away in the DB rows is recovered (a run reads
+			// back carrying the union of every scan's ports for a shared host). Fall back to
+			// the stored host trees when a run has no raw output to re-parse (e.g. a live
+			// streamed scan) — an approximate diff, flagged as such.
+			d, exact := ingest.DiffStored(a, b)
+			if !exact {
+				d = scan.DiffRuns(a, b)
+			}
+			renderDiff(a, b, d, exact)
 			return nil
 		},
 	}
@@ -91,11 +101,17 @@ func findRunByPrefix(runs []*pb.Run, arg string) *pb.Run {
 }
 
 // renderDiff prints the delta as a colored tree: green + for what appeared, red - for what
-// disappeared, yellow ~ for what changed in place (with the before → after service string).
-func renderDiff(a, b *pb.Run, d *scan.RunDiff) {
+// disappeared, yellow ~ for what changed in place (with the before → after service string). When
+// exact is false the diff was computed from the unified DB rows (a run lacked raw output to
+// re-parse), so shared-host drift may be understated — say so rather than imply certainty.
+func renderDiff(a, b *pb.Run, d *scan.RunDiff, exact bool) {
 	fmt.Printf("%s %s  →  %s %s\n",
 		a.GetScanner(), display.FormatSmallID(a.GetId()),
 		b.GetScanner(), display.FormatSmallID(b.GetId()))
+
+	if !exact {
+		fmt.Println(color.HiBlackString("(approximate: from stored rows — a run had no raw output to re-parse)"))
+	}
 
 	if d.Empty() {
 		fmt.Println(color.HiBlackString("no changes"))

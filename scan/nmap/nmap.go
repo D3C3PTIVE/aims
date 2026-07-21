@@ -37,8 +37,15 @@ func FromRun(pb *scan.Run) *Run {
 // FromXML - Given the output of an Nmap Scan as a string in XML format,
 // parse it and return a Run with its contents. If the unmarshalling fails,
 // it returns both the model and the error, so always check the latter.
+//
+// The run keeps its verbatim input as RawXML: it is the scanner's authoritative output, so it
+// serves both as the decisive run-dedup fingerprint (AreScansIdentical: two nmap scans of one
+// target at different times carry the same Args/Version and would otherwise field-collide, but
+// their raw output differs) and as the per-run snapshot that `scan diff` re-parses to see drift
+// that host unification has folded away in the stored rows.
 func FromXML(data []byte) (*scan.Run, error) {
 	r := &scan.Run{}
 	err := xml.Unmarshal(data, r)
+	r.RawXML = string(data)
 	return r, err
 }
