@@ -515,28 +515,25 @@ func importCommand(con *client.Client) func(cmd *cobra.Command, arg string, data
 		}
 
 		if len(scanList) > 0 {
-			for _, scan := range scanList {
-				res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
-					Scans: []*pb.Run{scan},
-				})
+			// Send the whole file's runs in one Create so the ingest fold shares a single
+			// host-candidate set across every run instead of reloading the host table per run
+			// (the O(runs) amplifier). Trade-off: Create is all-or-nothing, so one malformed run
+			// aborts the import rather than being skipped as the old per-run loop did — chosen
+			// deliberately for the shared-candidate speed win on multi-run imports.
+			res, err := con.Scans.Create(command.Context(), &scans.CreateScanRequest{
+				Scans: scanList,
+			})
+			if err = aims.CheckError(err); err != nil {
+				return fmt.Errorf("import error: %w", err)
+			}
 
-				err = aims.CheckError(err)
-				if err != nil {
-					fmt.Printf("Import error: %s", err.Error())
-					continue
-				}
-
-				if len(res.Scans) == 0 {
-					fmt.Printf("Skipped %s scan, already existing\n", scan.Scanner)
-					continue
-				}
-
-				saved := res.Scans[0]
-
+			// Create returns only the runs it actually persisted; exact-duplicate re-imports are
+			// silently dropped, so anything in scanList missing from the response was skipped.
+			for _, saved := range res.Scans {
 				fmt.Printf("Saved %s scan (%s) in database\n", saved.Scanner, display.FormatSmallID(saved.Id))
-				if len(saved.Hosts) < len(scan.Hosts) {
-					fmt.Printf("Skipped %d already existing hosts", len(scan.Hosts)-len(saved.Hosts))
-				}
+			}
+			if skipped := len(scanList) - len(res.Scans); skipped > 0 {
+				fmt.Printf("Skipped %d already-existing scan(s)\n", skipped)
 			}
 		}
 
