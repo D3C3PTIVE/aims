@@ -26,6 +26,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	scandomain "github.com/d3c3ptive/aims/scan"
 )
 
 // rawScanCaps are the file capabilities a scanner needs for raw-packet work: CAP_NET_RAW (craft/read
@@ -35,7 +37,7 @@ const rawScanCaps = "cap_net_raw,cap_net_admin,cap_net_bind_service+eip"
 
 // capableScanners are the scanner binaries whose raw-packet scan modes need elevated capabilities.
 // masscan is included when present; a missing scanner is skipped, not an error.
-var capableScanners = []string{"nmap", "masscan"}
+var capableScanners = []string{scandomain.ScannerNmap, scandomain.ScannerMasscan}
 
 // capsCommand returns `aims init caps`: the one-time privileged step that lets raw-packet scans
 // (-sU/-sS/-sO/-O) run WITHOUT sudo on every scan or a root teamserver. It file-caps the scanner

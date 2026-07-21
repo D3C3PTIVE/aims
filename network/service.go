@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/d3c3ptive/aims/cmd/display"
+	hostdomain "github.com/d3c3ptive/aims/host"
 	host "github.com/d3c3ptive/aims/host/pb"
 	network "github.com/d3c3ptive/aims/network/pb"
 	nmap "github.com/d3c3ptive/aims/scan/pb/nmap"
@@ -114,11 +115,11 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		}
 
 		switch port.State.State {
-		case "open":
+		case hostdomain.PortOpen:
 			return color.HiGreenString(id)
-		case "filtered":
+		case hostdomain.PortFiltered:
 			return color.HiYellowString(id)
-		case "closed":
+		case hostdomain.PortClosed:
 			return color.HiRedString(id)
 		}
 
@@ -204,12 +205,12 @@ var DisplayFields = map[string]func(port *host.Port) string{
 		}
 
 		switch port.State.State {
-		case "open":
-			return color.HiGreenString("open")
-		case "filtered":
-			return color.HiYellowString("filtered")
-		case "closed":
-			return color.HiRedString("closed")
+		case hostdomain.PortOpen:
+			return color.HiGreenString(hostdomain.PortOpen)
+		case hostdomain.PortFiltered:
+			return color.HiYellowString(hostdomain.PortFiltered)
+		case hostdomain.PortClosed:
+			return color.HiRedString(hostdomain.PortClosed)
 		}
 
 		return port.State.State
@@ -333,7 +334,7 @@ func scriptsBody(port *host.Port) string {
 // Insights returns cross-cutting observations about a single port for the info view: a cleartext
 // protocol warning, and a note when the port is filtered (no confirmed service).
 func Insights(port *host.Port) (lines []string) {
-	if st := port.GetState(); st != nil && st.State == "filtered" {
+	if st := port.GetState(); st != nil && st.State == hostdomain.PortFiltered {
 		lines = append(lines, color.HiYellowString("⚠")+" filtered — service not confirmed (no response)")
 	}
 	if p := cleartextProtocol(port); p != "" {
@@ -370,11 +371,11 @@ func stateBadge(port *host.Port) string {
 		return color.HiBlackString("● unknown")
 	}
 	switch st.State {
-	case "open":
+	case hostdomain.PortOpen:
 		return color.HiGreenString("● open")
-	case "filtered":
+	case hostdomain.PortFiltered:
 		return color.HiYellowString("● filtered")
-	case "closed":
+	case hostdomain.PortClosed:
 		return color.HiRedString("● closed")
 	default:
 		return color.HiBlackString("● " + st.State)

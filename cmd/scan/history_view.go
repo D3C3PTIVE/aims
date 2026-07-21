@@ -26,6 +26,7 @@ import (
 
 	"github.com/fatih/color"
 
+	hostdomain "github.com/d3c3ptive/aims/host"
 	"github.com/d3c3ptive/aims/scan"
 )
 
@@ -161,9 +162,9 @@ func colorStates(digest string) string {
 	return stateCountRE.ReplaceAllStringFunc(digest, func(m string) string {
 		sub := stateCountRE.FindStringSubmatch(m)
 		switch sub[2] {
-		case "open":
+		case hostdomain.PortOpen:
 			return color.HiGreenString("%s open", sub[1])
-		case "filtered":
+		case hostdomain.PortFiltered:
 			return color.HiYellowString("%s filtered", sub[1])
 		default: // closed
 			return color.HiBlackString("%s closed", sub[1])

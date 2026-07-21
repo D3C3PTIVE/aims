@@ -33,6 +33,7 @@ import (
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/completers"
+	scandomain "github.com/d3c3ptive/aims/scan"
 )
 
 // completeRunNmap is the single positional-tail completer for `scan run nmap`. Because the
@@ -53,7 +54,7 @@ import (
 // pre-NSE stub that drops --script and friends — supplemented, deduped, by the carapace-bridge
 // long-tail for whatever extra the local `_nmap` knows.
 func completeRunNmap(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(completers.Guard("nmap", func(c carapace.Context) carapace.Action {
+	return carapace.ActionCallback(completers.Guard(scandomain.ScannerNmap, func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 {
 			switch c.Args[n-1] {
 			case "--script":
@@ -261,7 +262,7 @@ func classifyNmapFlag(flag string) string {
 // no key=value arg surface, so there is no argValueKind classifier; the preceding flag is the
 // classifier.
 func completeRunMasscan(con *client.Client) carapace.Action {
-	return carapace.ActionCallback(completers.Guard("masscan", func(c carapace.Context) carapace.Action {
+	return carapace.ActionCallback(completers.Guard(scandomain.ScannerMasscan, func(c carapace.Context) carapace.Action {
 		if n := len(c.Args); n > 0 {
 			switch c.Args[n-1] {
 			case "-p", "--ports":

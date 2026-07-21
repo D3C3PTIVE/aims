@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 
+	hostdomain "github.com/d3c3ptive/aims/host"
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	networkpb "github.com/d3c3ptive/aims/network/pb"
 	scandomain "github.com/d3c3ptive/aims/scan"
@@ -59,11 +60,11 @@ type zgrabResponse struct {
 	Result   any    `json:"result,omitempty"`
 }
 
-func (zgrabIngestor) Name() string { return "zgrab2" }
+func (zgrabIngestor) Name() string { return scandomain.ScannerZgrab2 }
 
 func (zgrabIngestor) Ingest(raw []byte) (*scanpb.Run, error) {
 	run := &scandomain.Run{}
-	run.Scanner = "zgrab2"
+	run.Scanner = scandomain.ScannerZgrab2
 	// Record the raw output as the run's identity. zgrab has no nmap-style run metadata
 	// (Start/Args/version), so without this two DIFFERENT zgrab files would collapse into one
 	// run (AreScansIdentical would match on Scanner alone). RawXML is the authoritative dedup
@@ -105,7 +106,7 @@ func ingestGrab(run *scandomain.Run, grab *zgrabGrab) {
 		}
 		// A target that produced a zgrab record was reached over the network — assert it up,
 		// carrying the reason as evidence (Part A: every assertion states fact + why).
-		host.Status = &hostpb.Status{State: "up", Reason: "zgrab-response"}
+		host.Status = &hostpb.Status{State: hostdomain.StateUp, Reason: "zgrab-response"}
 
 		res := &scandomain.Result{
 			Host:    host,
@@ -120,7 +121,7 @@ func ingestGrab(run *scandomain.Run, grab *zgrabGrab) {
 			res.Port = &hostpb.Port{Number: port, Protocol: "tcp", Service: res.Service}
 			// A module that got a successful response proves the port open.
 			if ok {
-				res.Port.State = &hostpb.State{State: "open", Reason: "zgrab-response"}
+				res.Port.State = &hostpb.State{State: hostdomain.PortOpen, Reason: "zgrab-response"}
 			}
 			res.Port.Scripts = append(res.Port.Scripts, script)
 		} else {

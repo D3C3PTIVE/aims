@@ -37,6 +37,7 @@ import (
 
 	aims "github.com/d3c3ptive/aims/cmd"
 	"github.com/d3c3ptive/aims/cmd/display"
+	hostdomain "github.com/d3c3ptive/aims/host"
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	scandom "github.com/d3c3ptive/aims/scan"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
@@ -282,7 +283,7 @@ func (d *dashboard) lines() []string {
 		} else {
 			up := 0
 			for _, h := range d.hosts {
-				if h.state == "up" {
+				if h.state == hostdomain.StateUp {
 					up++
 				}
 			}
@@ -330,7 +331,7 @@ func hostSummary(h *hostpb.Host) hostRow {
 	open := 0
 	var svcs []string
 	for _, p := range ports {
-		if p.GetState().GetState() != "open" {
+		if p.GetState().GetState() != hostdomain.PortOpen {
 			continue
 		}
 		open++
@@ -373,9 +374,9 @@ func hostTableHeader() string {
 func hostRowLine(h hostRow) string {
 	st := padRight(h.state, colState)
 	switch h.state {
-	case "up":
+	case hostdomain.StateUp:
 		st = color.GreenString(st)
-	case "down":
+	case hostdomain.StateDown:
 		st = color.RedString(st)
 	default:
 		st = color.YellowString(st)

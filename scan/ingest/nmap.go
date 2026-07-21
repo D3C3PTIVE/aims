@@ -19,6 +19,7 @@ package ingest
 */
 
 import (
+	scandomain "github.com/d3c3ptive/aims/scan"
 	nmapscan "github.com/d3c3ptive/aims/scan/nmap"
 	scanpb "github.com/d3c3ptive/aims/scan/pb"
 )
@@ -31,7 +32,7 @@ func init() { Register(nmapIngestor{}) }
 // rides this same adapter for free — which is exactly why masscan does not need its own.
 type nmapIngestor struct{}
 
-func (nmapIngestor) Name() string { return "nmap" }
+func (nmapIngestor) Name() string { return scandomain.ScannerNmap }
 
 func (nmapIngestor) Ingest(raw []byte) (*scanpb.Run, error) {
 	run, err := nmapscan.FromXML(raw)
@@ -40,7 +41,7 @@ func (nmapIngestor) Ingest(raw []byte) (*scanpb.Run, error) {
 	}
 	pbRun := run.ToPB()
 	if pbRun.Scanner == "" {
-		pbRun.Scanner = "nmap"
+		pbRun.Scanner = scandomain.ScannerNmap
 	}
 	return pbRun, nil
 }

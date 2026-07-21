@@ -97,7 +97,7 @@ func Completions() []display.Options {
 var DisplayFields = map[string]func(h *pb.Host) string{
 	// Table
 	"ID": func(h *pb.Host) string {
-		if h.Status != nil && h.Status.State == "up" {
+		if h.Status != nil && h.Status.State == StateUp {
 			return color.HiGreenString(display.FormatSmallID(h.Id))
 		}
 		return display.FormatSmallID(h.Id)
@@ -129,9 +129,9 @@ var DisplayFields = map[string]func(h *pb.Host) string{
 			return ""
 		}
 		switch h.Status.State {
-		case "up":
+		case StateUp:
 			return color.HiGreenString(h.Status.State)
-		case "down":
+		case StateDown:
 			return color.HiRedString(h.Status.State)
 		default:
 			return h.Status.State
@@ -299,7 +299,7 @@ func InfoPanes(h *pb.Host) []display.Pane {
 // down/stale warning, exposed cleartext services, a large-attack-surface note, and a flag when the
 // OS is only an nmap guess.
 func Insights(h *pb.Host) (lines []string) {
-	if st := h.GetStatus(); st != nil && st.State == "down" {
+	if st := h.GetStatus(); st != nil && st.State == StateDown {
 		lines = append(lines, color.HiYellowString("⚠")+" host last reported down — data may be stale")
 	}
 	if ct := cleartextServices(h); len(ct) > 0 {
@@ -372,9 +372,9 @@ func statusBadge(h *pb.Host) string {
 		return color.HiBlackString("● unknown")
 	}
 	switch st.State {
-	case "up":
+	case StateUp:
 		return color.HiGreenString("● up")
-	case "down":
+	case StateDown:
 		return color.HiRedString("● down")
 	default:
 		return color.HiBlackString("● " + st.State)
@@ -384,7 +384,7 @@ func statusBadge(h *pb.Host) string {
 // openPorts returns the host's ports in the "open" state — the ones an attacker acts on.
 func openPorts(h *pb.Host) (open []*pb.Port) {
 	for _, p := range h.GetPorts() {
-		if st := p.GetState(); st != nil && st.State == "open" {
+		if st := p.GetState(); st != nil && st.State == PortOpen {
 			open = append(open, p)
 		}
 	}

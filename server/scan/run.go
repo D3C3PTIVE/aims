@@ -35,6 +35,7 @@ import (
 
 	"github.com/gofrs/uuid"
 
+	hostdomain "github.com/d3c3ptive/aims/host"
 	hostpb "github.com/d3c3ptive/aims/host/pb"
 	"github.com/d3c3ptive/aims/scan"
 	"github.com/d3c3ptive/aims/scan/drive"
@@ -439,7 +440,7 @@ func (s *server) consume(job *scanJob, results <-chan *scanpb.Result, progress <
 	// stats because the cleanup path loads runs without their host subtree) and the Info column shows.
 	up := 0
 	for _, h := range pbRun.GetHosts() {
-		if h.GetStatus().GetState() == "up" {
+		if h.GetStatus().GetState() == hostdomain.StateUp {
 			up++
 		}
 	}
@@ -618,12 +619,12 @@ func (s *server) Stop(ctx context.Context, req *scanrpcpb.StopRequest) (*scanrpc
 // switch is the extension point for naabu/… drivers.
 func scannerFor(name string) (drive.Scanner, error) {
 	switch name {
-	case "nmap", "":
+	case scan.ScannerNmap, "":
 		return drive.Nmap{}, nil
-	case "masscan":
+	case scan.ScannerMasscan:
 		return drive.Masscan{}, nil
 	default:
-		return nil, fmt.Errorf("unknown scanner %q (known: nmap, masscan)", name)
+		return nil, fmt.Errorf("unknown scanner %q (known: %s, %s)", name, scan.ScannerNmap, scan.ScannerMasscan)
 	}
 }
 

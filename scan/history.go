@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	hostdomain "github.com/d3c3ptive/aims/host"
 	host "github.com/d3c3ptive/aims/host/pb"
 	scan "github.com/d3c3ptive/aims/scan/pb"
 )
@@ -144,7 +145,7 @@ func summarizeDelta(d *RunDiff) []string {
 	}
 	for _, hd := range d.Changed {
 		for _, p := range hd.NewPorts {
-			if portState(p) == "open" {
+			if portState(p) == hostdomain.PortOpen {
 				lines = append(lines, "+ "+portLabel(p))
 			}
 		}
@@ -175,7 +176,7 @@ func portSummary(h *host.Host) string {
 		}
 	}
 	var parts []string
-	for _, st := range []string{"open", "filtered", "closed"} {
+	for _, st := range []string{hostdomain.PortOpen, hostdomain.PortFiltered, hostdomain.PortClosed} {
 		if n := counts[st]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d %s", n, st))
 		}
@@ -200,7 +201,7 @@ func buildSurface(ordered []*scan.Run) []PortStability {
 		for _, hst := range run.GetHosts() {
 			addr := hostAddr(hst)
 			for _, p := range hst.GetPorts() {
-				if portState(p) != "open" {
+				if portState(p) != hostdomain.PortOpen {
 					continue
 				}
 				k := key{addr: addr, proto: p.GetProtocol(), num: p.GetNumber()}

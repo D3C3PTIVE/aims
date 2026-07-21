@@ -596,7 +596,7 @@ func hostsUpDown(r *scan.Run) string {
 		up, down = hs.Up, hs.Down
 	} else {
 		for _, h := range r.GetHosts() {
-			if h.GetStatus().GetState() == "up" {
+			if h.GetStatus().GetState() == hostmerge.StateUp {
 				up++
 			} else {
 				down++

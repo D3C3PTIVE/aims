@@ -24,6 +24,7 @@ import (
 
 	"github.com/d3c3ptive/aims/client"
 	aims "github.com/d3c3ptive/aims/cmd"
+	scandomain "github.com/d3c3ptive/aims/scan"
 	scans "github.com/d3c3ptive/aims/scan/pb/rpc"
 )
 
@@ -90,7 +91,7 @@ func runMasscanCommand(con *client.Client) *cobra.Command {
 			"automatically; results are stored.",
 		DisableFlagParsing: true,
 		RunE: func(command *cobra.Command, args []string) error {
-			return runScanner(command, con, "masscan", args)
+			return runScanner(command, con, scandomain.ScannerMasscan, args)
 		},
 	}
 
@@ -100,7 +101,7 @@ func runMasscanCommand(con *client.Client) *cobra.Command {
 }
 
 func runNmap(command *cobra.Command, con *client.Client, args []string) error {
-	return runScanner(command, con, "nmap", args)
+	return runScanner(command, con, scandomain.ScannerNmap, args)
 }
 
 // runScanner is the shared client side of every `scan run <scanner>` leaf: it intercepts the bare
