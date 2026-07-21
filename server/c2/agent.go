@@ -13,20 +13,27 @@ import (
 	"github.com/d3c3ptive/aims/internal/db"
 )
 
-type server struct {
+type agentServer struct {
 	db *gorm.DB
 	*c2.UnimplementedAgentsServer
 }
 
-func New(db *gorm.DB) *server {
-	return &server{db: db, UnimplementedAgentsServer: &c2.UnimplementedAgentsServer{}}
+func New(db *gorm.DB) *agentServer {
+	return &agentServer{db: db, UnimplementedAgentsServer: &c2.UnimplementedAgentsServer{}}
 }
 
-func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.CreateAgentResponse, error) {
+func (s *agentServer) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.CreateAgentResponse, error) {
+	if len(req.GetAgents()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no agents were provided")
+	}
+
 	var agents []*pb.AgentORM
 
 	for _, h := range req.GetAgents() {
-		horm, _ := h.ToORM(ctx)
+		horm, err := h.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
 		agents = append(agents, &horm)
 	}
 
@@ -41,7 +48,7 @@ func (s *server) Create(ctx context.Context, req *c2.CreateAgentRequest) (*c2.Cr
 	return &c2.CreateAgentResponse{Agents: agentspb}, err
 }
 
-func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
+func (s *agentServer) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
 	// Convert to ORM model
 	cred, err := req.GetAgent().ToORM(ctx)
 	if err != nil {
@@ -50,7 +57,7 @@ func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 
 	// Query
 	agents := []*pb.AgentORM{}
-	database := Preloads(s.db, &c2.AgentFilters{})
+	database := Preloads(s.db)
 	err = database.Where(cred).First(&agents).Error
 	// An empty result set is not an error: a filtered Read that matches no rows is a valid
 	// "nothing here" answer, so the CLI's len(res)==0 branch (e.g. "No agents in database.")
@@ -66,7 +73,7 @@ func (s *server) Read(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	return &c2.ReadAgentResponse{Agents: agentspb}, err
 }
 
-func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
+func (s *agentServer) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAgentResponse, error) {
 	// Convert to ORM model
 	cred, err := req.GetAgent().ToORM(ctx)
 	if err != nil {
@@ -75,7 +82,7 @@ func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 
 	// Query
 	agents := []*pb.AgentORM{}
-	database := Preloads(s.db, &c2.AgentFilters{})
+	database := Preloads(s.db)
 	err = database.Where(cred).Find(&agents).Error
 
 	agentspb, convErr := db.ToPBs[*pb.AgentORM, pb.Agent](ctx, agents)
@@ -85,11 +92,11 @@ func (s *server) List(ctx context.Context, req *c2.ReadAgentRequest) (*c2.ReadAg
 	return &c2.ReadAgentResponse{Agents: agentspb}, err
 }
 
-func (s *server) Upsert(context.Context, *c2.UpsertAgentRequest) (*c2.UpsertAgentResponse, error) {
+func (s *agentServer) Upsert(context.Context, *c2.UpsertAgentRequest) (*c2.UpsertAgentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpsertAgent not implemented")
 }
 
-func (s *server) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.DeleteAgentResponse, error) {
+func (s *agentServer) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.DeleteAgentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteAgent not implemented")
 }
 
@@ -97,7 +104,7 @@ func (s *server) Delete(context.Context, *c2.DeleteAgentRequest) (*c2.DeleteAgen
 // relations (clause.Associations, via db.PreloadAll) it names the nested Host.* chain bring's
 // prompt route summary reads — the agent's host, its traceroute hops and its hop distance — which
 // clause.Associations does not reach on its own.
-func Preloads(database *gorm.DB, filters *c2.AgentFilters) *gorm.DB {
+func Preloads(database *gorm.DB) *gorm.DB {
 	return db.PreloadAll(database,
 		"Channels",
 		"Host.Trace.Hops",

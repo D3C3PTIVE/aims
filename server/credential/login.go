@@ -34,7 +34,7 @@ type loginServer struct {
 }
 
 func NewLoginServer(db *gorm.DB) *loginServer {
-	return &loginServer{db: db}
+	return &loginServer{db: db, UnimplementedLoginsServer: &credentials.UnimplementedLoginsServer{}}
 }
 
 func (loginServer) Create(context.Context, *credentials.CreateLoginRequest) (*credentials.CreateLoginResponse, error) {

@@ -22,6 +22,8 @@ import (
 	"context"
 	"errors"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -87,6 +89,10 @@ func (s *server) List(ctx context.Context, req *credentials.ReadCredentialReques
 // Create inserts credentials that are genuinely new, skipping any whose (public, private, realm)
 // identity already exists. Unlike Upsert it never merges into an existing credential.
 func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRequest) (*credentials.CreateCredentialResponse, error) {
+	if len(req.GetCredentials()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no credentials were provided")
+	}
+
 	existing, err := s.loadAll(ctx)
 	if err != nil {
 		return nil, err
@@ -120,6 +126,10 @@ func (s *server) Create(ctx context.Context, req *credentials.CreateCredentialRe
 // §2–4): match on the value triple, merge by field-class when found, absorb a Public-only partial
 // when a richer credential subsumes it, otherwise insert.
 func (s *server) Upsert(ctx context.Context, req *credentials.UpsertCredentialRequest) (*credentials.UpsertCredentialResponse, error) {
+	if len(req.GetCredentials()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no credentials were provided")
+	}
+
 	existing, err := s.loadAll(ctx)
 	if err != nil {
 		return nil, err

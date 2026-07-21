@@ -23,10 +23,17 @@ func NewChannelServer(db *gorm.DB) *channelServer {
 }
 
 func (s *channelServer) Create(ctx context.Context, req *c2.CreateChannelRequest) (*c2.CreateChannelResponse, error) {
+	if len(req.GetChannels()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "no channels were provided")
+	}
+
 	var channelsORM []*pb.ChannelORM
 
 	for _, h := range req.GetChannels() {
-		horm, _ := h.ToORM(ctx)
+		horm, err := h.ToORM(ctx)
+		if err != nil {
+			return nil, err
+		}
 		channelsORM = append(channelsORM, &horm)
 	}
 
