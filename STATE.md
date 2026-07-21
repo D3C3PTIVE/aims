@@ -1,8 +1,9 @@
 # AIMS — Project State Overview
 
-> Investigated 2026-07-19, after the repo had been paused ~1 year. Companion to
-> [`CLAUDE.md`](./CLAUDE.md) (architecture), [`ROADMAP.md`](./ROADMAP.md) (re-entry plan) and
-> [`SCAN.md`](./SCAN.md) (scan model & scanner-plug substrate).
+> Investigated 2026-07-19, after the repo had been paused ~1 year; refreshed 2026-07-21
+> as **v0.3.0** was cut. Companion to [`CLAUDE.md`](./CLAUDE.md) (architecture),
+> [`ROADMAP.md`](./ROADMAP.md) (re-entry plan) and [`SCAN.md`](./SCAN.md) (scan model &
+> scanner-plug substrate).
 > This file answers: *where is the project right now, and what's broken.*
 
 ## TL;DR
@@ -16,17 +17,24 @@ foundation with a real, compiling, partially-complete slice on top.
 
 ## History — three work bursts
 
-Solo project (Maxime Landon), 92 commits, reconstructed from git:
+Solo project (Maxime Landon), 275 commits across four bursts, reconstructed from git:
 
 | Period | What got built | Commits |
 |--------|----------------|--------:|
 | **Nov 2021** | Foundation: all proto data models + generated code (host, network, credentials à la Metasploit, scan/nmap), Makefile/buf codegen, Maltego tag script | 26 |
 | **Jun–Aug 2023** | Client/server/gRPC layer, `reeflective/team` teamserver transport (mTLS + Tailscale), the generic `cmd/display` engine, cobra command tree | 34 |
-| **Aug 2024** (last touch) | scan RPC, host/port dedup on insert, JSON/XML import-export, **c2 agents/channels**, display table/detail polish | 32 |
+| **Aug 2024** | scan RPC, host/port dedup on insert, JSON/XML import-export, **c2 agents/channels**, display table/detail polish | 32 |
+| **Jul 2026** (resumed) | Build unblocked; domain-by-domain CRUD depth; scanner-plug substrate (nmap/zgrab/masscan/nuclei, live/streaming, diff, resume); provenance/Source; two-axis query scoping; perf sweep. Cut as **v0.1.0 → v0.3.0** | 183 |
 
-**Since resumed (2026-07):** build unblocked, then domain-by-domain depth — credential (full
-CRUD), scan (host-fold ingest, live-state list/show), provenance/Source across domains, and a
-CLI/display/completion polish pass. See CLAUDE.md for the live per-domain detail.
+**Since resumed (2026-07):** build unblocked, then domain-by-domain depth. Landed as **v0.3.0**
+(tagged 2026-07-21, on top of v0.2.0's scan-drift/live-dashboard/transport work): credential (full
+CRUD), scan (host-fold ingest, live-state list/show, **`scan resume`** for interrupted runs,
+exact run-to-run diff via RawXML reparse), the **scanner-plug substrate** (nmap + zgrab + masscan
++ **nuclei** drivers, streaming/live scans, ingest fold, stored-object→target bridge), provenance/
+Source across domains, the **two orthogonal query-scoping axes** (host/subnet + provenance/tool)
+with server-side prefix (LIKE) completion filters, a CLI/display/completion polish pass, and a
+performance sweep (hot-path indexes, one-transaction ingest, offline `make pb` codegen). See
+CLAUDE.md for the live per-domain detail.
 
 ## Build status — the whole tree builds; the `aims` binary runs
 
@@ -83,20 +91,16 @@ Verified 2026-07-20 against source. CLAUDE.md's table carries the same status wi
 
 | Service | Read/List | Create | Upsert | Delete | Notes |
 |---------|:--:|:--:|:--:|:--:|-------|
-| host **Hosts** | ✅ | ✅ (dedup) | ✅ | ❌ stub | reference impl.; DB-level fold + deep child enrichment (`saveMergedHost`/`saveMergedPorts`) done; Delete has scaffolding ending in Unimplemented (`server/host/host.go:480`) |
+| host **Hosts** | ✅ | ✅ (dedup) | ✅ | ❌ stub | reference impl.; DB-level fold + deep child enrichment (`saveMergedHost`/`saveMergedPorts`) done; Delete has scaffolding ending in Unimplemented (`server/host/host.go:633`) |
 | host **Users** | ❌ | ❌ | ❌ | ❌ | all methods stubbed |
 | network **Services** | ✅ | ❌ stub | ❌ stub | ❌ stub | Read/List + display/CLI slice done; mutations Unimplemented |
 | credential **Credentials** | ✅ | ✅ | ✅ | ✅ | full CRUD; Delete resolves by identity when no ID given |
 | credential **Logins** | ❌ | ❌ | ❌ | ❌ | all methods stubbed |
 | scan **Scans** | ✅ | ✅ (host fold + `run_hosts` join) | ✅ | ✅ | **full CRUD**; Delete unlinks run_hosts so shared hosts survive; Upsert idempotent. CLI: list/show/rm (running-scan guard) |
-| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | ❌ stub | type-name asymmetry, see below |
+| c2 **Agents/Channels** | ✅ | ✅ | ❌ stub | ❌ stub | Read/List/Create done; Upsert/Delete Unimplemented |
 
 ## Known rough edges / gotchas
 
-- **c2 server type-name asymmetry (minor):** filenames match contents — `agent.go` is the
-  **Agents** server (`type server`, `CreateAgentRequest`), `channel.go` the **Channels** server
-  (`type channelServer`, `CreateChannelRequest`). Only wart: the Agents type is the generic
-  `server` vs the specific `channelServer`; an optional `server`→`agentServer` rename squares it.
 - **Empty CLI handlers:** several command `RunE`s just `return nil` (e.g. `hosts add`,
   `hosts rm`) — command tree/completions exist but the actions are no-ops.
 - **`credential/core.go`** Metasploit-style scope helpers (`WhereLoggedInHost`, `WhereOriginIs`,
@@ -109,8 +113,9 @@ Verified 2026-07-20 against source. CLAUDE.md's table carries the same status wi
 
 > Fixed since the original survey (no longer issues): the display-path debug leftovers
 > (`println`/`fmt.Println`/empty `if head == "Purpose"`); the crossed
-> `stdoutTerm/stdinTerm/stderrTerm` `init()`; and the stray copy-pasted `ReadHost`/`ListHost`/
-> `UpsertHost` stubs in `server/network/service.go`.
+> `stdoutTerm/stdinTerm/stderrTerm` `init()`; the stray copy-pasted `ReadHost`/`ListHost`/
+> `UpsertHost` stubs in `server/network/service.go`; and the **c2 server type-name asymmetry**
+> — `agent.go` now uses `agentServer`, symmetric with `channel.go`'s `channelServer`.
 
 ## Codegen / infra facts (corrected)
 

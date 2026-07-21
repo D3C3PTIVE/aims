@@ -174,5 +174,52 @@ aims scan diff "$run_a" "$run_b"
 
 Rebuild a fleet box with a newer service image between runs and watch the version deltas
 appear — that's the timestamped-Run + host-dedup model doing its job.
+---
 
+## Nuclei — findings that fold into the same store (mid-to-slow examples)
+
+`aims scan run nuclei [nuclei args…]` runs nuclei **server-side** and folds its findings
+into the DB just like the nmap paths above — everything after `nuclei` is passed straight
+through, so any nuclei invocation works. Findings land as `Script`/`Table`/`Element` rows on
+the matched host/service, so `scan diff` and the drift loop cover them too. Template/tag/
+severity arguments complete live (`aims scan run nuclei -t <Tab>` browses the template tree).
+
+Point these at your own devices only. Tune `-rl` (rate limit) and `-c` (concurrency) down if
+IoT/router gear starts choking under load.
+
+```bash
+# 1. Default-credential checks — routers, NAS boxes, printers, cameras. Slow: many auth
+#    attempts per host across the subnet. Point it at your IoT/router gear specifically.
+aims scan run nuclei -t default-logins/ -target 192.168.1.0/24
+```
+
+```bash
+# 2. Exposed-panels sweep — hundreds of path/panel signatures per host (admin UIs, login
+#    pages for NAS/printers/routers). Moderate-slow, scales with how many devices respond.
+aims scan run nuclei -tags exposed-panels -target 192.168.1.0/24
+```
+
+```bash
+# 3. Vendor workflows (chained templates) — a detection template fires first, then a whole
+#    battery of follow-ups only if the vendor matches. Naturally slower per host.
+aims scan run nuclei -w workflows/synology-workflow.yaml -u <nas-ip>
+```
+
+```bash
+# 4. Time-based / blind detection — DSL response-time matchers (`duration>=5`) deliberately
+#    sleep; each match costs several real seconds. Slow by design, not by request volume.
+aims scan run nuclei -tags blind,time-based -u <ip>
+```
+
+```bash
+# 5. Brute-force network templates — SSH/FTP/Redis/MySQL weak-password checks, slow in
+#    proportion to wordlist size. Tune the wordlist down for home use.
+aims scan run nuclei -t network/ -u <ip> -var USER=admin -var PASS=passwords.txt
+```
+
+```bash
+# 6. Kitchen-sink CVE pass — thousands of templates; a low rate-limit makes it deliberately
+#    slow but thorough. A reasonable overnight run against a full home subnet.
+aims scan run nuclei -t cve/ -target 192.168.1.0/24 -rl 20
+```
 
