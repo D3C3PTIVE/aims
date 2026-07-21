@@ -30,12 +30,25 @@ message CreateServiceResponse {
 
 message ReadServiceRequest{
     network.Service Service = 1;
+
+    // Host: if set, scope the read to only the services running on this host — the
+    // host/subnet scoping axis, orthogonal to (and composable with) Source. The host is
+    // resolved by identity: its Id when set, else any host carrying one of its addresses,
+    // else one of its hostnames. Services reach their host through the ports table
+    // (ports.service_id -> ports.host_id). Unset/nil means every host.
     host.Host Host = 2;
 
     // Source: if set, scope the read to only the services contributed by this tool
     // (matched against provenance.Source.Tool via the service_sources join) — the "give me
     // only my objects" filter. Empty means the default cross-tool shared view.
     string Source = 3;
+
+    // Prefix: if set, scope the read to services whose name or product begins with this
+    // string, OR whose id begins with it (the id leg keeps the name-less → id-fallback
+    // candidates in range) — a SQL prefix LIKE 'x%' pushed down to the database rather than
+    // loading every service for the client to filter. It is the server-side completion
+    // filter behind `services` name completion. Empty is a no-op (no prefix scoping).
+    string Prefix = 4;
 }
 
 message ReadServiceResponse{
