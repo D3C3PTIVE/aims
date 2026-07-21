@@ -307,3 +307,53 @@ func TestReadMaxResultsCaps(t *testing.T) {
 		t.Fatalf("MaxResults=0 returned %d hosts, want all 3", n)
 	}
 }
+
+// TestReadPrefixScopes locks the server-side completion filter (HostFilters.Prefix): a set prefix
+// restricts the read to hosts whose address OR hostname begins with it, an empty prefix is a no-op,
+// and LIKE wildcards typed at the prompt are matched literally rather than as SQL wildcards.
+func TestReadPrefixScopes(t *testing.T) {
+	s, ctx := newTestServer(t)
+
+	seed := []*pb.Host{
+		{Addresses: []*network.Address{{Addr: "10.0.0.1"}}, Hostnames: []*pb.Hostname{{Name: "web01"}}},
+		{Addresses: []*network.Address{{Addr: "10.0.0.2"}}, Hostnames: []*pb.Hostname{{Name: "web02"}}},
+		{Addresses: []*network.Address{{Addr: "192.168.1.5"}}, Hostnames: []*pb.Hostname{{Name: "db01"}}},
+		{Addresses: []*network.Address{{Addr: "172.16.0.9"}}, Hostnames: []*pb.Hostname{{Name: "a_b"}}},
+	}
+	if _, err := s.Create(ctx, &hosts.CreateHostRequest{Hosts: seed}); err != nil {
+		t.Fatalf("seed create: %v", err)
+	}
+
+	count := func(prefix string) int {
+		t.Helper()
+		res, err := s.Read(ctx, &hosts.ReadHostRequest{
+			Host:    &pb.Host{},
+			Filters: &hosts.HostFilters{Prefix: prefix},
+		})
+		if err != nil {
+			t.Fatalf("read (prefix=%q): %v", prefix, err)
+		}
+		return len(res.GetHosts())
+	}
+
+	if n := count("10.0.0"); n != 2 {
+		t.Errorf("prefix %q matched %d hosts, want 2 (address leg)", "10.0.0", n)
+	}
+	if n := count("web"); n != 2 {
+		t.Errorf("prefix %q matched %d hosts, want 2 (hostname leg)", "web", n)
+	}
+	if n := count("192"); n != 1 {
+		t.Errorf("prefix %q matched %d hosts, want 1", "192", n)
+	}
+	if n := count(""); n != 4 {
+		t.Errorf("empty prefix matched %d hosts, want all 4 (no-op)", n)
+	}
+	if n := count("nfocontext"); n != 0 {
+		t.Errorf("prefix %q matched %d hosts, want 0", "nfocontext", n)
+	}
+	// '_' is a SQL LIKE wildcard; escaped, "a_b" must match the literal "a_b" hostname only and
+	// not, say, an "axb" — there is no "axb" seeded, so the literal match returns exactly one.
+	if n := count("a_b"); n != 1 {
+		t.Errorf("prefix %q matched %d hosts, want 1 (underscore escaped, matched literally)", "a_b", n)
+	}
+}

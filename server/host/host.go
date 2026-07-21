@@ -63,6 +63,9 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	// Per-tool scoping: restrict to hosts contributed by a given tool ("give me only my
 	// objects") via the host_sources provenance join. Empty Source is a no-op (all hosts).
 	query = db.ScopeBySource(query, "host_sources", "host_id", filts.GetSource())
+	// Server-side completion filter: when a prefix is set, push a prefix LIKE down to the DB so a
+	// Tab returns only the candidate hosts instead of the whole table. Empty prefix is a no-op.
+	query = scopeHostByPrefix(query, filts.GetPrefix())
 	database := db.Preload(query, filters)
 
 	// Query. MaxResults==1 keeps the First fast-path (single row, ErrRecordNotFound on miss);
@@ -94,6 +97,37 @@ func (s *server) Read(ctx context.Context, req *hosts.ReadHostRequest) (*hosts.R
 	}
 
 	return res, readErr
+}
+
+// scopeHostByPrefix restricts the query to hosts having an address OR a hostname that begins with
+// prefix — the server-side completion filter behind HostFilters.Prefix. Empty prefix is a no-op so
+// callers can pass the typed word through unconditionally. The LIKE is left-anchored (prefix%) so
+// the address leg is index-backed by addresses.addr; LIKE metacharacters in the prefix are escaped
+// (ESCAPE '\') so a literal '_' or '%' typed at the prompt matches itself rather than acting as a
+// wildcard. Addresses join through the host_addresses m2m; hostnames are a plain has-many.
+func scopeHostByPrefix(query *gorm.DB, prefix string) *gorm.DB {
+	if prefix == "" {
+		return query
+	}
+	like := escapeLike(prefix) + "%"
+	newDB := func() *gorm.DB { return query.Session(&gorm.Session{NewDB: true}) }
+	addrIDs := newDB().
+		Table("host_addresses").
+		Select("host_addresses.host_id").
+		Joins("JOIN addresses ON addresses.id = host_addresses.address_id").
+		Where(`addresses.addr LIKE ? ESCAPE '\'`, like)
+	nameIDs := newDB().
+		Table("hostnames").
+		Select("hostnames.host_id").
+		Where(`hostnames.name LIKE ? ESCAPE '\'`, like)
+	return query.Where("id IN (?) OR id IN (?)", addrIDs, nameIDs)
+}
+
+// escapeLike neutralises the SQL LIKE wildcards in a user-typed prefix so it is matched literally
+// under an `ESCAPE '\'` clause. The backslash is escaped first so it does not double-escape the
+// wildcards inserted after it.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 // Create inserts hosts that are genuinely new, skipping any whose natural key already exists in

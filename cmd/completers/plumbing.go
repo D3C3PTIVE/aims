@@ -93,6 +93,37 @@ func CachedList[T any](con *client.Client, name, label, emptyMsg string, read fu
 	})
 }
 
+// CachedListByPrefix is CachedList for completers that push the typed word down to the server as a
+// prefix filter (HostFilters.Prefix and friends) instead of fetching the whole object set. It reads
+// c.Value inside the callback, hands it to read so the DB returns only that prefix's candidates, and
+// keys the cache by the prefix (via CacheCompletionByPrefix) so each prefix is cached independently.
+// The server filter is a superset of what the candidate render will show, so carapace's own local
+// filtering still narrows the result to exactly the matching candidates — the pushdown only shrinks
+// the wire payload, it never drops a valid completion. An empty read on a non-empty prefix yields no
+// candidates (the shell shows nothing), not emptyMsg — emptyMsg means a genuinely empty database.
+func CachedListByPrefix[T any](con *client.Client, name, label, emptyMsg string, read func(prefix string) ([]T, error), render func([]T) carapace.Action) carapace.Action {
+	return carapace.ActionCallback(Guard(label, func(c carapace.Context) carapace.Action {
+		prefix := c.Value
+		cached := aims.CacheCompletionByPrefix(con, name, prefix, carapace.ActionCallback(func(carapace.Context) carapace.Action {
+			if msg, err := con.ConnectComplete(); err != nil {
+				return msg
+			}
+			items, err := read(prefix)
+			if err = aims.CheckError(err); err != nil {
+				return carapace.ActionMessage("Error: %s", err)
+			}
+			if len(items) == 0 {
+				if prefix == "" {
+					return carapace.ActionMessage(emptyMsg)
+				}
+				return carapace.ActionValues()
+			}
+			return render(items)
+		}))
+		return cached.Invoke(c).ToA()
+	}))
+}
+
 // FilterSelected wraps a completer so already-typed positional args are dropped from its candidates.
 // The filter runs per-invocation OUTSIDE the static cache key (which CachedList owns), so a cached
 // read is still reused across keystrokes while the selected-args elision stays live. It is the

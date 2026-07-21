@@ -167,6 +167,18 @@ func readHostsForCompletion(client *client.Client) ([]*pb.Host, error) {
 	return res.GetHosts(), err
 }
 
+// readHostsByPrefixForCompletion is readHostsForCompletion with the typed word pushed down as the
+// server-side prefix filter: the DB returns only the hosts whose address or hostname begins with
+// prefix, so a Tab against a large database transfers a handful of candidates instead of the whole
+// host table. An empty prefix is a no-op filter (the full set), matching the plain read.
+func readHostsByPrefixForCompletion(client *client.Client, prefix string) ([]*pb.Host, error) {
+	res, err := client.Hosts.Read(context.Background(), &hosts.ReadHostRequest{
+		Host:    &pb.Host{},
+		Filters: &hosts.HostFilters{Prefix: prefix},
+	})
+	return res.GetHosts(), err
+}
+
 // CompleteByID returns hosts completions with their smallened IDs as keys.
 func CompleteByID(client *client.Client) carapace.Action {
 	return completers.CachedList(client, "hosts:id", "hosts:id", "no hosts in database",
@@ -181,10 +193,13 @@ func CompleteByID(client *client.Client) carapace.Action {
 }
 
 // CompleteByHostnameOrIP returns completions for all hostnames,
-// or if not found for some hosts, their corresponding addresses.
+// or if not found for some hosts, their corresponding addresses. The word being completed is pushed
+// down to the server as a prefix filter (address- or hostname-anchored) so a Tab against a large
+// database fetches only the matching hosts, not the whole table — carapace still does the final
+// exact filtering, so the pushdown only shrinks the wire payload.
 func CompleteByHostnameOrIP(client *client.Client) carapace.Action {
-	return completers.CachedList(client, "hosts:hostname-or-ip", "hosts:hostname-or-ip", "no hosts in database",
-		func() ([]*pb.Host, error) { return readHostsForCompletion(client) },
+	return completers.CachedListByPrefix(client, "hosts:hostname-or-ip", "hosts:hostname-or-ip", "no hosts in database",
+		func(prefix string) ([]*pb.Host, error) { return readHostsByPrefixForCompletion(client, prefix) },
 		func(hs []*pb.Host) carapace.Action {
 			options := host.Completions()
 			options = append(options, display.WithCandidateValue("Hostnames", "Addresses"))

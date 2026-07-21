@@ -59,6 +59,18 @@ func CacheCompletion(con *client.Client, name string, action carapace.Action) ca
 	return action.Cache(CompletionCacheTTL, scope, key.String(name), completionEpochKey())
 }
 
+// CacheCompletionByPrefix is CacheCompletion for prefix-filtered completions: the word being
+// completed is folded into the cache key so each distinct prefix is its own entry. This is what
+// makes a server-side prefix filter safe to cache — unlike the whole-set completions (one cached
+// snapshot carapace filters locally for every prefix), a prefix-scoped read returns only that
+// prefix's candidates, so reusing it under a different prefix would drop valid matches. Keying by
+// prefix keeps the read-once-filter-many win per prefix while a longer prefix re-queries (a small
+// result each time) instead of transferring the whole table on the first keystroke.
+func CacheCompletionByPrefix(con *client.Client, name, prefix string, action carapace.Action) carapace.Action {
+	scope := key.Key(func() (string, error) { return con.CompletionScope(), nil })
+	return action.Cache(CompletionCacheTTL, scope, key.String(name), key.String("prefix\x00"+prefix), completionEpochKey())
+}
+
 // completionEpochPath is the location of the completion "epoch" sentinel — a tiny
 // file under the user cache dir whose content is bumped on every local DB mutation.
 // It honours XDG_CACHE_HOME (via os.UserCacheDir), so it sits alongside carapace's
